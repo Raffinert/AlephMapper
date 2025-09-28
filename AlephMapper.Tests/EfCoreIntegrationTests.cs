@@ -367,10 +367,10 @@ public class EfCoreIntegrationTests
 
         //var personSummaries1 = query.ToList();
 
-        var otherQuery = _context.Persons.Select(EfCoreMapper.GetPersonComplexExpression());
+        var query = _context.Persons.Select(EfCoreMapper.GetPersonComplexExpression());
 
         // Act
-        var personSummaries = await otherQuery.ToListAsync();
+        var personSummaries = await query.ToListAsync();
 
         // Assert
         await Assert.That(personSummaries.Count).IsEqualTo(4);
