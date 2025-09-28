@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AlephMapper.Tests/AlephMapper.Tests.csproj" />
+  <Project Path="AlephMapper/AlephMapper.csproj" />
+</Solution>
