@@ -41,9 +41,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
     // Transform: gather candidate and class info
     private static UnifiedMethodInfo GetMethodInfo(GeneratorSyntaxContext ctx)
     {
-        var method = ctx.Node as MethodDeclarationSyntax;
+        var method = (MethodDeclarationSyntax)ctx.Node;
         var semanticModel = ctx.SemanticModel;
-        var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
+        var methodSymbol = semanticModel.GetDeclaredSymbol(method);
         if (methodSymbol == null) return null;
 
         CandidateMethodInfo candidate = null;
@@ -51,57 +51,57 @@ public class AlephSourceGenerator : IIncrementalGenerator
             candidate = new CandidateMethodInfo { Symbol = methodSymbol, Syntax = method };
 
         ClassInfo? classInfo = null;
-        var classDecl = method.Parent as ClassDeclarationSyntax;
-        if (classDecl != null && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
+        if (method.Parent is ClassDeclarationSyntax classDecl && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
             classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)) &&
             classDecl.AttributeLists.Count > 0)
         {
             var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
-            if (classSymbol != null)
+            var expressiveAttribute = classSymbol?.GetAttributes()
+                .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
+
+            if (expressiveAttribute != null)
             {
-                var expressiveAttribute = classSymbol.GetAttributes()
-                    .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
-                if (expressiveAttribute != null)
+                var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
+                if (expressiveAttribute.NamedArguments.Any())
                 {
-                    var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
-                    if (expressiveAttribute.NamedArguments.Any())
+                    var nullConditionalArg = expressiveAttribute.NamedArguments
+                        .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
+                    if (nullConditionalArg.Value.Value is int enumValue)
                     {
-                        var nullConditionalArg = expressiveAttribute.NamedArguments
-                            .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
-                        if (nullConditionalArg.Value.Value is int enumValue)
-                        {
-                            nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
-                        }
+                        nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
                     }
-                    var methodInfo = TryCreateMethodInfo(method, semanticModel, nullConditionalRewriteSupport);
-                    if (methodInfo.HasValue)
-                    {
-                        classInfo = new ClassInfo(
-                            className: classSymbol.Name,
-                            namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
-                                ? classSymbol.ContainingNamespace.ToDisplayString()
-                                : "",
-                            methods: ImmutableArray.Create(methodInfo.Value),
-                            nullConditionalRewriteSupport: nullConditionalRewriteSupport);
-                    }
+                }
+                var methodInfo = TryCreateMethodInfo(method, semanticModel, nullConditionalRewriteSupport);
+                if (methodInfo.HasValue)
+                {
+                    classInfo = new ClassInfo(
+                        className: classSymbol.Name,
+                        namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
+                            ? classSymbol.ContainingNamespace.ToDisplayString()
+                            : "",
+                        methods: ImmutableArray.Create(methodInfo.Value),
+                        nullConditionalRewriteSupport: nullConditionalRewriteSupport);
                 }
             }
         }
         if (candidate == null && !classInfo.HasValue) return null;
-        return new UnifiedMethodInfo { Candidate = candidate, Class = classInfo }; 
+        return new UnifiedMethodInfo { Candidate = candidate, Class = classInfo };
     }
 
-    // Output: aggregate and generate
     private static void ExecuteUnified(ImmutableArray<UnifiedMethodInfo> methodInfos, SourceProductionContext context)
     {
-        var candidates = methodInfos.Where(x => x.Candidate != null).Select(x => x.Candidate).ToList();
-        var classGroups = methodInfos.Where(x => x.Class.HasValue).Select(x => x.Class.Value)
+        var candidates = methodInfos
+            .Where(x => x.Candidate != null)
+            .Select(x => x.Candidate).ToList();
+
+        var classGroups = methodInfos.Select(x => x.Class).OfType<ClassInfo>()
             .GroupBy(c => c.ClassName)
             .Select(g => new ClassInfo(
                 g.Key,
                 g.First().NamespaceName,
                 g.SelectMany(c => c.Methods).ToImmutableArray(),
                 g.First().NullConditionalRewriteSupport)).ToList();
+
         foreach (var classInfo in classGroups)
         {
             var source = GenerateCompanionClassWithCandidates(classInfo, candidates);
@@ -109,91 +109,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
         }
     }
 
-    // Helper to get candidate method info
-    private static CandidateMethodInfo GetCandidateMethodInfo(MethodDeclarationSyntax method, SemanticModel semanticModel)
-    {
-        var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
-        if (methodSymbol == null) return null;
-        if (!methodSymbol.IsStatic) return null;
-        if (methodSymbol.Parameters.Length != 1) return null;
-        return new CandidateMethodInfo { Symbol = methodSymbol, Syntax = method };
-    }
-
     // Helper type for candidate methods
     private class CandidateMethodInfo
     {
         public IMethodSymbol Symbol { get; set; }
         public MethodDeclarationSyntax Syntax { get; set; }
-    }
-
-    private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
-    {
-        var partialStatic = new List<SyntaxKind> { SyntaxKind.PartialKeyword, SyntaxKind.StaticKeyword };
-
-        return node is ClassDeclarationSyntax classDeclaration &&
-               classDeclaration.AttributeLists.Count > 0
-               && partialStatic.All(expectedKind => classDeclaration.Modifiers.Any(m => m.IsKind(expectedKind)));
-    }
-
-    private static ClassInfo? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
-    {
-        var classDeclaration = (ClassDeclarationSyntax)context.Node;
-        var classSymbol = context.SemanticModel.GetDeclaredSymbol(classDeclaration);
-        if (classSymbol == null)
-            return null;
-        var expressiveAttribute = classSymbol.GetAttributes()
-            .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
-        if (expressiveAttribute == null)
-            return null;
-        var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
-        if (expressiveAttribute.NamedArguments.Any())
-        {
-            var nullConditionalArg = expressiveAttribute.NamedArguments
-                .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
-            if (nullConditionalArg.Value.Value is int enumValue)
-            {
-                nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
-            }
-        }
-        var mapperMethods = new List<MethodInfo>();
-        foreach (var member in classDeclaration.Members)
-        {
-            if (member is MethodDeclarationSyntax method && method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
-            {
-                var methodInfo = TryCreateMethodInfo(method, context.SemanticModel, nullConditionalRewriteSupport);
-                if (methodInfo.HasValue)
-                {
-                    mapperMethods.Add(methodInfo.Value);
-                }
-            }
-        }
-        if (mapperMethods.Count == 0)
-            return null;
-        return new ClassInfo(
-            className: classSymbol.Name,
-            namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
-                ? classSymbol.ContainingNamespace.ToDisplayString()
-                : "",
-            methods: mapperMethods.ToImmutableArray(),
-            nullConditionalRewriteSupport: nullConditionalRewriteSupport);
-    }
-
-    private static bool IsMapperMethod(MethodDeclarationSyntax method, SemanticModel semanticModel)
-    {
-        // Check if method has parameters and returns a concrete type (not Expression)
-        if (method.ParameterList.Parameters.Count == 0)
-            return false;
-
-        var returnType = semanticModel.GetTypeInfo(method.ReturnType).Type;
-        if (returnType == null)
-            return false;
-
-        // Skip if it's already an Expression method
-        if (returnType.ToDisplayString().StartsWith("System.Linq.Expressions.Expression"))
-            return false;
-
-        // Check if method body contains object construction
-        return method.Body?.Statements.Any() == true || method.ExpressionBody != null;
     }
 
     private static MethodInfo? TryCreateMethodInfo(MethodDeclarationSyntax method,
@@ -252,9 +172,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
             expression = (ExpressionSyntax)rewriter.Visit(expression);
         }
 
-        return GenerateExpressionFromSyntax(expression, parameterName,
-            //allMethods, 
-            semanticModel, nullConditionalRewriteSupport);
+        return GenerateExpressionFromSyntax(expression,
+            parameterName,
+            semanticModel,
+            nullConditionalRewriteSupport);
     }
 
     private static string GenerateExpressionFromSyntax(ExpressionSyntax expression, string parameterName,
@@ -536,18 +457,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return invocation.ToString().Replace("source", parameterName);
     }
 
-    private static void ExecuteWithCandidates(ImmutableArray<ClassInfo> classes, ImmutableArray<CandidateMethodInfo> candidateMethods, SourceProductionContext context)
-    {
-        var candidateMethodList = candidateMethods.ToList();
-        if (classes.IsDefaultOrEmpty)
-            return;
-        foreach (var classInfo in classes.Distinct())
-        {
-            var source = GenerateCompanionClassWithCandidates(classInfo, candidateMethodList);
-            context.AddSource($"{classInfo.ClassName}.Expressions.g.cs", SourceText.From(source, Encoding.UTF8));
-        }
-    }
-
     // Generate companion class using candidate methods for inlining
     private static string GenerateCompanionClassWithCandidates(ClassInfo classInfo, List<CandidateMethodInfo> candidateMethods)
     {
@@ -561,7 +470,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         sb.AppendLine("using System.Linq.Expressions;");
         sb.AppendLine("using System.CodeDom.Compiler;");
         sb.AppendLine();
-        var indent = !string.IsNullOrEmpty(classInfo.NamespaceName) ? "" : "";
+        var indent = "";
         sb.AppendLine($"{indent}[GeneratedCode(\"AlephMapper\", \"1.0.0\")]");
         sb.AppendLine($"{indent}public partial class {classInfo.ClassName}");
         sb.AppendLine($"{indent}{{");
@@ -601,7 +510,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var trimmed = expression.Trim();
 
         // Handle lambda expressions
-        var lambdaIndex = trimmed.IndexOf(" => ");
+        var lambdaIndex = trimmed.IndexOf(" => ", StringComparison.Ordinal);
         if (lambdaIndex > 0)
         {
             var parameter = trimmed.Substring(0, lambdaIndex);
@@ -961,46 +870,48 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
     private static string GetExpressiveAttributeSource()
     {
-        return @"using System;
+        return """
+               using System;
 
-namespace AlephMapper;
+               namespace AlephMapper;
 
-/// <summary>
-/// Configures how null-conditional operators are handled
-/// </summary>
-public enum NullConditionalRewriteSupport
-{
-    /// <summary>
-    /// Don't rewrite null conditional operators (Default behavior).
-    /// Usage of null conditional operators is thereby not allowed
-    /// </summary>
-    None,
+               /// <summary>
+               /// Configures how null-conditional operators are handled
+               /// </summary>
+               public enum NullConditionalRewriteSupport
+               {
+                   /// <summary>
+                   /// Don't rewrite null conditional operators (Default behavior).
+                   /// Usage of null conditional operators is thereby not allowed
+                   /// </summary>
+                   None,
 
-    /// <summary>
-    /// Ignore null-conditional operators in the generated expression tree
-    /// </summary>
-    /// <remarks>
-    /// <c>(A?.B)</c> is rewritten as expression: <c>(A.B)</c>
-    /// </remarks>
-    Ignore,
+                   /// <summary>
+                   /// Ignore null-conditional operators in the generated expression tree
+                   /// </summary>
+                   /// <remarks>
+                   /// <c>(A?.B)</c> is rewritten as expression: <c>(A.B)</c>
+                   /// </remarks>
+                   Ignore,
 
-    /// <summary>
-    /// Translates null-conditional operators into explicit null checks
-    /// </summary>
-    /// <remarks>
-    /// <c>(A?.B)</c> is rewritten as expression: <c>(A != null ? A.B : null)</c>
-    /// </remarks>
-    Rewrite
-}
+                   /// <summary>
+                   /// Translates null-conditional operators into explicit null checks
+                   /// </summary>
+                   /// <remarks>
+                   /// <c>(A?.B)</c> is rewritten as expression: <c>(A != null ? A.B : null)</c>
+                   /// </remarks>
+                   Rewrite
+               }
 
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class ExpressiveAttribute : Attribute
-{
-    /// <summary>
-    /// Get or set how null-conditional operators are handled
-    /// </summary>
-    public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; } = NullConditionalRewriteSupport.Ignore;
-}";
+               [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+               public sealed class ExpressiveAttribute : Attribute
+               {
+                   /// <summary>
+                   /// Get or set how null-conditional operators are handled
+                   /// </summary>
+                   public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; } = NullConditionalRewriteSupport.Ignore;
+               }
+               """;
     }
 }
 
