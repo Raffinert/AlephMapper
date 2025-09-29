@@ -19,19 +19,17 @@ public class AlephSourceGenerator : IIncrementalGenerator
         context.RegisterPostInitializationOutput(ctx =>
             ctx.AddSource("ExpressiveAttribute.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
 
-        // Single provider: collect all MethodDeclarationSyntax and gather info
         var methodInfos = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: (s, _) => s is MethodDeclarationSyntax,
                 transform: (ctx, _) => GetMethodInfo(ctx))
             .Where(m => m != null)
-            .Select((m, _) => (UnifiedMethodInfo)m)
+            .Select((m, _) => m)
             .Collect();
 
-        context.RegisterSourceOutput(methodInfos, (spc, source) => ExecuteUnified(source, spc));
+        context.RegisterSourceOutput(methodInfos, (spc, source) => GenerateCode(source, spc));
     }
 
-    // Unified method info type
     private class UnifiedMethodInfo
     {
         public CandidateMethodInfo Candidate { get; set; }
@@ -88,7 +86,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return new UnifiedMethodInfo { Candidate = candidate, Class = classInfo };
     }
 
-    private static void ExecuteUnified(ImmutableArray<UnifiedMethodInfo> methodInfos, SourceProductionContext context)
+    private static void GenerateCode(ImmutableArray<UnifiedMethodInfo> methodInfos, SourceProductionContext context)
     {
         var candidates = methodInfos
             .Where(x => x.Candidate != null)
@@ -200,7 +198,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var sb = new StringBuilder();
         sb.Append($"{parameterName} => new {objectCreation.Type}");
 
-        if (objectCreation.Initializer != null && objectCreation.Initializer.Expressions.Count > 0)
+        if (objectCreation.Initializer?.Expressions.Count > 0)
         {
             sb.AppendLine();
             sb.Append("            {");

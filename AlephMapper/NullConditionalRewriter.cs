@@ -2,7 +2,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Linq;
 
 namespace AlephMapper;
 
@@ -40,7 +39,7 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
         var whenNotNull = node.WhenNotNull;
 
         // Visit the expression recursively first
-        expression = (ExpressionSyntax)Visit(expression)!;
+        expression = (ExpressionSyntax)Visit(expression);
 
         if (whenNotNull is MemberBindingExpressionSyntax memberBinding)
         {
@@ -52,7 +51,8 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
 
             return Visit(memberAccess)!;
         }
-        else if (whenNotNull is ElementBindingExpressionSyntax elementBinding)
+
+        if (whenNotNull is ElementBindingExpressionSyntax elementBinding)
         {
             // A?[index] becomes A[index]
             var elementAccess = SyntaxFactory.ElementAccessExpression(
@@ -61,7 +61,8 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
 
             return Visit(elementAccess)!;
         }
-        else if (whenNotNull is InvocationExpressionSyntax invocationExpression)
+
+        if (whenNotNull is InvocationExpressionSyntax invocationExpression)
         {
             // A?.Method() becomes A.Method()
             // This is more complex as we need to reconstruct the member access
@@ -112,7 +113,7 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
 
             // Determine the type for the null value
             var typeInfo = _semanticModel.GetTypeInfo(node);
-            if (typeInfo.Type != null && typeInfo.Type.CanBeReferencedByName)
+            if (typeInfo.Type?.CanBeReferencedByName == true)
             {
                 if (typeInfo.Type.IsValueType && typeInfo.Type.Name != "Nullable")
                 {
