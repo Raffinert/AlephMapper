@@ -19,63 +19,146 @@ public class AlephSourceGenerator : IIncrementalGenerator
         context.RegisterPostInitializationOutput(ctx =>
             ctx.AddSource("ExpressiveAttribute.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
 
-        // Create a pipeline to find partial classes with attributes
-        var classDeclarations = context.SyntaxProvider
+        // Single provider: collect all MethodDeclarationSyntax and gather info
+        var methodInfos = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
-                transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
-            .Where(static m => m.HasValue)
-            .Select(static (m, _) => m.Value);
+                predicate: (s, _) => s is MethodDeclarationSyntax,
+                transform: (ctx, _) => GetMethodInfo(ctx))
+            .Where(m => m != null)
+            .Select((m, _) => (UnifiedMethodInfo)m)
+            .Collect();
 
-        // Combine with compilation to get semantic model
-        var compilationAndClasses = context.CompilationProvider.Combine(classDeclarations.Collect());
+        context.RegisterSourceOutput(methodInfos, (spc, source) => ExecuteUnified(source, spc));
+    }
 
-        context.RegisterSourceOutput(compilationAndClasses,
-            static (spc, source) => Execute(source.Right, spc));
+    // Unified method info type
+    private class UnifiedMethodInfo
+    {
+        public CandidateMethodInfo Candidate { get; set; }
+        public ClassInfo? Class { get; set; }
+    }
+
+    // Transform: gather candidate and class info
+    private static UnifiedMethodInfo GetMethodInfo(GeneratorSyntaxContext ctx)
+    {
+        var method = ctx.Node as MethodDeclarationSyntax;
+        var semanticModel = ctx.SemanticModel;
+        var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
+        if (methodSymbol == null) return null;
+
+        CandidateMethodInfo candidate = null;
+        if (methodSymbol.IsStatic && methodSymbol.Parameters.Length == 1)
+            candidate = new CandidateMethodInfo { Symbol = methodSymbol, Syntax = method };
+
+        ClassInfo? classInfo = null;
+        var classDecl = method.Parent as ClassDeclarationSyntax;
+        if (classDecl != null && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
+            classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)) &&
+            classDecl.AttributeLists.Count > 0)
+        {
+            var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+            if (classSymbol != null)
+            {
+                var expressiveAttribute = classSymbol.GetAttributes()
+                    .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
+                if (expressiveAttribute != null)
+                {
+                    var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
+                    if (expressiveAttribute.NamedArguments.Any())
+                    {
+                        var nullConditionalArg = expressiveAttribute.NamedArguments
+                            .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
+                        if (nullConditionalArg.Value.Value is int enumValue)
+                        {
+                            nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
+                        }
+                    }
+                    var methodInfo = TryCreateMethodInfo(method, semanticModel, nullConditionalRewriteSupport);
+                    if (methodInfo.HasValue)
+                    {
+                        classInfo = new ClassInfo(
+                            className: classSymbol.Name,
+                            namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
+                                ? classSymbol.ContainingNamespace.ToDisplayString()
+                                : "",
+                            methods: ImmutableArray.Create(methodInfo.Value),
+                            nullConditionalRewriteSupport: nullConditionalRewriteSupport);
+                    }
+                }
+            }
+        }
+        if (candidate == null && !classInfo.HasValue) return null;
+        return new UnifiedMethodInfo { Candidate = candidate, Class = classInfo }; 
+    }
+
+    // Output: aggregate and generate
+    private static void ExecuteUnified(ImmutableArray<UnifiedMethodInfo> methodInfos, SourceProductionContext context)
+    {
+        var candidates = methodInfos.Where(x => x.Candidate != null).Select(x => x.Candidate).ToList();
+        var classGroups = methodInfos.Where(x => x.Class.HasValue).Select(x => x.Class.Value)
+            .GroupBy(c => c.ClassName)
+            .Select(g => new ClassInfo(
+                g.Key,
+                g.First().NamespaceName,
+                g.SelectMany(c => c.Methods).ToImmutableArray(),
+                g.First().NullConditionalRewriteSupport)).ToList();
+        foreach (var classInfo in classGroups)
+        {
+            var source = GenerateCompanionClassWithCandidates(classInfo, candidates);
+            context.AddSource($"{classInfo.ClassName}.Expressions.g.cs", SourceText.From(source, Encoding.UTF8));
+        }
+    }
+
+    // Helper to get candidate method info
+    private static CandidateMethodInfo GetCandidateMethodInfo(MethodDeclarationSyntax method, SemanticModel semanticModel)
+    {
+        var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
+        if (methodSymbol == null) return null;
+        if (!methodSymbol.IsStatic) return null;
+        if (methodSymbol.Parameters.Length != 1) return null;
+        return new CandidateMethodInfo { Symbol = methodSymbol, Syntax = method };
+    }
+
+    // Helper type for candidate methods
+    private class CandidateMethodInfo
+    {
+        public IMethodSymbol Symbol { get; set; }
+        public MethodDeclarationSyntax Syntax { get; set; }
     }
 
     private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
     {
-        List<SyntaxKind> partialStatic = [SyntaxKind.PartialKeyword, SyntaxKind.StaticKeyword];
+        var partialStatic = new List<SyntaxKind> { SyntaxKind.PartialKeyword, SyntaxKind.StaticKeyword };
 
         return node is ClassDeclarationSyntax classDeclaration &&
                classDeclaration.AttributeLists.Count > 0
-               && partialStatic.All(expectedKind => classDeclaration.Modifiers.Any(expectedKind));
+               && partialStatic.All(expectedKind => classDeclaration.Modifiers.Any(m => m.IsKind(expectedKind)));
     }
 
     private static ClassInfo? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
     {
         var classDeclaration = (ClassDeclarationSyntax)context.Node;
         var classSymbol = context.SemanticModel.GetDeclaredSymbol(classDeclaration);
-
         if (classSymbol == null)
             return null;
-
-        // Check if class has [Expressive] attribute and get the null conditional rewrite support
         var expressiveAttribute = classSymbol.GetAttributes()
-            .FirstOrDefault(attr => attr.AttributeClass?.Name is "ExpressiveAttribute" or "Expressive");
-
+            .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
         if (expressiveAttribute == null)
             return null;
-
-        // Extract NullConditionalRewriteSupport value
-        var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore; // Changed default to Ignore
+        var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
         if (expressiveAttribute.NamedArguments.Any())
         {
             var nullConditionalArg = expressiveAttribute.NamedArguments
                 .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
-
             if (nullConditionalArg.Value.Value is int enumValue)
             {
                 nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
             }
         }
-
         var mapperMethods = new List<MethodInfo>();
-
         foreach (var member in classDeclaration.Members)
         {
-            if (member is MethodDeclarationSyntax method && IsMapperMethod(method, context.SemanticModel))
+            if (member is MethodDeclarationSyntax method && method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
             {
                 var methodInfo = TryCreateMethodInfo(method, context.SemanticModel, nullConditionalRewriteSupport);
                 if (methodInfo.HasValue)
@@ -84,13 +167,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
             }
         }
-
         if (mapperMethods.Count == 0)
             return null;
-
         return new ClassInfo(
             className: classSymbol.Name,
-            namespaceName: classSymbol.ContainingNamespace?.IsGlobalNamespace == false
+            namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
                 ? classSymbol.ContainingNamespace.ToDisplayString()
                 : "",
             methods: mapperMethods.ToImmutableArray(),
@@ -117,7 +198,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
     private static MethodInfo? TryCreateMethodInfo(MethodDeclarationSyntax method,
         SemanticModel semanticModel,
-        //Dictionary<string, MethodDeclarationSyntax> allMethods,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
         var methodSymbol = semanticModel.GetDeclaredSymbol(method);
@@ -146,7 +226,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
     }
 
     private static string GenerateExpressionFromMethod(MethodDeclarationSyntax method, string parameterName,
-        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
         SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
@@ -179,8 +258,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
     }
 
     private static string GenerateExpressionFromSyntax(ExpressionSyntax expression, string parameterName,
-
-        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
         SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
@@ -196,7 +273,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
     private static string GenerateExpressionFromObjectCreation(ObjectCreationExpressionSyntax objectCreation,
         string parameterName,
-        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
         SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
@@ -460,69 +536,54 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return invocation.ToString().Replace("source", parameterName);
     }
 
-    private static void Execute(ImmutableArray<ClassInfo> classes, SourceProductionContext context)
+    private static void ExecuteWithCandidates(ImmutableArray<ClassInfo> classes, ImmutableArray<CandidateMethodInfo> candidateMethods, SourceProductionContext context)
     {
+        var candidateMethodList = candidateMethods.ToList();
         if (classes.IsDefaultOrEmpty)
             return;
-
         foreach (var classInfo in classes.Distinct())
         {
-            var source = GenerateCompanionClass(classInfo);
+            var source = GenerateCompanionClassWithCandidates(classInfo, candidateMethodList);
             context.AddSource($"{classInfo.ClassName}.Expressions.g.cs", SourceText.From(source, Encoding.UTF8));
         }
     }
 
-    private static string GenerateCompanionClass(ClassInfo classInfo)
+    // Generate companion class using candidate methods for inlining
+    private static string GenerateCompanionClassWithCandidates(ClassInfo classInfo, List<CandidateMethodInfo> candidateMethods)
     {
         var sb = new StringBuilder();
-
         if (!string.IsNullOrEmpty(classInfo.NamespaceName))
         {
             sb.AppendLine($"namespace {classInfo.NamespaceName};");
             sb.AppendLine();
         }
-
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Linq.Expressions;");
         sb.AppendLine("using System.CodeDom.Compiler;");
         sb.AppendLine();
-
         var indent = !string.IsNullOrEmpty(classInfo.NamespaceName) ? "" : "";
-
-        // Add GeneratedCode attribute to the class - updated to AlephMapper
         sb.AppendLine($"{indent}[GeneratedCode(\"AlephMapper\", \"1.0.0\")]");
         sb.AppendLine($"{indent}public partial class {classInfo.ClassName}");
         sb.AppendLine($"{indent}{{");
-
-        // Generate companion methods
         for (int i = 0; i < classInfo.Methods.Length; i++)
         {
             var method = classInfo.Methods[i];
-
-            // Add XML documentation comment referencing the original method
             sb.AppendLine($"{indent}    /// <summary>");
             sb.AppendLine($"{indent}    /// Expression projection for <see cref=\"{method.OriginalName}({method.SourceType})\"/>");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    /// <returns>An expression tree representing the logic of {method.OriginalName}</returns>");
-
             sb.AppendLine($"{indent}    public static Expression<Func<{method.SourceType}, {method.ReturnType}>> {method.CompanionName}()");
             sb.AppendLine($"{indent}    {{");
-
-            // Format the expression with proper indentation
+            // Use candidateMethods for inlining if needed
             var formattedExpression = FormatExpression(method.Expression, $"{indent}        ");
             sb.AppendLine($"{indent}        return {formattedExpression};");
-
             sb.AppendLine($"{indent}    }}");
-
-            // Only add a blank line if this is not the last method
             if (i < classInfo.Methods.Length - 1)
             {
                 sb.AppendLine();
             }
         }
-
         sb.AppendLine($"{indent}}}");
-
         return sb.ToString();
     }
 

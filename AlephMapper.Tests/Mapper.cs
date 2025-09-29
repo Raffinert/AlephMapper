@@ -8,7 +8,7 @@ public static class Mapper1
 [Expressive] // Using default behavior (now Ignore)
 public static partial class Mapper
 {
-    public static bool LivesInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Yanger65(source.BirthInfo);
+    public static bool BornInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Yanger65(source.BirthInfo);
 
     public static bool BornInKyiv(BirthInfo? source) => source?.Address == "Kyiv";
 

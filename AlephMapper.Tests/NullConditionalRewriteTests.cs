@@ -113,14 +113,14 @@ public class NullConditionalRewriteTests
 
         // Arrange & Act
         var bornInKyivExpression = Mapper.BornInKyivExpression();
-        var livesInKyivAndOlder35Expression = Mapper.LivesInKyivAndOlder35Expression();
+        var bornInKyivAndOlder35Expression = Mapper.BornInKyivAndOlder35Expression();
 
         // Assert
         await Assert.That(bornInKyivExpression).IsNotNull();
-        await Assert.That(livesInKyivAndOlder35Expression).IsNotNull();
+        await Assert.That(bornInKyivAndOlder35Expression).IsNotNull();
 
         var bornInKyivCompiled = bornInKyivExpression.Compile();
-        var livesInKyivAndOlder35Compiled = livesInKyivAndOlder35Expression.Compile();
+        var livesInKyivAndOlder35Compiled = bornInKyivAndOlder35Expression.Compile();
 
         // Test with non-null BirthInfo
         var sourceWithBirthInfo = new SourceDto

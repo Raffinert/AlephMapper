@@ -65,7 +65,7 @@ public class DebugTests
 
         // Arrange
         var bornInKyivExpression = Mapper.BornInKyivExpression();
-        var livesInKyivAndOlder35Expression = Mapper.LivesInKyivAndOlder35Expression();
+        var bornInKyivAndOlder35Expression = Mapper.BornInKyivAndOlder35Expression();
 
         // Act & Assert - Output expressions for debugging
         Console.WriteLine("BornInKyiv Expression:");
@@ -73,18 +73,18 @@ public class DebugTests
         Console.WriteLine("");
 
         Console.WriteLine("LivesInKyivAndOlder35 Expression:");
-        Console.WriteLine(livesInKyivAndOlder35Expression.ToString());
+        Console.WriteLine(bornInKyivAndOlder35Expression.ToString());
         Console.WriteLine("");
 
         // Verify they compile and work
         var bornInKyivCompiled = bornInKyivExpression.Compile();
-        var livesInKyivAndOlder35Compiled = livesInKyivAndOlder35Expression.Compile();
+        var bornInKyivAndOlder35Compiled = bornInKyivAndOlder35Expression.Compile();
 
         var testBirthInfo = new BirthInfo { Age = 40, Address = "Kyiv" };
         var testSourceDto = new SourceDto { BirthInfo = testBirthInfo };
 
         await Assert.That(bornInKyivCompiled(testBirthInfo)).IsTrue();
-        await Assert.That(livesInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
+        await Assert.That(bornInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
     }
 
     [Test]
