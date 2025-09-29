@@ -1,16 +1,11 @@
-﻿using System;
-using System.Linq.Expressions;
-using TUnit.Assertions;
-using TUnit.Core;
-
-namespace AlephMapper.Tests;
+﻿namespace AlephMapper.Tests;
 
 // Test mapper with Ignore policy (now default, but being explicit)
 [Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
 public static partial class IgnoreMapper
 {
     public static string GetAddress(SourceDto source) => source.BirthInfo?.Address ?? "Unknown";
-    
+
     public static bool HasAddress(SourceDto source) => source.BirthInfo?.Address != null;
 }
 
@@ -18,8 +13,8 @@ public static partial class IgnoreMapper
 [Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
 public static partial class RewriteMapper
 {
-    public static string GetAddress(SourceDto source) => source.BirthInfo?.Address ?? "Unknown";
-    
+    public static string GetAddress(SourceDto dto) => dto.BirthInfo?.Address ?? "Unknown";
+
     public static bool HasAddress(SourceDto source) => source.BirthInfo?.Address != null;
 }
 
@@ -29,7 +24,7 @@ public static partial class NoneMapper
 {
     // This method should work because it doesn't use null conditional operators
     public static string GetName(SourceDto source) => source.Name;
-    
+
     // Methods with null conditional operators would cause compilation errors with None policy
     // but we won't include them here to avoid build failures
 }
@@ -42,21 +37,21 @@ public class NullConditionalRewriteTests
         // Arrange & Act
         var getAddressExpression = IgnoreMapper.GetAddressExpression();
         var hasAddressExpression = IgnoreMapper.HasAddressExpression();
-        
+
         // Assert
         await Assert.That(getAddressExpression).IsNotNull();
         await Assert.That(hasAddressExpression).IsNotNull();
-        
+
         // These should not throw CS8072 error since null conditional operators are ignored
         var getAddressCompiled = getAddressExpression.Compile();
         var hasAddressCompiled = hasAddressExpression.Compile();
-        
+
         // Test with non-null values - both should work the same
-        var sourceWithAddress = new SourceDto 
-        { 
-            BirthInfo = new BirthInfo { Address = "New York" } 
+        var sourceWithAddress = new SourceDto
+        {
+            BirthInfo = new BirthInfo { Address = "New York" }
         };
-        
+
         await Assert.That(getAddressCompiled(sourceWithAddress)).IsEqualTo("New York");
         await Assert.That(hasAddressCompiled(sourceWithAddress)).IsTrue();
     }
@@ -67,31 +62,31 @@ public class NullConditionalRewriteTests
         // Arrange & Act
         var getAddressExpression = RewriteMapper.GetAddressExpression();
         var hasAddressExpression = RewriteMapper.HasAddressExpression();
-        
+
         // Assert
         await Assert.That(getAddressExpression).IsNotNull();
         await Assert.That(hasAddressExpression).IsNotNull();
-        
+
         var getAddressCompiled = getAddressExpression.Compile();
         var hasAddressCompiled = hasAddressExpression.Compile();
-        
+
         // Test with non-null BirthInfo
-        var sourceWithBirthInfo = new SourceDto 
-        { 
-            Name = "John", 
-            BirthInfo = new BirthInfo { Address = "New York" } 
+        var sourceWithBirthInfo = new SourceDto
+        {
+            Name = "John",
+            BirthInfo = new BirthInfo { Address = "New York" }
         };
-        
+
         await Assert.That(getAddressCompiled(sourceWithBirthInfo)).IsEqualTo("New York");
         await Assert.That(hasAddressCompiled(sourceWithBirthInfo)).IsTrue();
-        
+
         // Test with null BirthInfo - should handle gracefully with explicit null checks
-        var sourceWithoutBirthInfo = new SourceDto 
-        { 
-            Name = "Jane", 
-            BirthInfo = null 
+        var sourceWithoutBirthInfo = new SourceDto
+        {
+            Name = "Jane",
+            BirthInfo = null
         };
-        
+
         await Assert.That(getAddressCompiled(sourceWithoutBirthInfo)).IsEqualTo("Unknown");
         await Assert.That(hasAddressCompiled(sourceWithoutBirthInfo)).IsFalse();
     }
@@ -101,12 +96,12 @@ public class NullConditionalRewriteTests
     {
         // Arrange & Act
         var getNameExpression = NoneMapper.GetNameExpression();
-        
+
         // Assert
         await Assert.That(getNameExpression).IsNotNull();
-        
+
         var getNameCompiled = getNameExpression.Compile();
-        
+
         var source = new SourceDto { Name = "Test" };
         await Assert.That(getNameCompiled(source)).IsEqualTo("Test");
     }
@@ -115,35 +110,35 @@ public class NullConditionalRewriteTests
     public async Task Original_Mapper_With_Default_Ignore_Policy_Should_Work()
     {
         // This tests the original Mapper class which now uses default Ignore policy
-        
+
         // Arrange & Act
         var bornInKyivExpression = Mapper.BornInKyivExpression();
         var livesInKyivAndOlder35Expression = Mapper.LivesInKyivAndOlder35Expression();
-        
+
         // Assert
         await Assert.That(bornInKyivExpression).IsNotNull();
         await Assert.That(livesInKyivAndOlder35Expression).IsNotNull();
-        
+
         var bornInKyivCompiled = bornInKyivExpression.Compile();
         var livesInKyivAndOlder35Compiled = livesInKyivAndOlder35Expression.Compile();
-        
+
         // Test with non-null BirthInfo
-        var sourceWithBirthInfo = new SourceDto 
-        { 
-            Name = "Jane", 
+        var sourceWithBirthInfo = new SourceDto
+        {
+            Name = "Jane",
             BirthInfo = new BirthInfo { Age = 40, Address = "Kyiv" }
         };
-        
+
         await Assert.That(bornInKyivCompiled(sourceWithBirthInfo.BirthInfo)).IsTrue();
         await Assert.That(livesInKyivAndOlder35Compiled(sourceWithBirthInfo)).IsTrue();
-        
+
         // With Ignore policy, null values will throw NullReferenceException
         await Assert.That(() => bornInKyivCompiled(null)).Throws<NullReferenceException>();
-        
-        var sourceWithNullBirthInfo = new SourceDto 
-        { 
-            Name = "John", 
-            BirthInfo = null 
+
+        var sourceWithNullBirthInfo = new SourceDto
+        {
+            Name = "John",
+            BirthInfo = null
         };
         await Assert.That(() => livesInKyivAndOlder35Compiled(sourceWithNullBirthInfo)).Throws<NullReferenceException>();
     }
@@ -154,42 +149,42 @@ public class NullConditionalRewriteTests
         // Arrange & Act
         var getAddressExpression = RewriteMapper.GetAddressExpression();
         var hasAddressExpression = RewriteMapper.HasAddressExpression();
-        
+
         // Assert - The important thing is that the expressions work correctly, not their string format
         await Assert.That(getAddressExpression).IsNotNull();
         await Assert.That(hasAddressExpression).IsNotNull();
-        
+
         var getAddressCompiled = getAddressExpression.Compile();
         var hasAddressCompiled = hasAddressExpression.Compile();
-        
+
         // Test functionality - this is what actually matters
-        var sourceWithBirthInfo = new SourceDto 
-        { 
-            Name = "Jane", 
-            BirthInfo = new BirthInfo { Address = "New York" } 
+        var sourceWithBirthInfo = new SourceDto
+        {
+            Name = "Jane",
+            BirthInfo = new BirthInfo { Address = "New York" }
         };
-        
+
         await Assert.That(getAddressCompiled(sourceWithBirthInfo)).IsEqualTo("New York");
         await Assert.That(hasAddressCompiled(sourceWithBirthInfo)).IsTrue();
-        
-        var sourceWithNullBirthInfo = new SourceDto 
-        { 
-            Name = "John", 
-            BirthInfo = null 
+
+        var sourceWithNullBirthInfo = new SourceDto
+        {
+            Name = "John",
+            BirthInfo = null
         };
-        
+
         await Assert.That(getAddressCompiled(sourceWithNullBirthInfo)).IsEqualTo("Unknown");
         await Assert.That(hasAddressCompiled(sourceWithNullBirthInfo)).IsFalse();
-        
+
         // Verify that the expressions contain proper conditional logic
         // The string representation will show IIF((condition), trueValue, falseValue) 
         // which is normal for Expression trees
         var getAddressString = getAddressExpression.ToString();
         var hasAddressString = hasAddressExpression.ToString();
-        
+
         // Verify we have the expected null check pattern in the expressions
-        await Assert.That(getAddressString).Contains("source.BirthInfo != null");
-        await Assert.That(getAddressString).Contains("source.BirthInfo.Address");
+        await Assert.That(getAddressString).Contains("dto.BirthInfo != null");
+        await Assert.That(getAddressString).Contains("dto.BirthInfo.Address");
         await Assert.That(hasAddressString).Contains("source.BirthInfo != null");
         await Assert.That(hasAddressString).Contains("source.BirthInfo.Address");
     }
@@ -199,31 +194,31 @@ public class NullConditionalRewriteTests
     {
         // This test verifies that generated classes have proper GeneratedCode attribute
         // to indicate they contain generated code
-        
+
         // Arrange & Act - Get the class type
         var rewriteMapperType = typeof(RewriteMapper);
         var ignoreMapperType = typeof(IgnoreMapper);
-        
+
         // Assert - Check for GeneratedCode attribute on the class
         var rewriteMapperAttributes = rewriteMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
         var ignoreMapperAttributes = ignoreMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
-        
+
         await Assert.That(rewriteMapperAttributes).IsNotEmpty();
         await Assert.That(ignoreMapperAttributes).IsNotEmpty();
-        
+
         // Verify the GeneratedCode attribute values
         var rewriteGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)rewriteMapperAttributes[0];
         await Assert.That(rewriteGenAttr.Tool).IsEqualTo("AlephMapper");
         await Assert.That(rewriteGenAttr.Version).IsEqualTo("1.0.0");
-        
+
         var ignoreGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)ignoreMapperAttributes[0];
         await Assert.That(ignoreGenAttr.Tool).IsEqualTo("AlephMapper");
         await Assert.That(ignoreGenAttr.Version).IsEqualTo("1.0.0");
-        
+
         // Verify methods exist and are accessible
         var getAddressMethod = rewriteMapperType.GetMethod("GetAddressExpression");
         var hasAddressMethod = rewriteMapperType.GetMethod("HasAddressExpression");
-        
+
         await Assert.That(getAddressMethod).IsNotNull();
         await Assert.That(hasAddressMethod).IsNotNull();
     }

@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -36,9 +36,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
     private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
     {
+        List<SyntaxKind> partialStatic = [SyntaxKind.PartialKeyword, SyntaxKind.StaticKeyword];
+
         return node is ClassDeclarationSyntax classDeclaration &&
-               classDeclaration.AttributeLists.Count > 0 &&
-               classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword);
+               classDeclaration.AttributeLists.Count > 0
+               && partialStatic.All(expectedKind => classDeclaration.Modifiers.Any(expectedKind));
     }
 
     private static ClassInfo? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
@@ -51,8 +53,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
         // Check if class has [Expressive] attribute and get the null conditional rewrite support
         var expressiveAttribute = classSymbol.GetAttributes()
-            .FirstOrDefault(attr => attr.AttributeClass?.Name == "ExpressiveAttribute" ||
-                                   attr.AttributeClass?.Name == "Expressive");
+            .FirstOrDefault(attr => attr.AttributeClass?.Name is "ExpressiveAttribute" or "Expressive");
 
         if (expressiveAttribute == null)
             return null;
@@ -63,32 +64,20 @@ public class AlephSourceGenerator : IIncrementalGenerator
         {
             var nullConditionalArg = expressiveAttribute.NamedArguments
                 .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
-            
+
             if (nullConditionalArg.Value.Value is int enumValue)
             {
                 nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
             }
         }
 
-        // Extract all methods (both mapper and helper methods)
-        var allMethods = new Dictionary<string, MethodDeclarationSyntax>();
         var mapperMethods = new List<MethodInfo>();
 
-        // First pass: collect all methods
-        foreach (var member in classDeclaration.Members)
-        {
-            if (member is MethodDeclarationSyntax method)
-            {
-                allMethods[method.Identifier.ValueText] = method;
-            }
-        }
-
-        // Second pass: create mapper methods with access to all methods for inlining
         foreach (var member in classDeclaration.Members)
         {
             if (member is MethodDeclarationSyntax method && IsMapperMethod(method, context.SemanticModel))
             {
-                var methodInfo = CreateMethodInfo(method, context.SemanticModel, allMethods, nullConditionalRewriteSupport);
+                var methodInfo = TryCreateMethodInfo(method, context.SemanticModel, nullConditionalRewriteSupport);
                 if (methodInfo.HasValue)
                 {
                     mapperMethods.Add(methodInfo.Value);
@@ -126,9 +115,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return method.Body?.Statements.Any() == true || method.ExpressionBody != null;
     }
 
-    private static MethodInfo? CreateMethodInfo(MethodDeclarationSyntax method, 
-        SemanticModel semanticModel, 
-        Dictionary<string, MethodDeclarationSyntax> allMethods,
+    private static MethodInfo? TryCreateMethodInfo(MethodDeclarationSyntax method,
+        SemanticModel semanticModel,
+        //Dictionary<string, MethodDeclarationSyntax> allMethods,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
         var methodSymbol = semanticModel.GetDeclaredSymbol(method);
@@ -144,7 +133,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
         var companionMethodName = method.Identifier.ValueText + "Expression";
 
-        var expression = GenerateExpressionFromMethod(method, sourceParameter.Identifier.ValueText, allMethods, semanticModel, nullConditionalRewriteSupport);
+        var expression = GenerateExpressionFromMethod(method, sourceParameter.Identifier.ValueText,
+            //allMethods, 
+            semanticModel, nullConditionalRewriteSupport);
 
         return new MethodInfo(
             originalName: method.Identifier.ValueText,
@@ -155,11 +146,12 @@ public class AlephSourceGenerator : IIncrementalGenerator
     }
 
     private static string GenerateExpressionFromMethod(MethodDeclarationSyntax method, string parameterName,
-        Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
         ExpressionSyntax expression;
-        
+
         if (method.ExpressionBody != null)
         {
             expression = method.ExpressionBody.Expression;
@@ -181,25 +173,31 @@ public class AlephSourceGenerator : IIncrementalGenerator
             expression = (ExpressionSyntax)rewriter.Visit(expression);
         }
 
-        return GenerateExpressionFromSyntax(expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+        return GenerateExpressionFromSyntax(expression, parameterName,
+            //allMethods, 
+            semanticModel, nullConditionalRewriteSupport);
     }
 
     private static string GenerateExpressionFromSyntax(ExpressionSyntax expression, string parameterName,
-        Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+
+        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
         if (expression is ObjectCreationExpressionSyntax objectCreation)
         {
-            return GenerateExpressionFromObjectCreation(objectCreation, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+            return GenerateExpressionFromObjectCreation(objectCreation, parameterName, semanticModel, nullConditionalRewriteSupport);
         }
 
         // Transform the expression properly to handle method invocations and other cases
-        var transformedExpression = TransformExpression(expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+        var transformedExpression = TransformExpression(expression, parameterName, semanticModel, nullConditionalRewriteSupport);
         return $"{parameterName} => {transformedExpression}";
     }
 
     private static string GenerateExpressionFromObjectCreation(ObjectCreationExpressionSyntax objectCreation,
-        string parameterName, Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+        string parameterName,
+        //Dictionary<string, MethodDeclarationSyntax> allMethods, 
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
         var sb = new StringBuilder();
@@ -216,7 +214,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 if (expr is AssignmentExpressionSyntax assignment)
                 {
                     var left = assignment.Left.ToString();
-                    var right = TransformExpression(assignment.Right, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+                    var right = TransformExpression(assignment.Right, parameterName, semanticModel, nullConditionalRewriteSupport);
                     expressions.Add($"{left} = {right}");
                 }
             }
@@ -253,14 +251,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
     }
 
     private static string TransformExpression(ExpressionSyntax expression, string parameterName,
-        Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
-        return TransformExpressionInternal(expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport, false);
+        return TransformExpressionInternal(expression, parameterName, semanticModel, nullConditionalRewriteSupport, false);
     }
 
     private static string TransformExpressionInternal(ExpressionSyntax expression, string parameterName,
-        Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport, bool parentRequiresParentheses)
     {
         // Handle binary expressions BEFORE applying null conditional rewriting 
@@ -295,8 +293,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 rightNeedsParens = true;
             }
 
-            var left = TransformExpressionInternal(binary.Left, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport, leftNeedsParens);
-            var right = TransformExpressionInternal(binary.Right, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport, rightNeedsParens);
+            var left = TransformExpressionInternal(binary.Left, parameterName, semanticModel, nullConditionalRewriteSupport, leftNeedsParens);
+            var right = TransformExpressionInternal(binary.Right, parameterName, semanticModel, nullConditionalRewriteSupport, rightNeedsParens);
             var operatorToken = binary.OperatorToken.ToString();
 
             return $"{left} {operatorToken} {right}";
@@ -312,12 +310,12 @@ public class AlephSourceGenerator : IIncrementalGenerator
         // Handle conditional expressions
         if (expression is ConditionalExpressionSyntax conditional)
         {
-            var condition = TransformExpressionInternal(conditional.Condition, parameterName, allMethods, semanticModel, NullConditionalRewriteSupport.None, false);
-            var whenTrue = TransformExpressionInternal(conditional.WhenTrue, parameterName, allMethods, semanticModel, NullConditionalRewriteSupport.None, false);
-            var whenFalse = TransformExpressionInternal(conditional.WhenFalse, parameterName, allMethods, semanticModel, NullConditionalRewriteSupport.None, false);
-            
+            var condition = TransformExpressionInternal(conditional.Condition, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
+            var whenTrue = TransformExpressionInternal(conditional.WhenTrue, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
+            var whenFalse = TransformExpressionInternal(conditional.WhenFalse, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
+
             var result = $"{condition} ? {whenTrue} : {whenFalse}";
-            
+
             // Add parentheses if the parent context requires them (for precedence)
             return parentRequiresParentheses ? $"({result})" : result;
         }
@@ -325,7 +323,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         // Handle method invocations (nested mapper calls)
         if (expression is InvocationExpressionSyntax invocation)
         {
-            return HandleMethodInvocation(invocation, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+            return HandleMethodInvocation(invocation, parameterName, semanticModel, nullConditionalRewriteSupport);
         }
 
         // Handle member access expressions like source.Property
@@ -338,7 +336,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         // Handle parenthesized expressions
         if (expression is ParenthesizedExpressionSyntax parenthesized)
         {
-            var inner = TransformExpressionInternal(parenthesized.Expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport, false);
+            var inner = TransformExpressionInternal(parenthesized.Expression, parameterName, semanticModel, nullConditionalRewriteSupport, false);
             return $"({inner})";
         }
 
@@ -378,68 +376,35 @@ public class AlephSourceGenerator : IIncrementalGenerator
                operatorToken.IsKind(SyntaxKind.AmpersandAmpersandToken);  // &&
     }
 
+    private static MethodDeclarationSyntax GetMethodDeclaration(ExpressionSyntax syntax, SemanticModel semanticModel)
+    {
+        if (semanticModel.SyntaxTree != syntax.SyntaxTree)
+        {
+            return null;
+        }
+
+        var symbolInfo = semanticModel.GetSymbolInfo(syntax);
+
+        if (symbolInfo.Symbol is not IMethodSymbol methodSymbol)
+        {
+            return null;
+        }
+
+        foreach (var syntaxRef in methodSymbol.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax() is MethodDeclarationSyntax methodDecl)
+            {
+                return methodDecl;
+            }
+        }
+
+        return null;
+    }
+
     private static string HandleMethodInvocation(InvocationExpressionSyntax invocation, string parameterName,
-        Dictionary<string, MethodDeclarationSyntax> allMethods, SemanticModel semanticModel,
+        SemanticModel semanticModel,
         NullConditionalRewriteSupport nullConditionalRewriteSupport)
     {
-        string methodName = null;
-        MethodDeclarationSyntax targetMethod = null;
-
-        // Handle both simple method calls (MethodName) and qualified calls (ClassName.MethodName)
-        if (invocation.Expression is IdentifierNameSyntax identifier)
-        {
-            // Simple method call within same class
-            methodName = identifier.Identifier.ValueText;
-            if (allMethods.TryGetValue(methodName, out targetMethod))
-            {
-                // Found in current class
-            }
-            else
-            {
-                // Not found, fall back to simple replacement
-                return invocation.ToString().Replace("source", parameterName);
-            }
-        }
-        else if (invocation.Expression is MemberAccessExpressionSyntax memberAccess && 
-                 memberAccess.Expression is IdentifierNameSyntax classIdentifier)
-        {
-            // Qualified method call (ClassName.MethodName)
-            var className = classIdentifier.Identifier.ValueText;
-            methodName = memberAccess.Name.Identifier.ValueText;
-            
-            // Check if this is a same-class method call by looking up the method in allMethods
-            if (allMethods.TryGetValue(methodName, out targetMethod))
-            {
-                // Found in current class - treat as same-class call for inlining
-            }
-            else
-            {
-                // For cross-class calls, handle specific known patterns
-                if (className == "Mapper1" && methodName == "Older35")
-                {
-                    // Hardcode the known implementation: source.Age > 35
-                    if (invocation.ArgumentList.Arguments.Count > 0)
-                    {
-                        var crossClassArgument = invocation.ArgumentList.Arguments[0];
-                        var crossClassArgumentExpression = TransformExpression(crossClassArgument.Expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
-                        return $"{crossClassArgumentExpression}.Age > 35";
-                    }
-                }
-                
-                // Fall back to simple replacement if not handled
-                return invocation.ToString().Replace("source", parameterName);
-            }
-        }
-        else
-        {
-            // Complex expression, fall back to simple replacement
-            return invocation.ToString().Replace("source", parameterName);
-        }
-
-        if (targetMethod == null)
-        {
-            return invocation.ToString().Replace("source", parameterName);
-        }
 
         // Get the argument being passed to the method
         if (invocation.ArgumentList.Arguments.Count == 0)
@@ -447,8 +412,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
             return invocation.ToString().Replace("source", parameterName);
         }
 
+        var targetMethod = GetMethodDeclaration(invocation, semanticModel);
+        if (targetMethod == null)
+        {
+            return invocation.ToString().Replace("source", parameterName);
+        }
+
         var argument = invocation.ArgumentList.Arguments[0];
-        var argumentExpression = TransformExpression(argument.Expression, parameterName, allMethods, semanticModel, nullConditionalRewriteSupport);
+        var argumentExpression = TransformExpression(argument.Expression, parameterName, semanticModel, nullConditionalRewriteSupport);
 
         // Try to inline the method - get the parameter name from the target method
         var targetParameter = targetMethod.ParameterList.Parameters.FirstOrDefault();
@@ -481,7 +452,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             }
 
             // Then transform the expression with the correct parameter substitution
-            var inlinedBody = TransformExpressionInternal(bodyExpression, targetParameterName, allMethods, semanticModel, NullConditionalRewriteSupport.None, false);
+            var inlinedBody = TransformExpressionInternal(bodyExpression, targetParameterName, semanticModel, NullConditionalRewriteSupport.None, false);
             return inlinedBody.Replace(targetParameterName, argumentExpression);
         }
 
@@ -527,22 +498,22 @@ public class AlephSourceGenerator : IIncrementalGenerator
         for (int i = 0; i < classInfo.Methods.Length; i++)
         {
             var method = classInfo.Methods[i];
-            
+
             // Add XML documentation comment referencing the original method
             sb.AppendLine($"{indent}    /// <summary>");
             sb.AppendLine($"{indent}    /// Expression projection for <see cref=\"{method.OriginalName}({method.SourceType})\"/>");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    /// <returns>An expression tree representing the logic of {method.OriginalName}</returns>");
-            
+
             sb.AppendLine($"{indent}    public static Expression<Func<{method.SourceType}, {method.ReturnType}>> {method.CompanionName}()");
             sb.AppendLine($"{indent}    {{");
-            
+
             // Format the expression with proper indentation
             var formattedExpression = FormatExpression(method.Expression, $"{indent}        ");
             sb.AppendLine($"{indent}        return {formattedExpression};");
-            
+
             sb.AppendLine($"{indent}    }}");
-            
+
             // Only add a blank line if this is not the last method
             if (i < classInfo.Methods.Length - 1)
             {
@@ -567,38 +538,38 @@ public class AlephSourceGenerator : IIncrementalGenerator
     {
         // Parse the expression structure manually
         var trimmed = expression.Trim();
-        
+
         // Handle lambda expressions
         var lambdaIndex = trimmed.IndexOf(" => ");
         if (lambdaIndex > 0)
         {
             var parameter = trimmed.Substring(0, lambdaIndex);
             var body = trimmed.Substring(lambdaIndex + 4);
-            
+
             var formattedBody = FormatObjectCreation(body.Trim(), baseIndent);
             return $"{parameter} => {formattedBody}";
         }
-        
+
         return FormatObjectCreation(trimmed, baseIndent);
     }
 
     private static string FormatObjectCreation(string expression, string baseIndent)
     {
         var trimmed = expression.Trim();
-        
+
         // Look for object creation pattern
         if (trimmed.StartsWith("new "))
         {
             return FormatNewExpression(trimmed, baseIndent);
         }
-        
+
         // Look for conditional expression
         var questionIndex = FindConditionalOperator(trimmed);
         if (questionIndex > 0)
         {
             return FormatConditionalExpression(trimmed, questionIndex, baseIndent);
         }
-        
+
         return trimmed;
     }
 
@@ -607,19 +578,19 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var openBraceIndex = expression.IndexOf('{');
         if (openBraceIndex < 0)
             return expression;
-        
+
         var closeBraceIndex = FindMatchingBrace(expression, openBraceIndex);
         if (closeBraceIndex < 0)
             return expression;
-        
+
         var typeDeclaration = expression.Substring(0, openBraceIndex).Trim();
         var propertiesContent = expression.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1).Trim();
-        
+
         if (string.IsNullOrEmpty(propertiesContent))
             return $"{typeDeclaration}()";
-        
+
         var properties = ParsePropertiesForNewExpression(propertiesContent, baseIndent);
-        
+
         return $"{typeDeclaration}\r\n{baseIndent}{{\r\n{string.Join(",\r\n", properties)}\r\n{baseIndent}}}";
     }
 
@@ -630,38 +601,38 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var braceLevel = 0;
         var inString = false;
         var escapeNext = false;
-        
+
         for (int i = 0; i < propertiesContent.Length; i++)
         {
             var ch = propertiesContent[i];
-            
+
             if (escapeNext)
             {
                 current.Append(ch);
                 escapeNext = false;
                 continue;
             }
-            
+
             if (ch == '\\' && inString)
             {
                 current.Append(ch);
                 escapeNext = true;
                 continue;
             }
-            
+
             if (ch == '"')
             {
                 inString = !inString;
                 current.Append(ch);
                 continue;
             }
-            
+
             if (inString)
             {
                 current.Append(ch);
                 continue;
             }
-            
+
             switch (ch)
             {
                 case '{':
@@ -678,7 +649,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         var propertyValue = current.ToString().Trim();
                         var formattedProperty = FormatPropertyAssignment(propertyValue, baseIndent);
                         properties.Add($"{baseIndent}    {formattedProperty}");
-						current.Clear();
+                        current.Clear();
                     }
                     else
                     {
@@ -690,14 +661,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     break;
             }
         }
-        
+
         if (current.Length > 0)
         {
             var propertyValue = current.ToString().Trim();
             var formattedProperty = FormatPropertyAssignment(propertyValue, baseIndent);
             properties.Add($"{baseIndent}    {formattedProperty}");
         }
-        
+
         return properties;
     }
 
@@ -706,10 +677,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var equalIndex = propertyAssignment.IndexOf('=');
         if (equalIndex <= 0)
             return propertyAssignment;
-        
+
         var propertyName = propertyAssignment.Substring(0, equalIndex).Trim();
         var propertyValue = propertyAssignment.Substring(equalIndex + 1).Trim();
-        
+
         // Check if the property value contains a conditional with object creation
         var questionIndex = FindConditionalOperator(propertyValue);
         if (questionIndex > 0)
@@ -721,7 +692,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 return $"{propertyName} = {formattedValue}";
             }
         }
-        
+
         return propertyAssignment;
     }
 
@@ -729,14 +700,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
     {
         var condition = expression.Substring(0, questionIndex).Trim();
         var remaining = expression.Substring(questionIndex + 1).Trim();
-        
+
         var colonIndex = FindConditionalColon(remaining);
         if (colonIndex < 0)
             return expression;
-        
+
         var whenTrue = remaining.Substring(0, colonIndex).Trim();
         var whenFalse = remaining.Substring(colonIndex + 1).Trim();
-        
+
         // Always format conditional expressions with object creation as multiline
         if (whenTrue.Contains("new ") && whenTrue.Contains("{"))
         {
@@ -749,7 +720,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 {
                     var typeDeclaration = whenTrue.Substring(0, openBraceIndex).Trim();
                     var propertiesContent = whenTrue.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1).Trim();
-                    
+
                     if (!string.IsNullOrEmpty(propertiesContent))
                     {
                         var properties = ParsePropertiesSimple(propertiesContent);
@@ -760,7 +731,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
             }
         }
-        
+
         // Fallback for non-object creation conditionals
         return $"{condition} ? {whenTrue} : {whenFalse}";
     }
@@ -769,7 +740,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
     {
         var properties = new List<string>();
         var parts = propertiesContent.Split(',');
-        
+
         foreach (var part in parts)
         {
             var trimmed = part.Trim();
@@ -778,7 +749,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 properties.Add(trimmed);
             }
         }
-        
+
         return properties;
     }
 
@@ -787,32 +758,32 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var braceLevel = 0;
         var inString = false;
         var escapeNext = false;
-        
+
         for (int i = 0; i < expression.Length; i++)
         {
             var ch = expression[i];
-            
+
             if (escapeNext)
             {
                 escapeNext = false;
                 continue;
             }
-            
+
             if (ch == '\\' && inString)
             {
                 escapeNext = true;
                 continue;
             }
-            
+
             if (ch == '"')
             {
                 inString = !inString;
                 continue;
             }
-            
+
             if (inString)
                 continue;
-            
+
             switch (ch)
             {
                 case '{':
@@ -827,7 +798,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     break;
             }
         }
-        
+
         return -1;
     }
 
@@ -836,32 +807,32 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var braceLevel = 0;
         var inString = false;
         var escapeNext = false;
-        
+
         for (int i = 0; i < expression.Length; i++)
         {
             var ch = expression[i];
-            
+
             if (escapeNext)
             {
                 escapeNext = false;
                 continue;
             }
-            
+
             if (ch == '\\' && inString)
             {
                 escapeNext = true;
                 continue;
             }
-            
+
             if (ch == '"')
             {
                 inString = !inString;
                 continue;
             }
-            
+
             if (inString)
                 continue;
-            
+
             switch (ch)
             {
                 case '{':
@@ -876,7 +847,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     break;
             }
         }
-        
+
         return -1;
     }
 
@@ -885,32 +856,32 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var braceLevel = 1;
         var inString = false;
         var escapeNext = false;
-        
+
         for (int i = openBraceIndex + 1; i < expression.Length; i++)
         {
             var ch = expression[i];
-            
+
             if (escapeNext)
             {
                 escapeNext = false;
                 continue;
             }
-            
+
             if (ch == '\\' && inString)
             {
                 escapeNext = true;
                 continue;
             }
-            
+
             if (ch == '"')
             {
                 inString = !inString;
                 continue;
             }
-            
+
             if (inString)
                 continue;
-            
+
             switch (ch)
             {
                 case '{':
@@ -923,7 +894,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     break;
             }
         }
-        
+
         return -1;
     }
 
