@@ -39,7 +39,7 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
         var whenNotNull = node.WhenNotNull;
 
         // Visit the expression recursively first
-        expression = (ExpressionSyntax)Visit(expression);
+        expression = (ExpressionSyntax)Visit(expression)!;
 
         if (whenNotNull is MemberBindingExpressionSyntax memberBinding)
         {
@@ -87,7 +87,7 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
 
     private SyntaxNode RewriteNullConditional(ConditionalAccessExpressionSyntax node)
     {
-        // Transform A?.B to (A != null ? A.B : null) and ALWAYS parenthesize the produced conditional
+        // Transform A?.B to (A != null ? A.B : null/default)
         var expression = node.Expression;
         var whenNotNull = node.WhenNotNull;
 
@@ -101,50 +101,27 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
             SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression));
 
         ExpressionSyntax accessExpression;
-        ExpressionSyntax nullValue;
+        ExpressionSyntax nullValue = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
 
         if (whenNotNull is MemberBindingExpressionSyntax memberBinding)
         {
-            // A?.B becomes A.B
+            // A?.B becomes (A != null ? A.B : null)
             accessExpression = SyntaxFactory.MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
                 expression,
                 memberBinding.Name);
-
-            // Determine the type for the null value
-            var typeInfo = _semanticModel.GetTypeInfo(node);
-            if (typeInfo.Type?.CanBeReferencedByName == true)
-            {
-                if (typeInfo.Type.IsValueType && typeInfo.Type.Name != "Nullable")
-                {
-                    // For value types, use default(T)
-                    nullValue = SyntaxFactory.DefaultExpression(
-                        SyntaxFactory.IdentifierName(typeInfo.Type.Name));
-                }
-                else
-                {
-                    // For reference types and nullable value types, use null
-                    nullValue = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
-                }
-            }
-            else
-            {
-                // Default to null if we can't determine the type
-                nullValue = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
-            }
         }
         else if (whenNotNull is ElementBindingExpressionSyntax elementBinding)
         {
-            // A?[index] becomes A[index]
+            // A?[index] becomes (A != null ? A[index] : null)
             accessExpression = SyntaxFactory.ElementAccessExpression(
                 expression,
                 elementBinding.ArgumentList);
-            nullValue = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
         }
         else if (whenNotNull is InvocationExpressionSyntax invocationExpression &&
                  invocationExpression.Expression is MemberBindingExpressionSyntax methodBinding)
         {
-            // A?.Method() becomes A.Method()
+            // A?.Method() becomes (A != null ? A.Method() : null)
             var memberAccess = SyntaxFactory.MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
                 expression,
@@ -153,7 +130,6 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
             accessExpression = SyntaxFactory.InvocationExpression(
                 memberAccess,
                 invocationExpression.ArgumentList);
-            nullValue = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
         }
         else
         {
@@ -161,10 +137,13 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
             return base.VisitConditionalAccessExpression(node) ?? node;
         }
 
+        // Recursively process the access expression to handle nested null conditionals
+        accessExpression = (ExpressionSyntax)Visit(accessExpression);
+
         // Create the conditional expression: A != null ? A.B : null
         var conditionalExpression = SyntaxFactory.ConditionalExpression(
             nullCheck,
-            (Visit(accessExpression) as ExpressionSyntax) ?? accessExpression,
+            accessExpression,
             nullValue);
 
         // Always wrap in parentheses to preserve original operator precedence when substituted
@@ -172,15 +151,47 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
                              .WithTriviaFrom(node);
     }
 
+    private ExpressionSyntax CreateNullValue(ITypeSymbol? type)
+    {
+        // For null conditional operators, we always return null
+        // The C# null conditional operator always produces a nullable result
+        return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+    }
+
     public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
     {
-        // Handle chained null conditional expressions like A?.B?.C
-        var left = Visit(node.Left) as ExpressionSyntax ?? node.Left;
-        var right = Visit(node.Right) as ExpressionSyntax ?? node.Right;
-
-        if (left != node.Left || right != node.Right)
+        // Handle null coalescing with conditional access: A?.B ?? "default"
+        if (node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken))
         {
+            // Visit left side first (this will handle any null conditionals)
+            var left = Visit(node.Left) as ExpressionSyntax ?? node.Left;
+            var right = Visit(node.Right) as ExpressionSyntax ?? node.Right;
+
+            // If the left side was rewritten as a conditional expression, we need to be careful
+            // about operator precedence
+            if (left is ParenthesizedExpressionSyntax parenthesized &&
+                parenthesized.Expression is ConditionalExpressionSyntax conditional)
+            {
+                // Transform (A != null ? A.B : null) ?? "default" 
+                // to (A != null ? A.B : "default")
+                var newConditional = SyntaxFactory.ConditionalExpression(
+                    conditional.Condition,
+                    conditional.WhenTrue,
+                    right);
+
+                return SyntaxFactory.ParenthesizedExpression(newConditional);
+            }
+
             return node.WithLeft(left).WithRight(right);
+        }
+
+        // Handle other binary expressions normally
+        var leftResult = Visit(node.Left) as ExpressionSyntax ?? node.Left;
+        var rightResult = Visit(node.Right) as ExpressionSyntax ?? node.Right;
+
+        if (leftResult != node.Left || rightResult != node.Right)
+        {
+            return node.WithLeft(leftResult).WithRight(rightResult);
         }
 
         return base.VisitBinaryExpression(node);
@@ -203,7 +214,7 @@ internal class NullConditionalRewriter : CSharpSyntaxRewriter
                operatorToken.IsKind(SyntaxKind.AsteriskToken) ||          // *
                operatorToken.IsKind(SyntaxKind.SlashToken) ||             // /
                operatorToken.IsKind(SyntaxKind.PercentToken) ||           // %
-               operatorToken.IsKind(SyntaxKind.QuestionQuestionToken);    // ?? - THIS WAS THE MISSING PIECE!
+               operatorToken.IsKind(SyntaxKind.QuestionQuestionToken);    // ??
     }
 }
 #nullable restore

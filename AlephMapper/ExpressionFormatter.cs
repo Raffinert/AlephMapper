@@ -1,19 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper
 {
     internal static class ExpressionFormatter
     {
+        public static string FormatExpression(ExpressionSyntax expressionSyntax, string baseIndent)
+        {
+            var expression = expressionSyntax.ToString();
+            if (!expression.Contains("new ") || !expression.Contains("{"))
+                return expression;
+
+            return FormatExpressionRecursively(expression, baseIndent);
+        }
+
+        // Keep the old method for backward compatibility during transition
         public static string FormatExpression(string expression, string baseIndent)
         {
             if (!expression.Contains("new ") || !expression.Contains("{"))
                 return expression;
+
             return FormatExpressionRecursively(expression, baseIndent);
         }
 
-        public static string FormatExpressionRecursively(string expression, string baseIndent)
+        private static string FormatExpressionRecursively(string expression, string baseIndent)
         {
             var trimmed = expression.Trim();
             var lambdaIndex = trimmed.IndexOf(" => ", StringComparison.Ordinal);
@@ -27,7 +39,7 @@ namespace AlephMapper
             return FormatObjectCreation(trimmed, baseIndent);
         }
 
-        public static string FormatObjectCreation(string expression, string baseIndent)
+        private static string FormatObjectCreation(string expression, string baseIndent)
         {
             var trimmed = expression.Trim();
             if (trimmed.StartsWith("new "))
@@ -38,7 +50,7 @@ namespace AlephMapper
             return trimmed;
         }
 
-        public static string FormatNewExpression(string expression, string baseIndent)
+        private static string FormatNewExpression(string expression, string baseIndent)
         {
             var openBraceIndex = expression.IndexOf('{');
             if (openBraceIndex < 0)
@@ -54,7 +66,7 @@ namespace AlephMapper
             return $"{typeDeclaration}\r\n{baseIndent}{{\r\n{string.Join(",\r\n", properties)}\r\n{baseIndent}}}";
         }
 
-        public static List<string> ParsePropertiesForNewExpression(string propertiesContent, string baseIndent)
+        private static List<string> ParsePropertiesForNewExpression(string propertiesContent, string baseIndent)
         {
             var properties = new List<string>();
             var current = new StringBuilder();
@@ -124,7 +136,7 @@ namespace AlephMapper
             return properties;
         }
 
-        public static string FormatPropertyAssignment(string propertyAssignment, string baseIndent)
+        private static string FormatPropertyAssignment(string propertyAssignment, string baseIndent)
         {
             var equalIndex = propertyAssignment.IndexOf('=');
             if (equalIndex <= 0)
@@ -141,7 +153,7 @@ namespace AlephMapper
             return propertyAssignment;
         }
 
-        public static string FormatConditionalExpression(string expression, int questionIndex, string baseIndent)
+        private static string FormatConditionalExpression(string expression, int questionIndex, string baseIndent)
         {
             var condition = expression.Substring(0, questionIndex).Trim();
             var remaining = expression.Substring(questionIndex + 1).Trim();
@@ -173,7 +185,7 @@ namespace AlephMapper
             return $"{condition} ? {whenTrue} : {whenFalse}";
         }
 
-        public static List<string> ParsePropertiesSimple(string propertiesContent)
+        private static List<string> ParsePropertiesSimple(string propertiesContent)
         {
             var properties = new List<string>();
             var parts = propertiesContent.Split(',');
