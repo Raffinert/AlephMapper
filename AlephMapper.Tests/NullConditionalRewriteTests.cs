@@ -1,7 +1,7 @@
 ﻿namespace AlephMapper.Tests;
 
 // Test mapper with Ignore policy (now default, but being explicit)
-[Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class IgnoreMapper
 {
     public static string GetAddress(SourceDto source) => source.BirthInfo?.Address ?? "Unknown";
@@ -10,7 +10,7 @@ public static partial class IgnoreMapper
 }
 
 // Test mapper with Rewrite policy
-[Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class RewriteMapper
 {
     public static string GetAddress(SourceDto dto) => dto.BirthInfo?.Address ?? "Unknown";
@@ -19,7 +19,7 @@ public static partial class RewriteMapper
 }
 
 // Test mapper with None policy (should fail with null conditional operators)
-[Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.None)]
+[Expressive(NullConditionalRewrite = NullConditionalRewrite.None)]
 public static partial class NoneMapper
 {
     // This method should work because it doesn't use null conditional operators

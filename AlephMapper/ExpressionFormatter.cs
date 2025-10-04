@@ -16,15 +16,6 @@ namespace AlephMapper
             return FormatExpressionRecursively(expression, baseIndent);
         }
 
-        // Keep the old method for backward compatibility during transition
-        public static string FormatExpression(string expression, string baseIndent)
-        {
-            if (!expression.Contains("new ") || !expression.Contains("{"))
-                return expression;
-
-            return FormatExpressionRecursively(expression, baseIndent);
-        }
-
         private static string FormatExpressionRecursively(string expression, string baseIndent)
         {
             var trimmed = expression.Trim();

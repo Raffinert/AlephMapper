@@ -5,7 +5,7 @@ namespace AlephMapper;
 /// <summary>
 /// Configures how null-conditional operators are handled
 /// </summary>
-public enum NullConditionalRewriteSupport
+public enum NullConditionalRewrite
 {
     /// <summary>
     /// Don't rewrite null conditional operators (Default behavior).
@@ -39,5 +39,5 @@ public sealed class ExpressiveAttribute : Attribute
     /// <summary>
     /// Get or set how null-conditional operators are handled
     /// </summary>
-    public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; } = NullConditionalRewriteSupport.Ignore;
+    public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }

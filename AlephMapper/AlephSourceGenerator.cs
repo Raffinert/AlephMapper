@@ -2,13 +2,10 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace AlephMapper;
 
@@ -21,797 +18,166 @@ public class AlephSourceGenerator : IIncrementalGenerator
         context.RegisterPostInitializationOutput(ctx =>
             ctx.AddSource("ExpressiveAttribute.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
 
-        var methodInfos = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                predicate: (s, _) => s is MethodDeclarationSyntax,
-                transform: (ctx, _) => GetMethodInfo(ctx))
-            .Where(m => m != null)
-            .Select((m, _) => m)
-            .Collect();
+        var candidates = context.SyntaxProvider.CreateSyntaxProvider(
+            static (node, _) => node is MethodDeclarationSyntax && node.Parent is ClassDeclarationSyntax,
+            Transform
+        ).Where(static m => m != null);
 
-        context.RegisterSourceOutput(methodInfos, (spc, source) => GenerateCode(source, spc));
-    }
+        var all = candidates.Collect();
 
-    private class UnifiedMethodInfo
-    {
-        public CandidateMethodInfo Candidate { get; set; }
-        public ClassInfo? Class { get; set; }
-    }
-
-    // Transform: gather candidate and class info
-    private static UnifiedMethodInfo GetMethodInfo(GeneratorSyntaxContext ctx)
-    {
-        var method = (MethodDeclarationSyntax)ctx.Node;
-        var semanticModel = ctx.SemanticModel;
-        var methodSymbol = semanticModel.GetDeclaredSymbol(method);
-        if (methodSymbol == null) return null;
-
-        CandidateMethodInfo candidate = null;
-        if (methodSymbol.IsStatic && methodSymbol.Parameters.Length == 1)
-            candidate = new CandidateMethodInfo { Symbol = methodSymbol, Syntax = method };
-
-        ClassInfo? classInfo = null;
-        if (method.Parent is ClassDeclarationSyntax classDecl && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
-            classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)) &&
-            classDecl.AttributeLists.Count > 0)
+        context.RegisterSourceOutput(all, static (spc, arr) =>
         {
-            var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
-            var expressiveAttribute = classSymbol?.GetAttributes()
-                .FirstOrDefault(attr => attr.AttributeClass != null && (attr.AttributeClass.Name == "ExpressiveAttribute" || attr.AttributeClass.Name == "Expressive"));
+            //Debugger.Launch();
 
-            if (expressiveAttribute != null)
+            if (arr.Length == 0) return;
+
+            var dict = new Dictionary<IMethodSymbol, MappingModel>(SymbolHelpers.MethodComparer.Instance);
+            foreach (var mm in arr)
             {
-                var nullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore;
-                if (expressiveAttribute.NamedArguments.Any())
+                dict[SymbolHelpers.Normalize(mm.MethodSymbol)] = mm;
+            }
+
+            var byType = new Dictionary<INamedTypeSymbol, List<MappingModel>>(SymbolEqualityComparer.Default);
+            foreach (var mm in arr)
+            {
+                if (!byType.TryGetValue(mm.ContainingType, out var list))
                 {
-                    var nullConditionalArg = expressiveAttribute.NamedArguments
-                        .FirstOrDefault(arg => arg.Key == "NullConditionalRewriteSupport");
-                    if (nullConditionalArg.Value.Value is int enumValue)
-                    {
-                        nullConditionalRewriteSupport = (NullConditionalRewriteSupport)enumValue;
-                    }
+                    list = [];
+                    byType.Add(mm.ContainingType, list);
+                }
+                list.Add(mm);
+            }
+
+            foreach (var kvp in byType)
+            {
+                var mapperType = kvp.Key;
+                var methods = kvp.Value;
+
+                if (!methods.Any(m => m.IsExpressive || m.IsReverseExpressive || m.IsReverseUpdatable || m.IsUpdateable))
+                {
+                    continue;
                 }
 
-                // Only process static methods with exactly 1 parameter
-                if (methodSymbol.IsStatic && methodSymbol.Parameters.Length == 1)
-                {
-                    try
-                    {
-                        var methodInfo = TryCreateMethodInfo(method, semanticModel, nullConditionalRewriteSupport);
-                        if (methodInfo.HasValue)
-                        {
-                            classInfo = new ClassInfo(
-                                className: classSymbol.Name,
-                                namespaceName: classSymbol.ContainingNamespace != null && !classSymbol.ContainingNamespace.IsGlobalNamespace
-                                    ? classSymbol.ContainingNamespace.ToDisplayString()
-                                    : "",
-                                methods: ImmutableArray.Create(methodInfo.Value),
-                                nullConditionalRewriteSupport: nullConditionalRewriteSupport);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // If we can't process this method, just continue without failing the entire generation
-                        // In a real scenario, you might want to report a diagnostic instead
-                    }
-                }
-            }
-        }
-        if (candidate == null && classInfo == null) return null;
-        return new UnifiedMethodInfo { Candidate = candidate, Class = classInfo };
-    }
-
-    private static void GenerateCode(ImmutableArray<UnifiedMethodInfo> methodInfos, SourceProductionContext context)
-    {
-        // Add diagnostic to see if generator is being called
-        context.ReportDiagnostic(Diagnostic.Create(
-            new DiagnosticDescriptor("ALM001", "Generator Called", "AlephMapper source generator called with {0} method infos", "AlephMapper", DiagnosticSeverity.Info, true),
-            Location.None, methodInfos.Length));
-
-        var candidates = methodInfos
-            .Where(x => x.Candidate != null)
-            .Select(x => x.Candidate).ToList();
-
-        var classGroups = methodInfos.Select(x => x.Class).OfType<ClassInfo>()
-            .GroupBy(c => c.ClassName)
-            .Select(g => new ClassInfo(
-                g.Key,
-                g.First().NamespaceName,
-                g.SelectMany(c => c.Methods).ToImmutableArray(),
-                g.First().NullConditionalRewriteSupport)).ToList();
-
-        context.ReportDiagnostic(Diagnostic.Create(
-            new DiagnosticDescriptor("ALM002", "Classes Found", "Found {0} classes to generate", "AlephMapper", DiagnosticSeverity.Info, true),
-            Location.None, classGroups.Count));
-
-        foreach (var classInfo in classGroups)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                new DiagnosticDescriptor("ALM003", "Generating Class", "Generating companion for class {0} with {1} methods", "AlephMapper", DiagnosticSeverity.Info, true),
-                Location.None, classInfo.ClassName, classInfo.Methods.Length));
-
-            try
-            {
-                var source = GenerateCompanionClassWithCandidates(classInfo, candidates);
-                context.AddSource($"{classInfo.ClassName}.Expressions.g.cs", SourceText.From(source, Encoding.UTF8));
-
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor("ALM004", "File Generated", "Successfully generated file {0}", "AlephMapper", DiagnosticSeverity.Info, true),
-                    Location.None, $"{classInfo.ClassName}.Expressions.g.cs"));
-            }
-            catch (Exception ex)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor("ALM005", "Generation Error", "Error generating class {0}: {1}", "AlephMapper", DiagnosticSeverity.Error, true),
-                    Location.None, classInfo.ClassName, ex.Message));
-            }
-        }
-    }
-
-    // Helper type for candidate methods
-    private class CandidateMethodInfo
-    {
-        public IMethodSymbol Symbol { get; set; }
-        public MethodDeclarationSyntax Syntax { get; set; }
-    }
-
-    private static MethodInfo? TryCreateMethodInfo(MethodDeclarationSyntax method,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        var methodSymbol = semanticModel.GetDeclaredSymbol(method);
-        if (methodSymbol == null)
-            return null;
-
-        if (method.ParameterList.Parameters.Count == 0)
-            return null;
-
-        var sourceParameter = method.ParameterList.Parameters.First();
-        var sourceType = semanticModel.GetTypeInfo(sourceParameter.Type).Type?.ToDisplayString();
-        var returnType = methodSymbol.ReturnType.ToDisplayString();
-
-        if (string.IsNullOrEmpty(sourceType) || string.IsNullOrEmpty(returnType))
-            return null;
-
-        var companionMethodName = method.Identifier.ValueText + "Expression";
-
-        try
-        {
-            var expression = GenerateExpressionFromMethod(method, sourceParameter.Identifier.ValueText,
-                semanticModel, nullConditionalRewriteSupport);
-
-            return new MethodInfo(
-                originalName: method.Identifier.ValueText,
-                companionName: companionMethodName,
-                sourceType: sourceType,
-                returnType: returnType,
-                expression: expression);
-        }
-        catch (Exception)
-        {
-            // If complex expression generation fails, create a simple fallback expression
-            // This ensures the method is still generated but with a basic implementation
-            var fallbackExpression = SyntaxFactory.SimpleLambdaExpression(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier(sourceParameter.Identifier.ValueText)),
-                SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(returnType)));
-
-            return new MethodInfo(
-                originalName: method.Identifier.ValueText,
-                companionName: companionMethodName,
-                sourceType: sourceType,
-                returnType: returnType,
-                expression: fallbackExpression);
-        }
-    }
-
-    private static ExpressionSyntax GenerateExpressionFromMethod(MethodDeclarationSyntax method, string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        ExpressionSyntax expression;
-
-        if (method.ExpressionBody != null)
-        {
-            expression = method.ExpressionBody.Expression;
-        }
-        else if (method.Body?.Statements.Count == 1 && method.Body.Statements[0] is ReturnStatementSyntax returnStatement && returnStatement.Expression != null)
-        {
-            expression = returnStatement.Expression;
-        }
-        else
-        {
-            // Fallback for more complex methods - create a simple lambda expression
-            var fallbackType = method.ReturnType?.ToString() ?? "object";
-            return SyntaxFactory.SimpleLambdaExpression(
-                SyntaxFactory.Parameter(SyntaxFactory.Identifier(parameterName)),
-                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(fallbackType))
-                    .WithArgumentList(SyntaxFactory.ArgumentList()));
-        }
-
-        var originalExpressionString = expression.ToString();
-
-        // CRITICAL: If the expression contains null conditional operators, we MUST eliminate them
-        // This is the most aggressive approach to eliminate CS8072 errors
-        if (originalExpressionString.Contains("?.") || originalExpressionString.Contains("?["))
-        {
-            // Use an extremely aggressive approach - completely eliminate null conditionals regardless of the setting
-            string processedString;
-
-            if (nullConditionalRewriteSupport == NullConditionalRewriteSupport.Rewrite)
-            {
-                // For Rewrite mode, convert to explicit null checks
-                processedString = AggressiveNullConditionalRewrite(originalExpressionString);
-            }
-            else
-            {
-                // For all other modes (including Ignore and None), just remove the ? operators
-                processedString = originalExpressionString.Replace("?.", ".").Replace("?[", "[");
-            }
-
-            // Verify that ALL null conditional operators are gone
-            if (processedString.Contains("?.") || processedString.Contains("?["))
-            {
-                // If we still have null conditionals, apply an even more aggressive approach
-                processedString = processedString.Replace("?.", ".").Replace("?[", "[");
-
-                // Last resort - manually scan and remove any remaining ? operators before . or [
-                processedString = Regex.Replace(processedString, @"\?\.", ".");
-                processedString = Regex.Replace(processedString, @"\?\[", "[");
-            }
-
-            try
-            {
-                expression = SyntaxFactory.ParseExpression(processedString);
-            }
-            catch
-            {
-                // If parsing fails completely, create a safe default based on return type
-                var methodSymbol = semanticModel.GetDeclaredSymbol(method);
-                var returnType = methodSymbol?.ReturnType;
-
-                if (returnType != null)
-                {
-                    var typeName = returnType.ToDisplayString();
-                    if (returnType.IsReferenceType || typeName.EndsWith("?"))
-                    {
-                        expression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
-                    }
-                    else
-                    {
-                        // Create a default value for value types
-                        expression = typeName switch
-                        {
-                            "int" => SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0)),
-                            "bool" => SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression),
-                            "string" => SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal("")),
-                            "decimal" => SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0m)),
-                            _ => SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
-                        };
-                    }
-                }
-                else
-                {
-                    expression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
-                }
-            }
-        }
-
-        return GenerateExpressionFromSyntax(expression,
-            parameterName,
-            semanticModel,
-            NullConditionalRewriteSupport.None); // Pass None to avoid double rewriting
-    }
-
-    // More aggressive null conditional rewriting
-    private static string AggressiveNullConditionalRewrite(string expressionText)
-    {
-        var result = expressionText.Trim();
-
-        // Multiple passes to handle nested null conditionals
-        var maxIterations = 5;
-        var iteration = 0;
-
-        while ((result.Contains("?.") || result.Contains("?[")) && iteration < maxIterations)
-        {
-            var oldResult = result;
-
-            // Pattern 1: Handle simple property access like obj?.prop
-            result = Regex.Replace(result, @"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\?\.([\w]+)", "($1 != null ? $1.$2 : null)");
-
-            // Pattern 2: Handle nested property access like obj.nested?.prop
-            result = Regex.Replace(result, @"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\?\.([\w]+)", "($1 != null ? $1.$2 : null)");
-
-            // Pattern 3: Handle method calls like obj?.Method()
-            result = Regex.Replace(result, @"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\?\.([\w]+)\s*\(([^)]*)\)", "($1 != null ? $1.$2($3) : null)");
-
-            // Pattern 4: Handle indexer access like obj?[index]
-            result = Regex.Replace(result, @"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\?\[([^\]]+)\]", "($1 != null ? $1[$2] : null)");
-
-            // If no change was made, break to avoid infinite loop
-            if (result == oldResult)
-                break;
-
-            iteration++;
-        }
-
-        // Final safety check - if we still have null conditionals, just remove them
-        if (result.Contains("?.") || result.Contains("?["))
-        {
-            result = result.Replace("?.", ".").Replace("?[", "[");
-        }
-
-        return result;
-    }
-
-    private static ExpressionSyntax GenerateExpressionFromSyntax(ExpressionSyntax expression, string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        if (expression is ObjectCreationExpressionSyntax objectCreation)
-        {
-            return GenerateExpressionFromObjectCreation(objectCreation, parameterName, semanticModel, nullConditionalRewriteSupport);
-        }
-
-        // Transform the expression properly to handle method invocations and other cases
-        var transformedExpression = TransformExpression(expression, parameterName, semanticModel, nullConditionalRewriteSupport);
-
-        // Create a lambda expression: parameterName => transformedExpression
-        return SyntaxFactory.SimpleLambdaExpression(
-            SyntaxFactory.Parameter(SyntaxFactory.Identifier(parameterName)),
-            transformedExpression);
-    }
-
-    private static ExpressionSyntax GenerateExpressionFromObjectCreation(ObjectCreationExpressionSyntax objectCreation,
-        string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        Debugger.Launch();
-
-        // Transform the object creation expression
-        var transformedObjectCreation = objectCreation;
-
-        if (objectCreation.Initializer?.Expressions.Count > 0)
-        {
-            var transformedExpressions = new List<ExpressionSyntax>();
-
-            foreach (var expr in objectCreation.Initializer.Expressions)
-            {
-                if (expr is AssignmentExpressionSyntax assignment)
-                {
-                    // CRITICAL FIX: Don't pass nullConditionalRewriteSupport since it should already be rewritten
-                    // at the top level in GenerateExpressionFromMethod
-                    var transformedRight = TransformExpressionInternal(assignment.Right, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-                    var newAssignment = SyntaxFactory.AssignmentExpression(
-                        SyntaxKind.SimpleAssignmentExpression,
-                        assignment.Left,
-                        transformedRight);
-                    transformedExpressions.Add(newAssignment);
-                }
-                else
-                {
-                    var transformedExpr = TransformExpression(expr, parameterName, semanticModel, NullConditionalRewriteSupport.None);
-                    transformedExpressions.Add(transformedExpr);
-                }
-            }
-
-            var newInitializer = SyntaxFactory.InitializerExpression(
-                SyntaxKind.ObjectInitializerExpression,
-                SyntaxFactory.SeparatedList(transformedExpressions));
-
-            transformedObjectCreation = objectCreation.WithInitializer(newInitializer);
-        }
-
-        // Create a lambda expression: parameterName => new Type { ... }
-        return SyntaxFactory.SimpleLambdaExpression(
-            SyntaxFactory.Parameter(SyntaxFactory.Identifier(parameterName)),
-            transformedObjectCreation);
-    }
-
-    private static ExpressionSyntax TransformExpression(ExpressionSyntax expression, string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        // Only apply null conditional rewriting if it hasn't been applied already at the top level
-        if (nullConditionalRewriteSupport != NullConditionalRewriteSupport.None)
-        {
-            try
-            {
-                var rewriter = new NullConditionalRewriter(nullConditionalRewriteSupport, semanticModel);
-                expression = (ExpressionSyntax)rewriter.Visit(expression);
-            }
-            catch (Exception)
-            {
-                // If null conditional rewriting fails, continue with original expression
-            }
-        }
-
-        return TransformExpressionInternal(expression, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-    }
-
-    private static ExpressionSyntax TransformExpressionInternal(ExpressionSyntax expression, string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport, bool parentRequiresParentheses)
-    {
-        // NOTE: Null conditional rewriting should NOT be applied here anymore since it's handled at the top level
-        // Only apply it if explicitly requested (which should be rare)
-        if (nullConditionalRewriteSupport != NullConditionalRewriteSupport.None)
-        {
-            try
-            {
-                var rewriter = new NullConditionalRewriter(nullConditionalRewriteSupport, semanticModel);
-                expression = (ExpressionSyntax)rewriter.Visit(expression);
-            }
-            catch (Exception)
-            {
-                // If null conditional rewriting fails, continue with original expression
-            }
-        }
-
-        // Handle binary expressions
-        if (expression is BinaryExpressionSyntax binary)
-        {
-            // Check if operands will need parentheses based on their current state
-            var leftNeedsParens = binary.Left is ConditionalExpressionSyntax &&
-                     ConditionalNeedsParenthesesInBinaryExpression(binary.OperatorToken);
-
-            var rightNeedsParens = binary.Right is ConditionalExpressionSyntax &&
-                     ConditionalNeedsParenthesesInBinaryExpression(binary.OperatorToken);
-
-            var left = TransformExpressionInternal(binary.Left, parameterName, semanticModel, NullConditionalRewriteSupport.None, leftNeedsParens);
-            var right = TransformExpressionInternal(binary.Right, parameterName, semanticModel, NullConditionalRewriteSupport.None, rightNeedsParens);
-
-            return SyntaxFactory.BinaryExpression(binary.OperatorToken.Kind(), left, right);
-        }
-
-        // Handle conditional expressions
-        if (expression is ConditionalExpressionSyntax conditional)
-        {
-            var condition = TransformExpressionInternal(conditional.Condition, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-            var whenTrue = TransformExpressionInternal(conditional.WhenTrue, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-            var whenFalse = TransformExpressionInternal(conditional.WhenFalse, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-
-            var result = SyntaxFactory.ConditionalExpression(condition, whenTrue, whenFalse);
-
-            // Add parentheses if the parent context requires them (for precedence)
-            return parentRequiresParentheses ? SyntaxFactory.ParenthesizedExpression(result) : result;
-        }
-
-        // Handle method invocations (nested mapper calls)
-        if (expression is InvocationExpressionSyntax invocation)
-        {
-            return HandleMethodInvocation(invocation, parameterName, semanticModel, NullConditionalRewriteSupport.None);
-        }
-
-        // Handle member access expressions like source.Property
-        if (expression is MemberAccessExpressionSyntax memberAccess)
-        {
-            return ReplaceParameterInMemberAccess(memberAccess, parameterName);
-        }
-
-        // Handle parenthesized expressions
-        if (expression is ParenthesizedExpressionSyntax parenthesized)
-        {
-            var inner = TransformExpressionInternal(parenthesized.Expression, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-            return SyntaxFactory.ParenthesizedExpression(inner);
-        }
-
-        // Handle literal expressions (constants)
-        if (expression is LiteralExpressionSyntax literal)
-        {
-            return literal;
-        }
-
-        // Handle cast expressions
-        if (expression is CastExpressionSyntax cast)
-        {
-            var transformedExpression = TransformExpressionInternal(cast.Expression, parameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-            return SyntaxFactory.CastExpression(cast.Type, transformedExpression);
-        }
-
-        // Handle simple identifiers and other expressions
-        return ReplaceParameterInExpression(expression, parameterName);
-    }
-
-    // Helper method to determine when parentheses are needed around conditional expressions in binary expressions
-    private static bool ConditionalNeedsParenthesesInBinaryExpression(SyntaxToken operatorToken)
-    {
-        // Conditional operator (?:) has the lowest precedence except for assignment and lambda.
-        // Therefore ANY use of a conditional expression as an operand of another binary operator
-        // needs parentheses so that the conditional does not capture the rest of the expression.
-        // We explicitly list operators where we require parentheses around an embedded conditional.
-        return operatorToken.IsKind(SyntaxKind.EqualsEqualsToken) ||    // ==
-               operatorToken.IsKind(SyntaxKind.ExclamationEqualsToken) || // !=
-               operatorToken.IsKind(SyntaxKind.LessThanToken) ||          // <
-               operatorToken.IsKind(SyntaxKind.LessThanEqualsToken) ||    // <=
-               operatorToken.IsKind(SyntaxKind.GreaterThanToken) ||       // >
-               operatorToken.IsKind(SyntaxKind.GreaterThanEqualsToken) || // >=
-               operatorToken.IsKind(SyntaxKind.PlusToken) ||              // +
-               operatorToken.IsKind(SyntaxKind.MinusToken) ||             // -
-               operatorToken.IsKind(SyntaxKind.AsteriskToken) ||          // *
-               operatorToken.IsKind(SyntaxKind.SlashToken) ||             // /
-               operatorToken.IsKind(SyntaxKind.PercentToken) ||           // %
-               operatorToken.IsKind(SyntaxKind.QuestionQuestionToken) ||  // ??
-               operatorToken.IsKind(SyntaxKind.BarBarToken) ||            // ||
-               operatorToken.IsKind(SyntaxKind.AmpersandAmpersandToken);  // &&
-    }
-
-    private static ExpressionSyntax HandleMethodInvocation(InvocationExpressionSyntax invocation, string parameterName,
-        SemanticModel semanticModel,
-        NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        // Get the argument being passed to the method
-        if (invocation.ArgumentList.Arguments.Count == 0)
-        {
-            return ReplaceParameterInExpression(invocation, parameterName);
-        }
-
-        // Check if this is a method call that we can inline
-        if (invocation.Expression is IdentifierNameSyntax identifierName)
-        {
-            // Look for the method in the same class
-            var methodName = identifierName.Identifier.ValueText;
-
-            // Try to find the method declaration in the same syntax tree
-            var root = semanticModel.SyntaxTree.GetRoot();
-            var targetMethod = root.DescendantNodes()
-                .OfType<MethodDeclarationSyntax>()
-                .FirstOrDefault(m => m.Identifier.ValueText == methodName);
-
-            if (targetMethod != null)
-            {
-                var argument = invocation.ArgumentList.Arguments[0];
-                var argumentExpression = TransformExpression(argument.Expression, parameterName, semanticModel, nullConditionalRewriteSupport);
-
-                // Try to inline the method - get the parameter name from the target method
-                var targetParameter = targetMethod.ParameterList.Parameters.FirstOrDefault();
-                if (targetParameter != null)
-                {
-                    var targetParameterName = targetParameter.Identifier.ValueText;
-
-                    // Get the body of the target method and inline it
-                    ExpressionSyntax bodyExpression = null;
-                    if (targetMethod.ExpressionBody != null)
-                    {
-                        bodyExpression = targetMethod.ExpressionBody.Expression;
-                    }
-                    else if (targetMethod.Body?.Statements.Count == 1 && targetMethod.Body.Statements[0] is ReturnStatementSyntax returnStatement)
-                    {
-                        bodyExpression = returnStatement.Expression;
-                    }
-
-                    if (bodyExpression != null)
-                    {
-                        try
-                        {
-                            // Apply null conditional rewriting to the original body if needed
-                            if (nullConditionalRewriteSupport != NullConditionalRewriteSupport.None)
-                            {
-                                var rewriter = new NullConditionalRewriter(nullConditionalRewriteSupport, semanticModel);
-                                bodyExpression = (ExpressionSyntax)rewriter.Visit(bodyExpression);
-                            }
-
-                            // Transform the expression with the correct parameter substitution
-                            var inlinedBody = TransformExpressionInternal(bodyExpression, targetParameterName, semanticModel, NullConditionalRewriteSupport.None, false);
-                            return ReplaceParameterInExpression(inlinedBody, targetParameterName, argumentExpression);
-                        }
-                        catch (Exception)
-                        {
-                            // If inlining fails, fall back to parameter replacement
-                            return ReplaceParameterInExpression(invocation, parameterName);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fallback - don't inline, just replace parameter names
-        return ReplaceParameterInExpression(invocation, parameterName);
-    }
-
-    private static ExpressionSyntax ReplaceParameterInMemberAccess(MemberAccessExpressionSyntax memberAccess, string parameterName)
-    {
-        if (memberAccess.Expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "source")
-        {
-            return memberAccess.WithExpression(SyntaxFactory.IdentifierName(parameterName));
-        }
-
-        var transformedExpression = ReplaceParameterInExpression(memberAccess.Expression, parameterName);
-        return memberAccess.WithExpression(transformedExpression);
-    }
-
-    private static ExpressionSyntax ReplaceParameterInExpression(ExpressionSyntax expression, string parameterName)
-    {
-        if (expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "source")
-        {
-            return SyntaxFactory.IdentifierName(parameterName);
-        }
-
-        // Handle specific expression types more carefully
-        if (expression is MemberAccessExpressionSyntax memberAccess)
-        {
-            return ReplaceParameterInMemberAccess(memberAccess, parameterName);
-        }
-
-        if (expression is InvocationExpressionSyntax invocation)
-        {
-            // Transform the expression part (method target)
-            var transformedExpression = ReplaceParameterInExpression(invocation.Expression, parameterName);
-
-            // Transform arguments
-            var transformedArguments = new List<ArgumentSyntax>();
-            foreach (var arg in invocation.ArgumentList.Arguments)
-            {
-                var transformedArg = SyntaxFactory.Argument(ReplaceParameterInExpression(arg.Expression, parameterName));
-                transformedArguments.Add(transformedArg);
-            }
-
-            return SyntaxFactory.InvocationExpression(
-                transformedExpression,
-                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(transformedArguments)));
-        }
-
-        if (expression is BinaryExpressionSyntax binary)
-        {
-            var left = ReplaceParameterInExpression(binary.Left, parameterName);
-            var right = ReplaceParameterInExpression(binary.Right, parameterName);
-            return SyntaxFactory.BinaryExpression(binary.OperatorToken.Kind(), left, right);
-        }
-
-        if (expression is ConditionalExpressionSyntax conditional)
-        {
-            var condition = ReplaceParameterInExpression(conditional.Condition, parameterName);
-            var whenTrue = ReplaceParameterInExpression(conditional.WhenTrue, parameterName);
-            var whenFalse = ReplaceParameterInExpression(conditional.WhenFalse, parameterName);
-            return SyntaxFactory.ConditionalExpression(condition, whenTrue, whenFalse);
-        }
-
-        if (expression is ParenthesizedExpressionSyntax parenthesized)
-        {
-            var inner = ReplaceParameterInExpression(parenthesized.Expression, parameterName);
-            return SyntaxFactory.ParenthesizedExpression(inner);
-        }
-
-        // For more complex expressions, try string replacement as a fallback
-        var expressionString = expression.ToString();
-        if (expressionString.Contains("source"))
-        {
-            var replacedString = expressionString.Replace("source", parameterName);
-
-            try
-            {
-                return SyntaxFactory.ParseExpression(replacedString);
-            }
-            catch
-            {
-                // If parsing fails, return the original expression
-                return expression;
-            }
-        }
-
-        // If no changes needed, return original expression
-        return expression;
-    }
-
-    private static ExpressionSyntax ReplaceParameterInExpression(ExpressionSyntax expression, string oldParameterName, ExpressionSyntax newExpression)
-    {
-        if (expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == oldParameterName)
-        {
-            return newExpression;
-        }
-
-        // Handle specific expression types more carefully
-        if (expression is MemberAccessExpressionSyntax memberAccess)
-        {
-            var transformedExpression = ReplaceParameterInExpression(memberAccess.Expression, oldParameterName, newExpression);
-            return memberAccess.WithExpression(transformedExpression);
-        }
-
-        if (expression is InvocationExpressionSyntax invocation)
-        {
-            // Transform the expression part (method target)
-            var transformedExpression = ReplaceParameterInExpression(invocation.Expression, oldParameterName, newExpression);
-
-            // Transform arguments
-            var transformedArguments = new List<ArgumentSyntax>();
-            foreach (var arg in invocation.ArgumentList.Arguments)
-            {
-                var transformedArg = SyntaxFactory.Argument(ReplaceParameterInExpression(arg.Expression, oldParameterName, newExpression));
-                transformedArguments.Add(transformedArg);
-            }
-
-            return SyntaxFactory.InvocationExpression(
-                transformedExpression,
-                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(transformedArguments)));
-        }
-
-        if (expression is BinaryExpressionSyntax binary)
-        {
-            var left = ReplaceParameterInExpression(binary.Left, oldParameterName, newExpression);
-            var right = ReplaceParameterInExpression(binary.Right, oldParameterName, newExpression);
-            return SyntaxFactory.BinaryExpression(binary.OperatorToken.Kind(), left, right);
-        }
-
-        if (expression is ConditionalExpressionSyntax conditional)
-        {
-            var condition = ReplaceParameterInExpression(conditional.Condition, oldParameterName, newExpression);
-            var whenTrue = ReplaceParameterInExpression(conditional.WhenTrue, oldParameterName, newExpression);
-            var whenFalse = ReplaceParameterInExpression(conditional.WhenFalse, oldParameterName, newExpression);
-            return SyntaxFactory.ConditionalExpression(condition, whenTrue, whenFalse);
-        }
-
-        if (expression is ParenthesizedExpressionSyntax parenthesized)
-        {
-            var inner = ReplaceParameterInExpression(parenthesized.Expression, oldParameterName, newExpression);
-            return SyntaxFactory.ParenthesizedExpression(inner);
-        }
-
-        // For more complex expressions, try string replacement as a fallback
-        var expressionString = expression.ToString();
-        if (expressionString.Contains(oldParameterName))
-        {
-            var newExpressionString = newExpression.ToString();
-            var replacedString = expressionString.Replace(oldParameterName, newExpressionString);
-
-            try
-            {
-                return SyntaxFactory.ParseExpression(replacedString);
-            }
-            catch
-            {
-                // If parsing fails, return the original expression
-                return expression;
-            }
-        }
-
-        // If no changes needed, return original expression
-        return expression;
-    }
-
-    // Generate companion class using candidate methods for inlining
-    private static string GenerateCompanionClassWithCandidates(ClassInfo classInfo, List<CandidateMethodInfo> candidateMethods)
-    {
-        var sb = new StringBuilder();
-        if (!string.IsNullOrEmpty(classInfo.NamespaceName))
-        {
-            sb.AppendLine($"namespace {classInfo.NamespaceName};");
-            sb.AppendLine();
-        }
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Linq.Expressions;");
-        sb.AppendLine("using System.CodeDom.Compiler;");
-        sb.AppendLine();
-        var indent = "";
-        sb.AppendLine($"{indent}[GeneratedCode(\"AlephMapper\", \"1.0.0\")]");
-        sb.AppendLine($"{indent}public partial class {classInfo.ClassName}");
-        sb.AppendLine($"{indent}{{");
-
-        // Add debugging comment
-        sb.AppendLine($"{indent}    // Generated {classInfo.Methods.Length} methods");
-
-        for (int i = 0; i < classInfo.Methods.Length; i++)
-        {
-            var method = classInfo.Methods[i];
-            sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// Expression projection for <see cref=\"{method.OriginalName}({method.SourceType})\"/>");
-            sb.AppendLine($"{indent}    /// </summary>");
-            sb.AppendLine($"{indent}    /// <returns>An expression tree representing the logic of {method.OriginalName}</returns>");
-            sb.AppendLine($"{indent}    public static Expression<Func<{method.SourceType}, {method.ReturnType}>> {method.CompanionName}()");
-            sb.AppendLine($"{indent}    {{");
-
-            // Convert ExpressionSyntax to string first, then format
-            //var expressionString = method.Expression.ToString();
-            var formattedExpression = ExpressionFormatter.FormatExpression(method.Expression, $"{indent}        ");
-
-            sb.AppendLine($"{indent}        return {formattedExpression};");
-            sb.AppendLine($"{indent}    }}");
-            if (i < classInfo.Methods.Length - 1)
-            {
+                var ns = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
+                var sb = new StringBuilder();
+                sb.AppendLine("using System;");
+                sb.AppendLine("using System.Linq;");
+                sb.AppendLine("using System.Linq.Expressions;");
+                sb.AppendLine("using System.CodeDom.Compiler;");
                 sb.AppendLine();
+                
+                if (!string.IsNullOrEmpty(ns))
+                {
+                    sb.AppendLine("namespace " + ns + " {");
+                    sb.AppendLine();
+                }
+
+                sb.AppendLine("[GeneratedCode(\"AlephMapper\", \"1.0.0\")]");
+                sb.AppendLine("partial class " + mapperType.Name + " {");
+
+                foreach (var mm in methods)
+                {
+                    var srcName = string.IsNullOrEmpty(mm.ParamName) ? "source" : mm.ParamName;
+                    var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    //var destMin = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+                    var projectionName = mm.Name + "Expression";
+                    var reverseProjectionName = mm.Name + "ReverseExpression";
+                    var updateName = mm.Name; // keep same
+                    var reverseUpdateName = "Reverse" + updateName;
+
+                    // Build inlined body first (model-driven before emission)
+                    var resolver = new InliningResolver(mm.SemanticModel, dict);
+                    var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
+
+                    // PROJECTION
+                    if (mm.IsExpressive)
+                    {
+                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody);
+                        var formattedExpression = ExpressionFormatter.FormatExpression(nullHandledExpression, "      ");
+
+                        sb.AppendLine("  /// <summary>");
+                        sb.AppendLine($"  /// Expression projection for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>");
+                        sb.AppendLine("  /// </summary>");
+                        sb.AppendLine($"  /// <returns>An expression tree representing the logic of {mm.Name}</returns>");
+                        sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + projectionName + "() => ");
+                        sb.AppendLine("      " + srcName + " => " + formattedExpression + ";");
+                        sb.AppendLine();
+                    }
+
+                    // REVERSE PROJECTION (simple placeholder that swaps direction if it's an object creation)
+                    if (mm.IsReverseExpressive)
+                    {
+                        // naive reverse projection: assume object creation with assignments where right side refers to source
+                        var reverseExpr = TryBuildReverseProjection(inlinedBody, srcName);
+                        if (reverseExpr != null)
+                        {
+                            sb.AppendLine("  /// <summary>");
+                            sb.AppendLine("  /// Reverse projection generated from " + mm.Name + ".");
+                            sb.AppendLine("  /// </summary>");
+                            sb.AppendLine("  public static Expression<Func<" + destFqn + ", " + srcFqn + ">> " + reverseProjectionName + "() => ");
+                            sb.AppendLine("      d => " + reverseExpr + ";");
+                            sb.AppendLine();
+                        }
+                    }
+
+                    // UPDATE
+                    if (mm.IsUpdateable)
+                    {
+                        var lines = new List<string>();
+                        if (EmitHelpers.TryBuildUpdateAssignments((ExpressionSyntax)new CommentRemover().Visit(mm.BodySyntax), "dest", lines))
+                        {
+                            sb.AppendLine("  /// <summary>");
+                            sb.AppendLine("  /// Update companion generated from " + mm.Name + ".");
+                            sb.AppendLine("  /// </summary>");
+                            sb.AppendLine("  public static void " + updateName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                            sb.AppendLine("  {");
+                            sb.AppendLine("    if (" + srcName + " == null || dest == null) return;");
+                            foreach (var l in lines) sb.AppendLine("    " + l);
+                            sb.AppendLine("  }");
+                            sb.AppendLine();
+                        }
+                    }
+
+                    // REVERSE UPDATE (clear+repopulate for collections is left to user types; here we show the creation policy hook)
+                    if (mm.IsReverseUpdatable)
+                    {
+                        sb.AppendLine("  /// <summary>");
+                        sb.AppendLine("  /// Reverse update generated from " + mm.Name + " with CreationPolicy=" + mm.ReverseCreationPolicy + ".");
+                        sb.AppendLine("  /// </summary>");
+                        sb.AppendLine("  public static void " + reverseUpdateName + "(" + destFqn + " dest, " + srcFqn + " " + srcName + ")");
+                        sb.AppendLine("  {");
+                        sb.AppendLine("    if (dest == null) return;");
+                        sb.AppendLine("    if (" + srcName + " == null) {");
+                        sb.AppendLine("       // CreationPolicy handling");
+                        sb.AppendLine("       if (" + mm.ReverseCreationPolicy + " == (int)Projectable.ReverseUpdateCreationPolicy.SkipIfDestNull) return;");
+                        sb.AppendLine("       if (" + mm.ReverseCreationPolicy + " == (int)Projectable.ReverseUpdateCreationPolicy.GuardedCreate) return;");
+                        sb.AppendLine("       return;");
+                        sb.AppendLine("    }");
+                        sb.AppendLine("    // TODO: implement reverse field mapping if needed (mirror of forward assignments).");
+                        sb.AppendLine("  }");
+                        sb.AppendLine();
+                    }
+                }
+
+                sb.AppendLine("}"); // class
+
+                if (!string.IsNullOrEmpty(ns))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("}"); // namespace
+                }
+
+                var fileName = (string.IsNullOrEmpty(ns) ? "" : ns.Replace('.', '_') + "_") + mapperType.Name + "_GeneratedMappings.g.cs";
+
+                //var normalizedCu = SyntaxFactory.ParseCompilationUnit(sb.ToString()).NormalizeWhitespace();
+
+                //spc.AddSource(fileName, normalizedCu.ToFullString());
+
+                spc.AddSource(fileName, sb.ToString());
             }
-        }
-        sb.AppendLine($"{indent}}}");
-        return sb.ToString();
+        });
     }
 
     private static string GetExpressiveAttributeSource()
@@ -824,7 +190,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                /// <summary>
                /// Configures how null-conditional operators are handled
                /// </summary>
-               public enum NullConditionalRewriteSupport
+               public enum NullConditionalRewrite
                {
                    /// <summary>
                    /// Don't rewrite null conditional operators (Default behavior).
@@ -855,142 +221,141 @@ public class AlephSourceGenerator : IIncrementalGenerator
                    /// <summary>
                    /// Get or set how null-conditional operators are handled
                    /// </summary>
-                   public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; } = NullConditionalRewriteSupport.Ignore;
+                   public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
                }
                """;
     }
-
-    // Simple fallback method for null conditional rewriting
-    private static string SimpleNullConditionalRewrite(string expressionText)
+    
+    private static string TryBuildReverseProjection(ExpressionSyntax inlinedBody, string srcName)
     {
-        var result = expressionText.Trim();
+        // Very naive reverse: if body is "new D { P = <src.Prop>, ... }" -> reverse "new S { Prop = d.P, ... }" is not generally possible without type info.
+        // Provide a minimal stub: if new expression exists, return identity of source as placeholder.
+        var oce = inlinedBody as ObjectCreationExpressionSyntax;
+        if (oce == null) return null;
+        // Fallback: return "default(S)" - generator users can opt-out if not desired.
+        return "default(" + srcName + ")";
+    }
 
-        // Handle the most common and straightforward patterns first
-        // Pattern 1: Simple property access like "person.BirthInfo?.Age"
-        // This pattern matches: identifier(s).identifier?.identifier (not followed by parentheses or brackets)
-        var simplePropertyPattern = @"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\?\.([a-zA-Z_][a-zA-Z0-9_]*)(?![(\[]|\.\w)";
-        result = Regex.Replace(result, simplePropertyPattern, "($1 != null ? $1.$2 : null)");
+    private static MappingModel Transform(GeneratorSyntaxContext ctx, System.Threading.CancellationToken ct)
+    {
+        if (ctx.Node is not MethodDeclarationSyntax methodDecl) return null;
+        if (methodDecl.Parent is not ClassDeclarationSyntax classDecl) return null;
 
-        // Handle any remaining null conditional operators with a more conservative approach
-        // Only if there are still ?. operators and they look safe to replace
-        var maxIterations = 3;
-        var iterations = 0;
+        var model = ctx.SemanticModel;
+        var classSymbol = model.GetDeclaredSymbol(classDecl, ct);
+        var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct);
+        if (classSymbol == null || methodSymbol == null) return null;
 
-        while (result.Contains("?.") && iterations < maxIterations)
+        if (methodSymbol.Parameters.Length != 1) return null;
+
+        var hasProj = HasAttr(classSymbol, "AlephMapper.ExpressiveAttribute") || HasAttr(methodSymbol, "AlephMapper.ExpressiveAttribute");
+        var hasUpd = HasAttr(classSymbol, "AlephMapper.UpdateableAttribute") || HasAttr(methodSymbol, "AlephMapper.UpdateableAttribute");
+        var hasRevProj = HasAttr(classSymbol, "AlephMapper.ReverseExpressiveAttribute") || HasAttr(methodSymbol, "AlephMapper.ReverseExpressiveAttribute");
+        var hasRevUpd = HasAttr(classSymbol, "AlephMapper.ReverseUpdatableAttribute") || HasAttr(methodSymbol, "AlephMapper.ReverseUpdatableAttribute");
+
+        //if (!(hasProj || hasUpd || hasRevProj || hasRevUpd))
+        //    return null;
+
+        var bodyExpr = ExtractBodyExpression(methodDecl);
+        if (bodyExpr == null) return null;
+
+        NullConditionalRewrite nullStrategy = GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore;
+        int creationPolicy = GetReverseCreationPolicy(methodSymbol) ?? GetReverseCreationPolicy(classSymbol) ?? 0;
+
+        return new MappingModel(
+            classSymbol,
+            methodSymbol,
+            methodSymbol.Name,
+            methodSymbol.Parameters[0].Name,
+            methodSymbol.Parameters[0].Type,
+            methodSymbol.ReturnType,
+            bodyExpr,
+            model,
+            hasProj,
+            hasUpd,
+            hasRevProj,
+            hasRevUpd,
+            nullStrategy,
+            creationPolicy
+        );
+    }
+
+    //private static bool HasAttr(ISymbol sym, string fullName)
+    //{
+    //    foreach (var a in sym.GetAttributes())
+    //    {
+    //        var cls = a.AttributeClass;
+    //        if (cls != null)
+    //        {
+    //            var s = cls.ToDisplayString();
+    //            if (s == fullName || s == fullName.Substring(fullName.LastIndexOf('.') + 1)) return true;
+    //        }
+    //    }
+    //    return false;
+    //}
+
+    private static bool HasAttr(ISymbol sym, string fullName)
+    {
+        foreach (var a in sym.GetAttributes())
         {
-            var oldResult = result;
-
-            // Very conservative pattern - only match clear identifier chains
-            var conservativePattern = @"([a-zA-Z_][a-zA-Z0-9_]*)\?\.([a-zA-Z_][a-zA-Z0-9_]*)";
-            var matches = Regex.Matches(result, conservativePattern);
-
-            if (matches.Count == 0)
-                break;
-
-            // Replace each match individually to avoid conflicts
-            foreach (Match match in matches)
+            var cls = a.AttributeClass;
+            if (cls != null)
             {
-                var fullMatch = match.Value;
-                var obj = match.Groups[1].Value;
-                var prop = match.Groups[2].Value;
-                var replacement = $"({obj} != null ? {obj}.{prop} : null)";
-                result = result.Replace(fullMatch, replacement);
+                if (cls.Name == fullName || cls.Name == fullName.Substring(fullName.LastIndexOf('.') + 1)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)
+    {
+        foreach (var a in sym.GetAttributes())
+        {
+            var cls = a.AttributeClass;
+            var name = cls?.ToDisplayString();
+            if (name is not ("AlephMapper.ExpressiveAttribute" or "ExpressiveAttribute"))
+            {
+                continue;
             }
 
-            // Break if no changes were made
-            if (result == oldResult)
-                break;
-
-            iterations++;
+            foreach (var arg in a.NamedArguments)
+            {
+                if (arg is { Key: "NullConditionalRewrite", Value.Value: int value })
+                    return (NullConditionalRewrite)value;
+            }
         }
-
-        return result;
-    }
-}
-
-// Value types for caching-friendly data model
-public readonly struct ClassInfo : IEquatable<ClassInfo>
-{
-    public readonly string ClassName;
-    public readonly string NamespaceName;
-    public readonly ImmutableArray<MethodInfo> Methods;
-    public readonly NullConditionalRewriteSupport NullConditionalRewriteSupport;
-
-    public ClassInfo(string className, string namespaceName, ImmutableArray<MethodInfo> methods, NullConditionalRewriteSupport nullConditionalRewriteSupport)
-    {
-        ClassName = className;
-        NamespaceName = namespaceName;
-        Methods = methods;
-        NullConditionalRewriteSupport = nullConditionalRewriteSupport;
+        return null;
     }
 
-    public bool Equals(ClassInfo other)
+    private static int? GetReverseCreationPolicy(ISymbol sym)
     {
-        return ClassName == other.ClassName &&
-               NamespaceName == other.NamespaceName &&
-               Methods.SequenceEqual(other.Methods) &&
-               NullConditionalRewriteSupport == other.NullConditionalRewriteSupport;
-    }
-
-    public override bool Equals(object obj)
-    {
-        return obj is ClassInfo other && Equals(other);
-    }
-
-    public override int GetHashCode()
-    {
-        unchecked
+        foreach (var a in sym.GetAttributes())
         {
-            var hashCode = ClassName?.GetHashCode() ?? 0;
-            hashCode = (hashCode * 397) ^ (NamespaceName?.GetHashCode() ?? 0);
-            hashCode = (hashCode * 397) ^ Methods.GetHashCode();
-            hashCode = (hashCode * 397) ^ (int)NullConditionalRewriteSupport;
-            return hashCode;
+            var cls = a.AttributeClass;
+            if (cls == null) continue;
+            var name = cls.ToDisplayString();
+            if (name is not ("AlephMapper.ReverseUpdatableAttribute" or "ReverseUpdatableAttribute"))
+            {
+                continue;
+            }
+
+            foreach (var arg in a.NamedArguments)
+            {
+                if (arg is { Key: "CreationPolicy", Value.Value: int })
+                    return (int)arg.Value.Value;
+            }
         }
-    }
-}
-
-public readonly struct MethodInfo : IEquatable<MethodInfo>
-{
-    public readonly string OriginalName;
-    public readonly string CompanionName;
-    public readonly string SourceType;
-    public readonly string ReturnType;
-    public readonly ExpressionSyntax Expression;
-
-    public MethodInfo(string originalName, string companionName, string sourceType, string returnType, ExpressionSyntax expression)
-    {
-        OriginalName = originalName;
-        CompanionName = companionName;
-        SourceType = sourceType;
-        ReturnType = returnType;
-        Expression = expression;
+        return null;
     }
 
-    public bool Equals(MethodInfo other)
+    private static ExpressionSyntax ExtractBodyExpression(MethodDeclarationSyntax mds)
     {
-        return OriginalName == other.OriginalName &&
-               CompanionName == other.CompanionName &&
-               SourceType == other.SourceType &&
-               ReturnType == other.ReturnType &&
-               SyntaxFactory.AreEquivalent(Expression, other.Expression);
-    }
-
-    public override bool Equals(object obj)
-    {
-        return obj is MethodInfo other && Equals(other);
-    }
-
-    public override int GetHashCode()
-    {
-        unchecked
+        if (mds.ExpressionBody != null) return mds.ExpressionBody.Expression;
+        if (mds.Body == null) return null;
+        foreach (var statement in mds.Body.Statements)
         {
-            var hashCode = OriginalName?.GetHashCode() ?? 0;
-            hashCode = (hashCode * 397) ^ (CompanionName?.GetHashCode() ?? 0);
-            hashCode = (hashCode * 397) ^ (SourceType?.GetHashCode() ?? 0);
-            hashCode = (hashCode * 397) ^ (ReturnType?.GetHashCode() ?? 0);
-            hashCode = (hashCode * 397) ^ (Expression?.ToString()?.GetHashCode() ?? 0);
-            return hashCode;
+            if (statement is ReturnStatementSyntax rs) return rs.Expression;
         }
+        return null;
     }
 }
