@@ -3,7 +3,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace AlephMapper;
 
@@ -29,13 +28,13 @@ internal class NullConditionalRewriter(NullConditionalRewrite rewriteSupport) : 
             return node;
         }
 
-        else if (rewriteSupport is NullConditionalRewrite.Ignore)
+        if (rewriteSupport is NullConditionalRewrite.Ignore)
         {
             // Ignore the conditional access and simply visit the WhenNotNull expression
             return Visit(node.WhenNotNull);
         }
 
-        else if (rewriteSupport is NullConditionalRewrite.Rewrite)
+        if (rewriteSupport is NullConditionalRewrite.Rewrite)
         {
             return SyntaxFactory.ParenthesizedExpression(
                 SyntaxFactory.ConditionalExpression(
@@ -52,7 +51,7 @@ internal class NullConditionalRewriter(NullConditionalRewrite rewriteSupport) : 
                     SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
                         .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
                 )
-            ).WithTriviaFrom(node);
+            );
         }
 
         return base.VisitConditionalAccessExpression(node);

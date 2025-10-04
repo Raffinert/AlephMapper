@@ -22,7 +22,7 @@ internal sealed class ParameterSubstitutionRewriter(string paramName, Expression
 {
     public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
     {
-        return node.Identifier.Text == paramName ? arg : base.VisitIdentifierName(node);
+        return node.Identifier.Text == paramName ? arg.WithoutTrivia() : base.VisitIdentifierName(node);
     }
 }
 
@@ -47,15 +47,6 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         return p?.DelegateInvokeMethod;
     }
         
-    //public override SyntaxNode VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
-    //{
-    //    // Defer to upstream NullStrategy during emission; here we normalize to a safe form (?. -> !.whenNotNull)
-    //    var visitedExpr = (ExpressionSyntax)Visit(node.Expression);
-    //    var visitedWhen = (ExpressionSyntax)Visit(node.WhenNotNull);
-    //    var expr = ParseExpression(visitedExpr.ToFullString() + "!" + visitedWhen.ToFullString());
-    //    return expr;
-    //}
-
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
@@ -112,7 +103,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
             }
         }
 
-        if (node.Parent == null) return node;
+        if (node.Parent == null) return node.WithoutTrivia();
 
         // Direct-call inlining (MapToDto(s) -> inline)
         var callSym = model.GetSymbolInfo(node.Expression).Symbol as IMethodSymbol;
@@ -128,6 +119,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
             .Visit(callee2.BodySyntax);
 
         var again = (ExpressionSyntax)Visit(substituted);
+        
         return again;
     }
 }

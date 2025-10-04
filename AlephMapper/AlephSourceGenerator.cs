@@ -68,7 +68,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 
                 if (!string.IsNullOrEmpty(ns))
                 {
-                    sb.AppendLine("namespace " + ns + " {");
+                    //sb.AppendLine("namespace " + ns + " {");
+                    sb.AppendLine("namespace " + ns + ";");
                     sb.AppendLine();
                 }
 
@@ -95,14 +96,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     if (mm.IsExpressive)
                     {
                         var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody);
-                        var formattedExpression = ExpressionFormatter.FormatExpression(nullHandledExpression, "      ");
+                        //var formattedExpression = ExpressionFormatter.FormatExpression(nullHandledExpression, "      ");
 
                         sb.AppendLine("  /// <summary>");
                         sb.AppendLine($"  /// Expression projection for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>");
                         sb.AppendLine("  /// </summary>");
                         sb.AppendLine($"  /// <returns>An expression tree representing the logic of {mm.Name}</returns>");
                         sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + projectionName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + formattedExpression + ";");
+                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
                         sb.AppendLine();
                     }
 
@@ -163,19 +164,18 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 sb.AppendLine("}"); // class
 
-                if (!string.IsNullOrEmpty(ns))
-                {
-                    sb.AppendLine();
-                    sb.AppendLine("}"); // namespace
-                }
+                //if (!string.IsNullOrEmpty(ns))
+                //{
+                //    sb.AppendLine();
+                //    sb.AppendLine("}"); // namespace
+                //}
 
                 var fileName = (string.IsNullOrEmpty(ns) ? "" : ns.Replace('.', '_') + "_") + mapperType.Name + "_GeneratedMappings.g.cs";
 
-                //var normalizedCu = SyntaxFactory.ParseCompilationUnit(sb.ToString()).NormalizeWhitespace();
+                // Format the generated code using the extracted formatter
+                var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
 
-                //spc.AddSource(fileName, normalizedCu.ToFullString());
-
-                spc.AddSource(fileName, sb.ToString());
+                spc.AddSource(fileName, formattedCode);
             }
         });
     }
