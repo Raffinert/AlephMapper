@@ -20,7 +20,7 @@ internal sealed class MappingModel
     public readonly bool IsReverseUpdatable;
 
     public readonly NullConditionalRewrite NullStrategy; 
-    public readonly int ReverseCreationPolicy; // enum int
+    public readonly int ReverseCreationPolicy;
 
     public MappingModel(
         INamedTypeSymbol containingType,
@@ -52,5 +52,19 @@ internal sealed class MappingModel
         IsReverseUpdatable = isReverseUpdatable;
         NullStrategy = nullStrategy;
         ReverseCreationPolicy = reverseCreationPolicy;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        if (obj is MappingModel other)
+        {
+            return SymbolEqualityComparer.Default.Equals(MethodSymbol, other.MethodSymbol);
+        }
+        return false;
+    }
+
+    public override int GetHashCode()
+    {
+        return SymbolEqualityComparer.Default.GetHashCode(MethodSymbol);
     }
 }

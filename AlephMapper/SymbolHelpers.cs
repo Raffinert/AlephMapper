@@ -19,7 +19,7 @@ internal static class SymbolHelpers
         private readonly SymbolEqualityComparer _base = SymbolEqualityComparer.Default;
         public bool Equals(IMethodSymbol x, IMethodSymbol y)
         {
-            if (x == y) return true;
+            if (_base.Equals(x, y)) return true;
             if (x == null || y == null) return false;
             return _base.Equals(Normalize(x), Normalize(y));
         }
