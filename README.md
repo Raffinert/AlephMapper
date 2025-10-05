@@ -140,6 +140,7 @@ For each method marked with `[Expressive]`:
 
 - Methods must be **static** and be member of a **partial static class**
 - Supported only simple lambda-bodied or return methods
+- Dos not have circilar references detection for method calls
 
 ## 🔄 Migration from Other Mappers
 
