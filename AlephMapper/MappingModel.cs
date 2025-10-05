@@ -16,7 +16,7 @@ internal sealed class MappingModel
 
     public readonly bool IsExpressive;
     public readonly bool IsUpdateable;
-    public readonly bool ClassIsStaticAndPartial;
+    public readonly bool IsClassPartial;
 
     public readonly NullConditionalRewrite NullStrategy; 
 
@@ -43,7 +43,7 @@ internal sealed class MappingModel
         SemanticModel = semanticModel;
         IsExpressive = isExpressive;
         IsUpdateable = isUpdateable;
-        ClassIsStaticAndPartial = classIsStaticAndPartial;
+        IsClassPartial = classIsStaticAndPartial;
         NullStrategy = nullStrategy;
     }
 

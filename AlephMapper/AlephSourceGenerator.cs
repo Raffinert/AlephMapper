@@ -52,7 +52,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 var mapperType = kvp.Key;
                 var methods = kvp.Value;
 
-                if (!methods.Any(m => (m.IsExpressive || m.IsUpdateable) && m.ClassIsStaticAndPartial))
+                if (!methods.Any(m => (m.IsExpressive || m.IsUpdateable) && m.IsClassPartial))
                 {
                     continue;
                 }
@@ -169,6 +169,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
         if (ctx.Node is not MethodDeclarationSyntax methodDecl) return null;
         if (methodDecl.Parent is not ClassDeclarationSyntax classDecl) return null;
 
+        var classIsStatic = classDecl.Modifiers
+            .Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+        
+        if(!classIsStatic) return null;
+
         var model = ctx.SemanticModel;
         var classSymbol = model.GetDeclaredSymbol(classDecl, ct);
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct);
@@ -199,17 +204,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var nullStrategy = GetNullStrategy(methodSymbol) 
                            ?? GetNullStrategy(classSymbol) 
                            ?? NullConditionalRewrite.Ignore;
-        
-        //ClassInfo? classInfo = null;
-        // if (method.Parent is ClassDeclarationSyntax classDecl && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
-        //     classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)) &&
-        //     classDecl.AttributeLists.Count > 0)
 
-        var classIsStaticAndPartial = classDecl.Modifiers
-                                          .Any(m => m.IsKind(SyntaxKind.StaticKeyword))
-                                      && classDecl.Modifiers
-                                          .Any(m => m.IsKind(SyntaxKind.PartialKeyword));
-
+        var isClassPartial = classDecl.Modifiers
+                                      .Any(m => m.IsKind(SyntaxKind.PartialKeyword));
 
         return new MappingModel(
             classSymbol,
@@ -222,11 +219,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
             model,
             hasExpressive,
             hasUpdateable,
-            classIsStaticAndPartial,
+            isClassPartial,
             nullStrategy
         );
     }
-    
 
     private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)
     {
