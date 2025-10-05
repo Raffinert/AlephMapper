@@ -16,11 +16,11 @@ internal sealed class MappingModel
 
     public readonly bool IsExpressive;
     public readonly bool IsUpdateable;
+    public readonly bool ClassIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy; 
 
-    public MappingModel(
-        INamedTypeSymbol containingType,
+    public MappingModel(INamedTypeSymbol containingType,
         IMethodSymbol methodSymbol,
         string name,
         string paramName,
@@ -30,6 +30,7 @@ internal sealed class MappingModel
         SemanticModel semanticModel,
         bool isExpressive,
         bool isUpdateable,
+        bool classIsStaticAndPartial,
         NullConditionalRewrite nullStrategy)
     {
         ContainingType = containingType;
@@ -42,6 +43,7 @@ internal sealed class MappingModel
         SemanticModel = semanticModel;
         IsExpressive = isExpressive;
         IsUpdateable = isUpdateable;
+        ClassIsStaticAndPartial = classIsStaticAndPartial;
         NullStrategy = nullStrategy;
     }
 

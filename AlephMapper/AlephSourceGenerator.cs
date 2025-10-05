@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 
@@ -53,7 +52,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 var mapperType = kvp.Key;
                 var methods = kvp.Value;
 
-                if (!methods.Any(m => m.IsExpressive || m.IsUpdateable))
+                if (!methods.Any(m => (m.IsExpressive || m.IsUpdateable) && m.ClassIsStaticAndPartial))
                 {
                     continue;
                 }
@@ -197,8 +196,21 @@ public class AlephSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        var nullStrategy = GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore;
+        var nullStrategy = GetNullStrategy(methodSymbol) 
+                           ?? GetNullStrategy(classSymbol) 
+                           ?? NullConditionalRewrite.Ignore;
         
+        //ClassInfo? classInfo = null;
+        // if (method.Parent is ClassDeclarationSyntax classDecl && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
+        //     classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)) &&
+        //     classDecl.AttributeLists.Count > 0)
+
+        var classIsStaticAndPartial = classDecl.Modifiers
+                                          .Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                                      && classDecl.Modifiers
+                                          .Any(m => m.IsKind(SyntaxKind.PartialKeyword));
+
+
         return new MappingModel(
             classSymbol,
             methodSymbol,
@@ -210,6 +222,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             model,
             hasExpressive,
             hasUpdateable,
+            classIsStaticAndPartial,
             nullStrategy
         );
     }
