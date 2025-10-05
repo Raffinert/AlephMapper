@@ -21,7 +21,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
         var candidates = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax && node.Parent is ClassDeclarationSyntax,
-            Transform
+            GetMappingModel
         ).Where(static m => m != null);
 
         var all = candidates.Collect();
@@ -164,7 +164,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return streamReader.ReadToEnd();
     }
     
-    private static MappingModel Transform(GeneratorSyntaxContext ctx, CancellationToken ct)
+    private static MappingModel GetMappingModel(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         if (ctx.Node is not MethodDeclarationSyntax methodDecl) return null;
         if (methodDecl.Parent is not ClassDeclarationSyntax classDecl) return null;
