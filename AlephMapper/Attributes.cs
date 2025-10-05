@@ -33,7 +33,7 @@ public enum NullConditionalRewrite
 /// <summary>
 /// Marks a class to generate expressive companion methods.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class ExpressiveAttribute : Attribute
 {
     /// <summary>
@@ -41,3 +41,9 @@ public sealed class ExpressiveAttribute : Attribute
     /// </summary>
     public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }
+
+/// <summary>
+/// Marks a class to generate update companion methods.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
+public sealed class UpdateableAttribute : Attribute;

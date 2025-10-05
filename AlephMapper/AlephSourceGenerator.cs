@@ -3,7 +3,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 
@@ -16,7 +18,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
     {
         // Add the attribute source
         context.RegisterPostInitializationOutput(ctx =>
-            ctx.AddSource("ExpressiveAttribute.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
+            ctx.AddSource("AlephMapper.Attributes.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
 
         var candidates = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax && node.Parent is ClassDeclarationSyntax,
@@ -140,48 +142,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
     private static string GetExpressiveAttributeSource()
     {
-        return """
-               using System;
-
-               namespace AlephMapper;
-
-               /// <summary>
-               /// Configures how null-conditional operators are handled
-               /// </summary>
-               public enum NullConditionalRewrite
-               {
-                   /// <summary>
-                   /// Don't rewrite null conditional operators (Default behavior).
-                   /// Usage of null conditional operators is thereby not allowed
-                   /// </summary>
-                   None,
-
-                   /// <summary>
-                   /// Ignore null-conditional operators in the generated expression tree
-                   /// </summary>
-                   /// <remarks>
-                   /// <c>(A?.B)</c> is rewritten as expression: <c>(A.B)</c>
-                   /// </remarks>
-                   Ignore,
-
-                   /// <summary>
-                   /// Translates null-conditional operators into explicit null checks
-                   /// </summary>
-                   /// <remarks>
-                   /// <c>(A?.B)</c> is rewritten as expression: <c>(A != null ? A.B : null)</c>
-                   /// </remarks>
-                   Rewrite
-               }
-
-               [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-               public sealed class ExpressiveAttribute : Attribute
-               {
-                   /// <summary>
-                   /// Get or set how null-conditional operators are handled
-                   /// </summary>
-                   public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
-               }
-               """;
+        var assembly = typeof(AlephSourceGenerator).Assembly;
+        using var streamReader =  new StreamReader(assembly.GetManifestResourceStream("AlephMapper.Attributes.cs")!);
+        return streamReader.ReadToEnd();
     }
     
     private static MappingModel Transform(GeneratorSyntaxContext ctx, CancellationToken ct)

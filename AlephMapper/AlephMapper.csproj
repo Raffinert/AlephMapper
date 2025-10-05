@@ -21,4 +21,8 @@
     <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers\dotnet\cs\$(AssemblyName).dll" Visible="false" />
   </ItemGroup>
 
+	<ItemGroup>
+		<EmbeddedResource Include="Attributes.cs" />
+	</ItemGroup>
+
 </Project>
