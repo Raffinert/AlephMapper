@@ -2,7 +2,7 @@
 
 // Projection mappers for EF Core integration tests
 
-[Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class EfCoreMapper
 {
     public static PersonSummaryDto GetPersonComplex(Person p) => new PersonSummaryDto
@@ -88,7 +88,7 @@ public static partial class EfCoreMapper
 }
 
 // Mapper with Ignore policy for comparison
-[Expressive(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class EfCoreIgnoreMapper
 {
     public static string GetPersonName(Person person) => person.Name;

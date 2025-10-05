@@ -5,7 +5,7 @@ namespace AlephMapper;
 /// <summary>
 /// Configures how null-conditional operators are handled
 /// </summary>
-public enum NullConditionalRewriteSupport
+public enum NullConditionalRewrite
 {
     /// <summary>
     /// Don't rewrite null conditional operators (Default behavior).
@@ -33,11 +33,17 @@ public enum NullConditionalRewriteSupport
 /// <summary>
 /// Marks a class to generate expressive companion methods.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class ExpressiveAttribute : Attribute
 {
     /// <summary>
     /// Get or set how null-conditional operators are handled
     /// </summary>
-    public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; } = NullConditionalRewriteSupport.Ignore;
+    public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }
+
+/// <summary>
+/// Marks a class to generate update companion methods.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
+public sealed class UpdateableAttribute : Attribute;

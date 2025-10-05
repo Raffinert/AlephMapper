@@ -1,8 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
-using TUnit.Assertions; 
-using TUnit.Core;
 
 namespace AlephMapper.Tests;
 
@@ -65,85 +62,83 @@ public class DebugTests
     public async Task Debug_Expression_Generation()
     {
         // This test is primarily for debugging and inspection of generated expressions
-        
+
         // Arrange
         var bornInKyivExpression = Mapper.BornInKyivExpression();
-        var livesInKyivAndOlder35Expression = Mapper.LivesInKyivAndOlder35Expression();
-        
+        var bornInKyivAndOlder35Expression = Mapper.BornInKyivAndOlder35Expression();
+
         // Act & Assert - Output expressions for debugging
         Console.WriteLine("BornInKyiv Expression:");
         Console.WriteLine(bornInKyivExpression.ToString());
         Console.WriteLine("");
-        
+
         Console.WriteLine("LivesInKyivAndOlder35 Expression:");
-        Console.WriteLine(livesInKyivAndOlder35Expression.ToString());
+        Console.WriteLine(bornInKyivAndOlder35Expression.ToString());
         Console.WriteLine("");
-        
+
         // Verify they compile and work
         var bornInKyivCompiled = bornInKyivExpression.Compile();
-        var livesInKyivAndOlder35Compiled = livesInKyivAndOlder35Expression.Compile();
-        
+        var bornInKyivAndOlder35Compiled = bornInKyivAndOlder35Expression.Compile();
+
         var testBirthInfo = new BirthInfo { Age = 40, Address = "Kyiv" };
         var testSourceDto = new SourceDto { BirthInfo = testBirthInfo };
-        
+
         await Assert.That(bornInKyivCompiled(testBirthInfo)).IsTrue();
-        await Assert.That(livesInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
+        await Assert.That(bornInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
     }
 
     [Test]
     public async Task Debug_EfCore_Query_Generation()
     {
         // This test helps debug EF Core SQL generation
-        
+
         // Arrange
         var personSummaryExpression = EfCoreMapper.GetPersonSummaryExpression();
-        
+
         // Act
-        var query = _context.Persons
-            .Include(p => p.BirthInfo)
-            .Select(personSummaryExpression);
-            
+        var query = _context.Persons.Select(personSummaryExpression);
+
         Console.WriteLine("Generated SQL:");
         Console.WriteLine(query.ToQueryString());
         Console.WriteLine("");
-        
+
         var results = await query.ToListAsync();
-        
+
         // Assert
         await Assert.That(results.Count).IsEqualTo(4);
-        
+
         foreach (var result in results)
         {
             Console.WriteLine($"Result: {result}");
         }
     }
 
-    [Test] 
+    [Test]
     public async Task Debug_Complex_Expression_With_Null_Conditional()
     {
         // Debug expressions that use null conditional operators
-        
+
         // Arrange
         var rewriteExpression = RewriteMapper.GetAddressExpression();
         var ignoreExpression = IgnoreMapper.GetAddressExpression();
-        
+
         // Act & Assert
         Console.WriteLine("Rewrite Policy Expression:");
         Console.WriteLine(rewriteExpression.ToString());
         Console.WriteLine("");
-        
+
         Console.WriteLine("Ignore Policy Expression:");
         Console.WriteLine(ignoreExpression.ToString());
         Console.WriteLine("");
-        
+
         var rewriteCompiled = rewriteExpression.Compile();
         var ignoreCompiled = ignoreExpression.Compile();
-        
+
         // Test with null values
         var sourceWithNull = new SourceDto { Name = "Test", BirthInfo = null };
-        
+
         await Assert.That(rewriteCompiled(sourceWithNull)).IsEqualTo("Unknown");
-        
+
         // With ignore policy, this would throw NullReferenceException
         await Assert.That(() => ignoreCompiled(sourceWithNull)).Throws<NullReferenceException>();
     }

@@ -1,8 +1,6 @@
 ﻿using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
-using TUnit.Assertions;
-using TUnit.Core;
 
 namespace AlephMapper.Tests;
 

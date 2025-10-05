@@ -1,9 +1,4 @@
-﻿using System;
-using System.Linq.Expressions;
-using TUnit.Assertions;
-using TUnit.Core;
-
-namespace AlephMapper.Tests;
+﻿namespace AlephMapper.Tests;
 
 public class GeneratedCodeValidationTests
 {
@@ -12,37 +7,37 @@ public class GeneratedCodeValidationTests
     {
         // This test verifies that the generated expressions compile successfully
         // without CS8072 errors (null propagating operators in expression trees)
-        
+
         // These expressions would have failed before our null conditional rewrite implementation
         var bornInKyivExpression = Mapper.BornInKyivExpression();
-        var livesInKyivAndOlder35Expression = Mapper.LivesInKyivAndOlder35Expression();
-        
+        var bornInKyivAndOlder35Expression = Mapper.BornInKyivAndOlder35Expression();
+
         // Assert that we can compile them (this would fail with CS8072 before our fix)
         var bornInKyivCompiled = bornInKyivExpression.Compile();
-        var livesInKyivAndOlder35Compiled = livesInKyivAndOlder35Expression.Compile();
-        
+        var bornInKyivAndOlder35Compiled = bornInKyivAndOlder35Expression.Compile();
+
         // Output the expression trees for inspection
         Console.WriteLine("BornInKyiv Expression:");
         Console.WriteLine(bornInKyivExpression.ToString());
         Console.WriteLine("");
-        
+
         Console.WriteLine("LivesInKyivAndOlder35 Expression:");
-        Console.WriteLine(livesInKyivAndOlder35Expression.ToString());
+        Console.WriteLine(bornInKyivAndOlder35Expression.ToString());
         Console.WriteLine("");
-        
+
         // Verify they work correctly with non-null values
         var testBirthInfo = new BirthInfo { Age = 40, Address = "Kyiv" };
         var testSourceDto = new SourceDto { BirthInfo = testBirthInfo };
-        
+
         await Assert.That(bornInKyivCompiled(testBirthInfo)).IsTrue();
-        await Assert.That(livesInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
-        
+        await Assert.That(bornInKyivAndOlder35Compiled(testSourceDto)).IsTrue();
+
         // With Ignore policy (now default), null values will throw NullReferenceException
         // This is expected behavior for the Ignore policy
         await Assert.That(() => bornInKyivCompiled(null)).Throws<NullReferenceException>();
-        
+
         var testSourceDtoWithNullBirthInfo = new SourceDto { BirthInfo = null };
-        await Assert.That(() => livesInKyivAndOlder35Compiled(testSourceDtoWithNullBirthInfo)).Throws<NullReferenceException>();
+        await Assert.That(() => bornInKyivAndOlder35Compiled(testSourceDtoWithNullBirthInfo)).Throws<NullReferenceException>();
     }
 
     [Test]
@@ -51,39 +46,39 @@ public class GeneratedCodeValidationTests
         // Test expressions with different policies
         var ignoreMapperExpression = IgnoreMapper.GetAddressExpression();
         var rewriteMapperExpression = RewriteMapper.GetAddressExpression();
-        
+
         Console.WriteLine("Ignore Policy Expression:");
         Console.WriteLine(ignoreMapperExpression.ToString());
         Console.WriteLine("");
-        
+
         Console.WriteLine("Rewrite Policy Expression:");
         Console.WriteLine(rewriteMapperExpression.ToString());
         Console.WriteLine("");
-        
+
         // Both should compile successfully
         var ignoreCompiled = ignoreMapperExpression.Compile();
         var rewriteCompiled = rewriteMapperExpression.Compile();
-        
+
         // Test with valid data - both should work the same
-        var sourceWithBirthInfo = new SourceDto 
-        { 
-            Name = "Test", 
-            BirthInfo = new BirthInfo { Address = "Test Address" } 
+        var sourceWithBirthInfo = new SourceDto
+        {
+            Name = "Test",
+            BirthInfo = new BirthInfo { Address = "Test Address" }
         };
-        
+
         await Assert.That(ignoreCompiled(sourceWithBirthInfo)).IsEqualTo("Test Address");
         await Assert.That(rewriteCompiled(sourceWithBirthInfo)).IsEqualTo("Test Address");
-        
+
         // Test with null data - behavior should differ
-        var sourceWithNullBirthInfo = new SourceDto 
-        { 
-            Name = "Test", 
-            BirthInfo = null 
+        var sourceWithNullBirthInfo = new SourceDto
+        {
+            Name = "Test",
+            BirthInfo = null
         };
-        
+
         // Ignore policy should throw NullReferenceException
         await Assert.That(() => ignoreCompiled(sourceWithNullBirthInfo)).Throws<NullReferenceException>();
-        
+
         // Rewrite policy should return default value
         await Assert.That(rewriteCompiled(sourceWithNullBirthInfo)).IsEqualTo("Unknown");
     }
@@ -93,39 +88,39 @@ public class GeneratedCodeValidationTests
     {
         // This test verifies that generated expressions can be used in EF Core queries
         // by checking that they represent valid expression tree structures
-        
+
         var personNameExpression = EfCoreMapper.GetPersonNameExpression();
         var birthPlaceExpression = EfCoreMapper.GetBirthPlaceExpression();
-        
+
         Console.WriteLine("Person Name Expression:");
         Console.WriteLine(personNameExpression.ToString());
         Console.WriteLine("");
-        
+
         Console.WriteLine("Birth Place Expression:");
         Console.WriteLine(birthPlaceExpression.ToString());
         Console.WriteLine("");
-        
+
         // These expressions should compile
         var nameCompiled = personNameExpression.Compile();
         var birthPlaceCompiled = birthPlaceExpression.Compile();
-        
+
         // Test with mock data
-        var person = new Person 
-        { 
-            Name = "John Doe", 
+        var person = new Person
+        {
+            Name = "John Doe",
             BirthInfo = new PersonBirthInfo { BirthPlace = "Kyiv" }
         };
-        
+
         await Assert.That(nameCompiled(person)).IsEqualTo("John Doe");
         await Assert.That(birthPlaceCompiled(person)).IsEqualTo("Kyiv");
-        
+
         // Test with null birth info
-        var personWithNullBirthInfo = new Person 
-        { 
+        var personWithNullBirthInfo = new Person
+        {
             Name = "Jane Smith",
             BirthInfo = null
         };
-        
+
         await Assert.That(nameCompiled(personWithNullBirthInfo)).IsEqualTo("Jane Smith");
         await Assert.That(birthPlaceCompiled(personWithNullBirthInfo)).IsEqualTo("Unknown");
     }
@@ -137,16 +132,16 @@ public class GeneratedCodeValidationTests
         var mapperType = typeof(Mapper);
         var rewriteMapperType = typeof(RewriteMapper);
         var ignoreMapperType = typeof(IgnoreMapper);
-        
+
         // Check for GeneratedCode attributes
         var mapperGeneratedAttributes = mapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
         var rewriteGeneratedAttributes = rewriteMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
         var ignoreGeneratedAttributes = ignoreMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
-        
+
         await Assert.That(mapperGeneratedAttributes.Length).IsGreaterThan(0);
         await Assert.That(rewriteGeneratedAttributes.Length).IsGreaterThan(0);
         await Assert.That(ignoreGeneratedAttributes.Length).IsGreaterThan(0);
-        
+
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
