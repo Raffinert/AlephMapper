@@ -15,7 +15,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Add the attribute source
         context.RegisterPostInitializationOutput(ctx =>
             ctx.AddSource("AlephMapper.Attributes.g.cs", SourceText.From(GetExpressiveAttributeSource(), Encoding.UTF8)));
 
