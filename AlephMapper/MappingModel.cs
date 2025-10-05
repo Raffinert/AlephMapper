@@ -16,11 +16,8 @@ internal sealed class MappingModel
 
     public readonly bool IsExpressive;
     public readonly bool IsUpdateable;
-    public readonly bool IsReverseExpressive;
-    public readonly bool IsReverseUpdatable;
 
     public readonly NullConditionalRewrite NullStrategy; 
-    public readonly int ReverseCreationPolicy;
 
     public MappingModel(
         INamedTypeSymbol containingType,
@@ -31,12 +28,9 @@ internal sealed class MappingModel
         ITypeSymbol returnType,
         ExpressionSyntax bodySyntax,
         SemanticModel semanticModel,
-        bool isProjectable,
+        bool isExpressive,
         bool isUpdateable,
-        bool isReverseProjectable,
-        bool isReverseUpdatable,
-        NullConditionalRewrite nullStrategy,
-        int reverseCreationPolicy)
+        NullConditionalRewrite nullStrategy)
     {
         ContainingType = containingType;
         MethodSymbol = methodSymbol;
@@ -46,12 +40,9 @@ internal sealed class MappingModel
         ReturnType = returnType;
         BodySyntax = bodySyntax;
         SemanticModel = semanticModel;
-        IsExpressive = isProjectable;
+        IsExpressive = isExpressive;
         IsUpdateable = isUpdateable;
-        IsReverseExpressive = isReverseProjectable;
-        IsReverseUpdatable = isReverseUpdatable;
         NullStrategy = nullStrategy;
-        ReverseCreationPolicy = reverseCreationPolicy;
     }
 
     public override bool Equals(object? obj)

@@ -3,9 +3,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace AlephMapper;
 
@@ -25,40 +25,38 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
         var all = candidates.Collect();
 
-        context.RegisterSourceOutput(all, static (spc, arr) =>
+        context.RegisterSourceOutput(all, static (spc, models) =>
         {
-            //Debugger.Launch();
+            if (models.Length == 0) return;
 
-            if (arr.Length == 0) return;
-
-            var dict = new Dictionary<IMethodSymbol, MappingModel>(SymbolHelpers.MethodComparer.Instance);
-            foreach (var mm in arr)
+            var modelsByMethod = new Dictionary<IMethodSymbol, MappingModel>(SymbolHelpers.MethodComparer.Instance);
+            foreach (var mm in models)
             {
-                dict[SymbolHelpers.Normalize(mm.MethodSymbol)] = mm;
+                modelsByMethod[SymbolHelpers.Normalize(mm.MethodSymbol)] = mm;
             }
 
-            var byType = new Dictionary<INamedTypeSymbol, List<MappingModel>>(SymbolEqualityComparer.Default);
-            foreach (var mm in arr)
+            var modelsByClass = new Dictionary<INamedTypeSymbol, List<MappingModel>>(SymbolEqualityComparer.Default);
+            foreach (var mm in models)
             {
-                if (!byType.TryGetValue(mm.ContainingType, out var list))
+                if (!modelsByClass.TryGetValue(mm.ContainingType, out var list))
                 {
                     list = [];
-                    byType.Add(mm.ContainingType, list);
+                    modelsByClass.Add(mm.ContainingType, list);
                 }
                 list.Add(mm);
             }
 
-            foreach (var kvp in byType)
+            foreach (var kvp in modelsByClass)
             {
                 var mapperType = kvp.Key;
                 var methods = kvp.Value;
 
-                if (!methods.Any(m => m.IsExpressive || m.IsReverseExpressive || m.IsReverseUpdatable || m.IsUpdateable))
+                if (!methods.Any(m => m.IsExpressive || m.IsUpdateable))
                 {
                     continue;
                 }
 
-                var ns = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
+                var nameSpace = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
                 var sb = new StringBuilder();
                 sb.AppendLine("using System;");
                 sb.AppendLine("using System.Linq;");
@@ -66,10 +64,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 sb.AppendLine("using System.CodeDom.Compiler;");
                 sb.AppendLine();
                 
-                if (!string.IsNullOrEmpty(ns))
+                if (!string.IsNullOrEmpty(nameSpace))
                 {
-                    //sb.AppendLine("namespace " + ns + " {");
-                    sb.AppendLine("namespace " + ns + ";");
+                    sb.AppendLine("namespace " + nameSpace + ";");
                     sb.AppendLine();
                 }
 
@@ -81,58 +78,42 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var srcName = string.IsNullOrEmpty(mm.ParamName) ? "source" : mm.ParamName;
                     var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    //var destMin = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-
-                    var projectionName = mm.Name + "Expression";
-                    var reverseProjectionName = mm.Name + "ReverseExpression";
-                    var updateName = mm.Name; // keep same
-                    var reverseUpdateName = "Reverse" + updateName;
 
                     // Build inlined body first (model-driven before emission)
-                    var resolver = new InliningResolver(mm.SemanticModel, dict);
+                    var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
 
-                    // PROJECTION
+                    // Expression method
                     if (mm.IsExpressive)
                     {
                         var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody);
-                        //var formattedExpression = ExpressionFormatter.FormatExpression(nullHandledExpression, "      ");
 
-                        sb.AppendLine("  /// <summary>");
-                        sb.AppendLine($"  /// Expression projection for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>");
-                        sb.AppendLine("  /// </summary>");
-                        sb.AppendLine($"  /// <returns>An expression tree representing the logic of {mm.Name}</returns>");
-                        sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + projectionName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
-                        sb.AppendLine();
-                    }
-
-                    // REVERSE PROJECTION (simple placeholder that swaps direction if it's an object creation)
-                    if (mm.IsReverseExpressive)
-                    {
-                        // naive reverse projection: assume object creation with assignments where right side refers to source
-                        var reverseExpr = TryBuildReverseProjection(inlinedBody, srcName);
-                        if (reverseExpr != null)
+                        if (nullHandledExpression != null)
                         {
+                            var expressionMethodName = mm.Name + "Expression";
+
                             sb.AppendLine("  /// <summary>");
-                            sb.AppendLine("  /// Reverse projection generated from " + mm.Name + ".");
+                            sb.AppendLine($"  /// Expression projection for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>");
                             sb.AppendLine("  /// </summary>");
-                            sb.AppendLine("  public static Expression<Func<" + destFqn + ", " + srcFqn + ">> " + reverseProjectionName + "() => ");
-                            sb.AppendLine("      d => " + reverseExpr + ";");
+                            sb.AppendLine($"  /// <returns>An expression tree representing the logic of {mm.Name}</returns>");
+                            sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                            sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
                             sb.AppendLine();
                         }
                     }
 
-                    // UPDATE
+                    // Update method
                     if (mm.IsUpdateable)
                     {
                         var lines = new List<string>();
                         if (EmitHelpers.TryBuildUpdateAssignments((ExpressionSyntax)new CommentRemover().Visit(mm.BodySyntax), "dest", lines))
                         {
+                            var updateMethodName = mm.Name;
+
                             sb.AppendLine("  /// <summary>");
                             sb.AppendLine("  /// Update companion generated from " + mm.Name + ".");
                             sb.AppendLine("  /// </summary>");
-                            sb.AppendLine("  public static void " + updateName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                            sb.AppendLine("  public static void " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
                             sb.AppendLine("    if (" + srcName + " == null || dest == null) return;");
                             foreach (var l in lines) sb.AppendLine("    " + l);
@@ -140,42 +121,19 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             sb.AppendLine();
                         }
                     }
-
-                    // REVERSE UPDATE (clear+repopulate for collections is left to user types; here we show the creation policy hook)
-                    if (mm.IsReverseUpdatable)
-                    {
-                        sb.AppendLine("  /// <summary>");
-                        sb.AppendLine("  /// Reverse update generated from " + mm.Name + " with CreationPolicy=" + mm.ReverseCreationPolicy + ".");
-                        sb.AppendLine("  /// </summary>");
-                        sb.AppendLine("  public static void " + reverseUpdateName + "(" + destFqn + " dest, " + srcFqn + " " + srcName + ")");
-                        sb.AppendLine("  {");
-                        sb.AppendLine("    if (dest == null) return;");
-                        sb.AppendLine("    if (" + srcName + " == null) {");
-                        sb.AppendLine("       // CreationPolicy handling");
-                        sb.AppendLine("       if (" + mm.ReverseCreationPolicy + " == (int)Projectable.ReverseUpdateCreationPolicy.SkipIfDestNull) return;");
-                        sb.AppendLine("       if (" + mm.ReverseCreationPolicy + " == (int)Projectable.ReverseUpdateCreationPolicy.GuardedCreate) return;");
-                        sb.AppendLine("       return;");
-                        sb.AppendLine("    }");
-                        sb.AppendLine("    // TODO: implement reverse field mapping if needed (mirror of forward assignments).");
-                        sb.AppendLine("  }");
-                        sb.AppendLine();
-                    }
                 }
 
                 sb.AppendLine("}"); // class
 
-                //if (!string.IsNullOrEmpty(ns))
-                //{
-                //    sb.AppendLine();
-                //    sb.AppendLine("}"); // namespace
-                //}
-
-                var fileName = (string.IsNullOrEmpty(ns) ? "" : ns.Replace('.', '_') + "_") + mapperType.Name + "_GeneratedMappings.g.cs";
+                var fileName = (string.IsNullOrEmpty(nameSpace) 
+                    ? "" 
+                    : nameSpace.Replace('.', '_') + "_")
+                        + mapperType.Name + "_GeneratedMappings.g.cs";
 
                 // Format the generated code using the extracted formatter
-                var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
+               // var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
 
-                spc.AddSource(fileName, formattedCode);
+                spc.AddSource(fileName, sb.ToString());
             }
         });
     }
@@ -226,17 +184,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                """;
     }
     
-    private static string TryBuildReverseProjection(ExpressionSyntax inlinedBody, string srcName)
-    {
-        // Very naive reverse: if body is "new D { P = <src.Prop>, ... }" -> reverse "new S { Prop = d.P, ... }" is not generally possible without type info.
-        // Provide a minimal stub: if new expression exists, return identity of source as placeholder.
-        var oce = inlinedBody as ObjectCreationExpressionSyntax;
-        if (oce == null) return null;
-        // Fallback: return "default(S)" - generator users can opt-out if not desired.
-        return "default(" + srcName + ")";
-    }
-
-    private static MappingModel Transform(GeneratorSyntaxContext ctx, System.Threading.CancellationToken ct)
+    private static MappingModel Transform(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         if (ctx.Node is not MethodDeclarationSyntax methodDecl) return null;
         if (methodDecl.Parent is not ClassDeclarationSyntax classDecl) return null;
@@ -244,24 +192,32 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var model = ctx.SemanticModel;
         var classSymbol = model.GetDeclaredSymbol(classDecl, ct);
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct);
-        if (classSymbol == null || methodSymbol == null) return null;
+        
+        if (classSymbol == null || methodSymbol == null)
+        {
+            return null;
+        }
 
-        if (methodSymbol.Parameters.Length != 1) return null;
+        if (methodSymbol.Parameters.Length != 1)
+        {
+            return null;
+        }
 
-        var hasProj = HasAttr(classSymbol, "AlephMapper.ExpressiveAttribute") || HasAttr(methodSymbol, "AlephMapper.ExpressiveAttribute");
-        var hasUpd = HasAttr(classSymbol, "AlephMapper.UpdateableAttribute") || HasAttr(methodSymbol, "AlephMapper.UpdateableAttribute");
-        var hasRevProj = HasAttr(classSymbol, "AlephMapper.ReverseExpressiveAttribute") || HasAttr(methodSymbol, "AlephMapper.ReverseExpressiveAttribute");
-        var hasRevUpd = HasAttr(classSymbol, "AlephMapper.ReverseUpdatableAttribute") || HasAttr(methodSymbol, "AlephMapper.ReverseUpdatableAttribute");
-
-        //if (!(hasProj || hasUpd || hasRevProj || hasRevUpd))
-        //    return null;
+        var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.ExpressiveAttribute") 
+                            || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.ExpressiveAttribute");
+        
+        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.UpdateableAttribute") 
+                            || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.UpdateableAttribute");
 
         var bodyExpr = ExtractBodyExpression(methodDecl);
-        if (bodyExpr == null) return null;
+        
+        if (bodyExpr == null)
+        {
+            return null;
+        }
 
-        NullConditionalRewrite nullStrategy = GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore;
-        int creationPolicy = GetReverseCreationPolicy(methodSymbol) ?? GetReverseCreationPolicy(classSymbol) ?? 0;
-
+        var nullStrategy = GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore;
+        
         return new MappingModel(
             classSymbol,
             methodSymbol,
@@ -271,80 +227,25 @@ public class AlephSourceGenerator : IIncrementalGenerator
             methodSymbol.ReturnType,
             bodyExpr,
             model,
-            hasProj,
-            hasUpd,
-            hasRevProj,
-            hasRevUpd,
-            nullStrategy,
-            creationPolicy
+            hasExpressive,
+            hasUpdateable,
+            nullStrategy
         );
     }
-
-    //private static bool HasAttr(ISymbol sym, string fullName)
-    //{
-    //    foreach (var a in sym.GetAttributes())
-    //    {
-    //        var cls = a.AttributeClass;
-    //        if (cls != null)
-    //        {
-    //            var s = cls.ToDisplayString();
-    //            if (s == fullName || s == fullName.Substring(fullName.LastIndexOf('.') + 1)) return true;
-    //        }
-    //    }
-    //    return false;
-    //}
-
-    private static bool HasAttr(ISymbol sym, string fullName)
-    {
-        foreach (var a in sym.GetAttributes())
-        {
-            var cls = a.AttributeClass;
-            if (cls != null)
-            {
-                if (cls.Name == fullName || cls.Name == fullName.Substring(fullName.LastIndexOf('.') + 1)) return true;
-            }
-        }
-        return false;
-    }
+    
 
     private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)
     {
-        foreach (var a in sym.GetAttributes())
+        var attributeValue = SymbolHelpers.GetAttributeArgumentValue(
+            sym, 
+            "AlephMapper.ExpressiveAttribute", 
+            "NullConditionalRewrite");
+
+        if (attributeValue is int intValue)
         {
-            var cls = a.AttributeClass;
-            var name = cls?.ToDisplayString();
-            if (name is not ("AlephMapper.ExpressiveAttribute" or "ExpressiveAttribute"))
-            {
-                continue;
-            }
-
-            foreach (var arg in a.NamedArguments)
-            {
-                if (arg is { Key: "NullConditionalRewrite", Value.Value: int value })
-                    return (NullConditionalRewrite)value;
-            }
+            return (NullConditionalRewrite)intValue;
         }
-        return null;
-    }
-
-    private static int? GetReverseCreationPolicy(ISymbol sym)
-    {
-        foreach (var a in sym.GetAttributes())
-        {
-            var cls = a.AttributeClass;
-            if (cls == null) continue;
-            var name = cls.ToDisplayString();
-            if (name is not ("AlephMapper.ReverseUpdatableAttribute" or "ReverseUpdatableAttribute"))
-            {
-                continue;
-            }
-
-            foreach (var arg in a.NamedArguments)
-            {
-                if (arg is { Key: "CreationPolicy", Value.Value: int })
-                    return (int)arg.Value.Value;
-            }
-        }
+        
         return null;
     }
 

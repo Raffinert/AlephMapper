@@ -1,6 +1,4 @@
-﻿using AlephMapper;
-
-namespace AlephMapper.Tests;
+﻿namespace AlephMapper.Tests;
 
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class DebugRewriteMapper
