@@ -95,9 +95,23 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             var expressionMethodName = mm.Name + "Expression";
 
                             sb.AppendLine("  /// <summary>");
-                            sb.AppendLine($"  /// Expression projection for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>");
+                            sb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
                             sb.AppendLine("  /// </summary>");
-                            sb.AppendLine($"  /// <returns>An expression tree representing the logic of {mm.Name}</returns>");
+                            sb.AppendLine("  /// <remarks>");
+
+                            // Add null strategy information
+                            string nullStrategyDescription = mm.NullStrategy switch
+                            {
+                                NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
+                                NullConditionalRewrite.Ignore => "Null-conditional operators are ignored and treated as regular member access.",
+                                NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
+                                _ => "Default null handling strategy is applied."
+                            };
+
+                            sb.AppendLine("  /// <para>");
+                            sb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
+                            sb.AppendLine("  /// </para>");
+                            sb.AppendLine("  /// </remarks>");
                             sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
                             sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
                             sb.AppendLine();
@@ -113,8 +127,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             var updateMethodName = mm.Name;
 
                             sb.AppendLine("  /// <summary>");
-                            sb.AppendLine("  /// Update companion generated from " + mm.Name + ".");
+                            sb.AppendLine($"  /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
                             sb.AppendLine("  /// </summary>");
+                            sb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
+                            sb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
+                            sb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
                             sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
                             sb.AppendLine("    if (" + srcName + " == null || dest == null) return dest;");
