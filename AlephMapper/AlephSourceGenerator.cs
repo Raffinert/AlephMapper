@@ -70,7 +70,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     sb.AppendLine();
                 }
 
-                sb.AppendLine("[GeneratedCode(\"AlephMapper\", \"1.0.0\")]");
+                sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
                 sb.AppendLine("partial class " + mapperType.Name + " {");
 
                 foreach (var mm in methods)

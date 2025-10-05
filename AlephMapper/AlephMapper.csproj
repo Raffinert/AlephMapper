@@ -6,10 +6,11 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageId>AlephMapper</PackageId>
-    <PackageVersion>1.0.0</PackageVersion>
+    <PackageVersion>0.1.0</PackageVersion>
     <Authors>AlephMapper</Authors>
     <Description>Source generator for creating projectable companions</Description>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +20,7 @@
 
   <ItemGroup>
     <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers\dotnet\cs\$(AssemblyName).dll" Visible="false" />
+    <None Include="../README.md" pack="true" PackagePath="." />
   </ItemGroup>
 
 	<ItemGroup>
