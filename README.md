@@ -21,13 +21,9 @@ AlephMapper is a **Source Generator** that automatically creates projectable com
 
 ## 🚀 Features
 
-- **Zero Runtime Dependencies** - Pure source generation approach
 - **Expression Tree Generation** - Automatically converts method bodies to expression trees
-- **Entity Framework Core Integration** - Perfect for database projections and queries
-- **Compile-Time Safety** - All mappings are validated at compile time
 - **Updateable Methods** - Generate update methods that modify existing instances
 - **Null-Conditional Operator Support** - Configurable handling of `?.` operators
-- **Performance Optimized** - No reflection or runtime overhead
 
 ## 📦 Installation
 
