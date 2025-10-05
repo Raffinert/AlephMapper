@@ -8,14 +8,15 @@ public static class Mapper1
 [Expressive]
 public static partial class Mapper
 {
-    public static bool BornInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Yanger65(source.BirthInfo);
+    public static bool BornInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Younger65(source.BirthInfo);
 
     public static bool BornInKyiv(BirthInfo? source) => source?.Address == "Kyiv";
 
-
-    public static bool Yanger65(BirthInfo? source) => source?.Age < 65;
+    public static bool Younger65(BirthInfo? source) => source?.Age < 65;
 
     public static bool LivesIn(BirthInfo source) => source.Address == "Kyiv";
+
+    [Updateable]
     public static DestDto MapToDestDto(SourceDto source) => new DestDto
     {
         Name = source.Name,

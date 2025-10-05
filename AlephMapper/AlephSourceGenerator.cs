@@ -115,10 +115,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             sb.AppendLine("  /// <summary>");
                             sb.AppendLine("  /// Update companion generated from " + mm.Name + ".");
                             sb.AppendLine("  /// </summary>");
-                            sb.AppendLine("  public static void " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                            sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
-                            sb.AppendLine("    if (" + srcName + " == null || dest == null) return;");
+                            sb.AppendLine("    if (" + srcName + " == null || dest == null) return dest;");
                             foreach (var l in lines) sb.AppendLine("    " + l);
+                            sb.AppendLine("    return dest;");
                             sb.AppendLine("  }");
                             sb.AppendLine();
                         }
