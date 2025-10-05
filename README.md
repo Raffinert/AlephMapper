@@ -139,7 +139,7 @@ For each method marked with `[Expressive]`:
 ## ⚠️ Limitations
 
 - Methods must be **static** and be member of a **partial static class**
-- **Complex control flow** (loops, try-catch) is not supported in projection methods
+- Supported only simple lambda-bodied or return methods
 
 ## 🔄 Migration from Other Mappers
 
