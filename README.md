@@ -23,7 +23,7 @@ AlephMapper is a **Source Generator** that automatically creates projectable com
 
 - **Expression Tree Generation** - Automatically converts method bodies to expression trees
 - **Null-Conditional Operator Support** - Configurable handling of `?.` operators
-- - **Updateable Methods** - Generate update methods that modify existing instances (now is in a very early development stage)
+- **Updateable Methods** - Generate update methods that modify existing instances (now is in a very early development stage)
 
 ## 📦 Installation
 
