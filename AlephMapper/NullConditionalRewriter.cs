@@ -40,12 +40,12 @@ internal class NullConditionalRewriter(NullConditionalRewrite rewriteSupport) : 
                 SyntaxFactory.ConditionalExpression(
                     SyntaxFactory.BinaryExpression(
                         SyntaxKind.NotEqualsExpression,
-                        targetExpression.WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                        targetExpression.WithoutTrivia().WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
                         SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
                             .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
                     ),
                     SyntaxFactory.ParenthesizedExpression(
-                            (ExpressionSyntax)Visit(node.WhenNotNull)
+                            (ExpressionSyntax)Visit(node.WhenNotNull).WithoutTrivia()
                         ).WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
                         .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
                     SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)

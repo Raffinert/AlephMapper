@@ -86,7 +86,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     // Expression method
                     if (mm.IsExpressive)
                     {
-                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody);
+                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody).WithoutTrivia();
 
                         if (nullHandledExpression != null)
                         {

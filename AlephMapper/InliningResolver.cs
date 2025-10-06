@@ -53,7 +53,6 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         if (node == null) return null;
         if (node.Parent == null) return node;
 
-
         // Handle method-group arguments first (Select(MapToX))
         var invokedSym = model.GetSymbolInfo(node.Expression).Symbol as IMethodSymbol;
         var args = node.ArgumentList.Arguments;
@@ -90,7 +89,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
                 var substitutedBody = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName, IdentifierName(paramName))
                     .Visit(callee.BodySyntax);
 
-                var inlinedBody = (ExpressionSyntax)Visit(substitutedBody);
+                var inlinedBody = (ExpressionSyntax)Visit(substitutedBody).WithoutTrivia();
                 var lambda = SimpleLambdaExpression(lambdaParam, inlinedBody);
 
                 newArgs = newArgs.Replace(arg, arg.WithExpression(lambda));
@@ -103,7 +102,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
             }
         }
 
-        if (node.Parent == null) return node.WithoutTrivia();
+        if (node.Parent == null) return node;
 
         // Direct-call inlining (MapToDto(s) -> inline)
         var callSym = model.GetSymbolInfo(node.Expression).Symbol as IMethodSymbol;
@@ -112,7 +111,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         var key = SymbolHelpers.Normalize(callSym);
         if (!catalog.TryGetValue(key, out var callee2)) return node;
         if (callee2.MethodSymbol.Parameters.Length != 1) return node;
-        if (node.ArgumentList.Arguments.Count != 1) return node;
+        if (node.ArgumentList.Arguments.Count != 1) return node; 
 
         var argExpr = node.ArgumentList.Arguments[0].Expression;
         var substituted = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
