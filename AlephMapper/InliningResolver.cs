@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AlephMapper;
@@ -46,7 +46,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         var p = invokedMethod.Parameters[argIndex].Type as INamedTypeSymbol;
         return p?.DelegateInvokeMethod;
     }
-        
+
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
@@ -111,14 +111,14 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         var key = SymbolHelpers.Normalize(callSym);
         if (!catalog.TryGetValue(key, out var callee2)) return node;
         if (callee2.MethodSymbol.Parameters.Length != 1) return node;
-        if (node.ArgumentList.Arguments.Count != 1) return node; 
+        if (node.ArgumentList.Arguments.Count != 1) return node;
 
         var argExpr = node.ArgumentList.Arguments[0].Expression;
-        var substituted = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
-            .Visit(callee2.BodySyntax);
+        var rewrittenBody = (ExpressionSyntax)Visit(callee2.BodySyntax);
 
-        var again = (ExpressionSyntax)Visit(substituted);
-        
-        return again;
+        var substituted = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
+            .Visit(rewrittenBody);
+
+        return substituted;
     }
 }
