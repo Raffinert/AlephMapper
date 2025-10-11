@@ -145,6 +145,6 @@ public class GeneratedCodeValidationTests
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.3");
+        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.4");
     }
 }

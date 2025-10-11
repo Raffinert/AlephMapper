@@ -148,9 +148,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     : nameSpace.Replace('.', '_') + "_")
                         + mapperType.Name + "_GeneratedMappings.g.cs";
 
-                var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
-
-                spc.AddSource(fileName, formattedCode);
+                //var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
+                spc.AddSource(fileName, sb.ToString());
             }
         });
     }
