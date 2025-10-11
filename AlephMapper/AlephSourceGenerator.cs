@@ -86,7 +86,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     // Expression method
                     if (mm.IsExpressive)
                     {
-                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody).WithoutTrivia();
+                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)?.WithoutTrivia();
 
                         if (nullHandledExpression != null)
                         {
@@ -148,10 +148,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     : nameSpace.Replace('.', '_') + "_")
                         + mapperType.Name + "_GeneratedMappings.g.cs";
 
-                // Format the generated code using the extracted formatter
-               // var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
+                var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
 
-                spc.AddSource(fileName, sb.ToString());
+                spc.AddSource(fileName, formattedCode);
             }
         });
     }

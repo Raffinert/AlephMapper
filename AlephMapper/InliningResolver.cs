@@ -33,10 +33,6 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
     {
         var si = model.GetSymbolInfo(expr);
         if (si.Symbol is IMethodSymbol ms) return ms;
-        foreach (var c in si.CandidateSymbols)
-        {
-            if (c is IMethodSymbol mm) return mm;
-        }
         return null;
     }
 
@@ -49,75 +45,61 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
 
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-        if (node == null) return null;
-        if (node.Parent == null) return node;
+        if (model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
+        {
+            return base.VisitInvocationExpression(node);
+        }
 
-        // Handle method-group arguments first (Select(MapToX))
-        var invokedSym = model.GetSymbolInfo(node.Expression).Symbol as IMethodSymbol;
         var args = node.ArgumentList.Arguments;
 
-        if (invokedSym != null && args.Count > 0)
+        if (args.Count != 1)
         {
-            var newArgs = args;
-            var changed = false;
+            return base.VisitInvocationExpression(node);
+        }
 
-            for (int i = 0; i < args.Count; i++)
+        var arg = args[0];
+        var argExpr = arg.Expression;
+
+        // Handle method-group arguments first (Select(MapToX))
+        if (argExpr is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax)
+        {
+            var methodGroup = ResolveMethodGroupSymbol(argExpr);
+
+            if (methodGroup is { Parameters.Length: 1 })
             {
-                var arg = args[i];
-                var expr = arg.Expression;
-                if (!(expr is IdentifierNameSyntax
-                      || expr is MemberAccessExpressionSyntax
-                      || expr is GenericNameSyntax
-                      || expr is QualifiedNameSyntax
-                      || expr is AliasQualifiedNameSyntax))
-                    continue;
+                var normalizedMethod = SymbolHelpers.Normalize(methodGroup);
 
-                var mg = ResolveMethodGroupSymbol(expr);
-                if (mg == null) continue;
+                if (catalog.TryGetValue(normalizedMethod, out var callee))
+                {
+                    var delInvoke = TryGetDelegateInvoke(invokedMethod, 0);
+                    if (delInvoke is { Parameters.Length: 1 })
+                    {
+                        var paramName = string.IsNullOrEmpty(callee.ParamName) ? "x" : callee.ParamName;
+                        var lambdaParam = Parameter(Identifier(paramName));
 
-                var normalized = SymbolHelpers.Normalize(mg);
-                if (!catalog.TryGetValue(normalized, out var callee)) continue;
+                        var inlinedBody = (ExpressionSyntax)Visit(callee.BodySyntax);
+                        var substitutedBody = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName, IdentifierName(paramName))
+                                .Visit(inlinedBody)!
+                                .WithoutTrivia();
 
-                if (callee.MethodSymbol.Parameters.Length != 1) continue;
-
-                var delInvoke = TryGetDelegateInvoke(invokedSym, i);
-                if (delInvoke != null && delInvoke.Parameters.Length != 1) continue;
-
-                var paramName = string.IsNullOrEmpty(callee.ParamName) ? "x" : callee.ParamName;
-                var lambdaParam = Parameter(Identifier(paramName));
-                var substitutedBody = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName, IdentifierName(paramName))
-                    .Visit(callee.BodySyntax);
-
-                var inlinedBody = (ExpressionSyntax)Visit(substitutedBody).WithoutTrivia();
-                var lambda = SimpleLambdaExpression(lambdaParam, inlinedBody);
-
-                newArgs = newArgs.Replace(arg, arg.WithExpression(lambda));
-                changed = true;
-            }
-
-            if (changed)
-            {
-                node = node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
+                        var lambda = SimpleLambdaExpression(lambdaParam, substitutedBody);
+                        var newArgs = SeparatedList([arg.WithExpression(lambda)]);
+                        return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
+                    }
+                }
             }
         }
 
-        if (node.Parent == null) return node;
-
         // Direct-call inlining (MapToDto(s) -> inline)
-        var callSym = model.GetSymbolInfo(node.Expression).Symbol as IMethodSymbol;
-        if (callSym == null) return node;
+        var directCallMethod = SymbolHelpers.Normalize(invokedMethod);
+        if (!catalog.TryGetValue(directCallMethod, out var callee2))
+        {
+            return base.VisitInvocationExpression(node);
+        }
 
-        var key = SymbolHelpers.Normalize(callSym);
-        if (!catalog.TryGetValue(key, out var callee2)) return node;
-        if (callee2.MethodSymbol.Parameters.Length != 1) return node;
-        if (node.ArgumentList.Arguments.Count != 1) return node;
-
-        var argExpr = node.ArgumentList.Arguments[0].Expression;
-        var rewrittenBody = (ExpressionSyntax)Visit(callee2.BodySyntax);
-
-        var substituted = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
-            .Visit(rewrittenBody);
+        var inlinedBody2 = Visit(callee2.BodySyntax);
+        var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
+            .Visit(inlinedBody2);
 
         return substituted;
     }
