@@ -11,7 +11,7 @@
     internal class Address1
     {
         public AddressLine Line1 { get; set; }
-        public AddressLine Line2 { get; set; }
+        public AddressLine? Line2 { get; set; }
     }
 
     internal class AddressLine
@@ -31,8 +31,8 @@
 
     internal class Address1Dto
     {
-        public AddressLineDto Line1 { get; set; }
-        public AddressLineDto Line2 { get; set; }
+        public AddressLineDto? Line1 { get; set; }
+        public AddressLineDto? Line2 { get; set; }
     }
 
     internal class AddressLineDto
@@ -51,11 +51,12 @@
         {
             Name = source.Name,
             SurName = source.SurName,
-            Address = Address1Mapper.MapToDto(source.Address)
+            Address = source.Address != null ? Address1Mapper.MapToDto(source.Address) : null
         };
     }
 
-    internal static class Address1Mapper
+    [Expressive]
+    internal static partial class Address1Mapper
     {
         public static Address1Dto MapToDto(Address1 sourceAddress)
         => new Address1Dto
@@ -65,10 +66,11 @@
         };
     }
 
-    internal static class AddressLineMapper
+    [Expressive]
+    internal static partial class AddressLineMapper
     {
-        public static AddressLineDto MapToDto(AddressLine sourceAddressLine1)
-        => new AddressLineDto
+        public static AddressLineDto? MapToDto(AddressLine? sourceAddressLine1)
+        => sourceAddressLine1 == null ? null : new AddressLineDto
         {
             Street = sourceAddressLine1.Street,
             HouseNumber = sourceAddressLine1.HouseNumber

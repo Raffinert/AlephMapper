@@ -63,7 +63,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 sb.AppendLine("using System.Linq.Expressions;");
                 sb.AppendLine("using System.CodeDom.Compiler;");
                 sb.AppendLine();
-                
+
                 if (!string.IsNullOrEmpty(nameSpace))
                 {
                     sb.AppendLine("namespace " + nameSpace + ";");
@@ -79,48 +79,47 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                    // Build inlined body first (model-driven before emission)
+                    if (!mm.IsExpressive && !mm.IsUpdateable) continue;
+
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
 
                     // Expression method
                     if (mm.IsExpressive)
                     {
-                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)?.WithoutTrivia();
+                        // Build inlined body for expressions
+                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)!.WithoutTrivia();
 
-                        if (nullHandledExpression != null)
+                        var expressionMethodName = mm.Name + "Expression";
+
+                        sb.AppendLine("  /// <summary>");
+                        sb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
+                        sb.AppendLine("  /// </summary>");
+                        sb.AppendLine("  /// <remarks>");
+
+                        // Add null strategy information
+                        string nullStrategyDescription = mm.NullStrategy switch
                         {
-                            var expressionMethodName = mm.Name + "Expression";
+                            NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
+                            NullConditionalRewrite.Ignore => "Null-conditional operators are ignored and treated as regular member access.",
+                            NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
+                            _ => "Default null handling strategy is applied."
+                        };
 
-                            sb.AppendLine("  /// <summary>");
-                            sb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
-                            sb.AppendLine("  /// </summary>");
-                            sb.AppendLine("  /// <remarks>");
-
-                            // Add null strategy information
-                            string nullStrategyDescription = mm.NullStrategy switch
-                            {
-                                NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
-                                NullConditionalRewrite.Ignore => "Null-conditional operators are ignored and treated as regular member access.",
-                                NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
-                                _ => "Default null handling strategy is applied."
-                            };
-
-                            sb.AppendLine("  /// <para>");
-                            sb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
-                            sb.AppendLine("  /// </para>");
-                            sb.AppendLine("  /// </remarks>");
-                            sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                            sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
-                            sb.AppendLine();
-                        }
+                        sb.AppendLine("  /// <para>");
+                        sb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
+                        sb.AppendLine("  /// </para>");
+                        sb.AppendLine("  /// </remarks>");
+                        sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
+                        sb.AppendLine();
                     }
 
                     // Update method
                     if (mm.IsUpdateable)
                     {
                         var lines = new List<string>();
-                        if (EmitHelpers.TryBuildUpdateAssignments((ExpressionSyntax)new CommentRemover().Visit(mm.BodySyntax), "dest", lines))
+                        if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(inlinedBody, "dest", lines))
                         {
                             var updateMethodName = mm.Name;
 
@@ -130,6 +129,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             sb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
                             sb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
                             sb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
+                            sb.AppendLine("  /// <remarks>");
+                            sb.AppendLine("  /// This method includes inlined method calls for improved performance and maintainability.");
+                            sb.AppendLine("  /// </remarks>");
                             sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
                             sb.AppendLine("    if (" + srcName + " == null || dest == null) return dest;");
@@ -143,8 +145,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 sb.AppendLine("}"); // class
 
-                var fileName = (string.IsNullOrEmpty(nameSpace) 
-                    ? "" 
+                var fileName = (string.IsNullOrEmpty(nameSpace)
+                    ? ""
                     : nameSpace.Replace('.', '_') + "_")
                         + mapperType.Name + "_GeneratedMappings.g.cs";
 
@@ -158,10 +160,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
     private static string GetExpressiveAttributeSource()
     {
         var assembly = typeof(AlephSourceGenerator).Assembly;
-        using var streamReader =  new StreamReader(assembly.GetManifestResourceStream("AlephMapper.Attributes.cs")!);
+        using var streamReader = new StreamReader(assembly.GetManifestResourceStream("AlephMapper.Attributes.cs")!);
         return streamReader.ReadToEnd();
     }
-    
+
     private static MappingModel GetMappingModel(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         if (ctx.Node is not MethodDeclarationSyntax methodDecl) return null;
@@ -169,13 +171,13 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
         var classIsStatic = classDecl.Modifiers
             .Any(m => m.IsKind(SyntaxKind.StaticKeyword));
-        
-        if(!classIsStatic) return null;
+
+        if (!classIsStatic) return null;
 
         var model = ctx.SemanticModel;
         var classSymbol = model.GetDeclaredSymbol(classDecl, ct);
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct);
-        
+
         if (classSymbol == null || methodSymbol == null)
         {
             return null;
@@ -186,21 +188,21 @@ public class AlephSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.ExpressiveAttribute") 
+        var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.ExpressiveAttribute")
                             || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.ExpressiveAttribute");
-        
-        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.UpdateableAttribute") 
+
+        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.UpdateableAttribute")
                             || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.UpdateableAttribute");
 
         var bodyExpr = ExtractBodyExpression(methodDecl);
-        
+
         if (bodyExpr == null)
         {
             return null;
         }
 
-        var nullStrategy = GetNullStrategy(methodSymbol) 
-                           ?? GetNullStrategy(classSymbol) 
+        var nullStrategy = GetNullStrategy(methodSymbol)
+                           ?? GetNullStrategy(classSymbol)
                            ?? NullConditionalRewrite.Ignore;
 
         var isClassPartial = classDecl.Modifiers
@@ -225,15 +227,15 @@ public class AlephSourceGenerator : IIncrementalGenerator
     private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)
     {
         var attributeValue = SymbolHelpers.GetAttributeArgumentValue(
-            sym, 
-            "AlephMapper.ExpressiveAttribute", 
+            sym,
+            "AlephMapper.ExpressiveAttribute",
             "NullConditionalRewrite");
 
         if (attributeValue is int intValue)
         {
             return (NullConditionalRewrite)intValue;
         }
-        
+
         return null;
     }
 
