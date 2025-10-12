@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,7 +17,7 @@ namespace AlephMapper;
 //    }
 //}
 
-internal sealed class UpdateableExpressionProcessor(string destPrefix)
+internal sealed class UpdateableExpressionProcessor(string destPrefix, UpdateableTypeContext typeContext)
 {
     private readonly List<string> _lines = [];
 
@@ -103,14 +104,24 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             //   ensure target object exists (create if null, reuse if exists)  
             //   update all properties of target object
             // else
-            //   set target to null
+            //   set target to null (only if target can be null)
 
             _lines.Add($"if ({sourceCondition})");
             _lines.Add("{");
 
             // Ensure target object exists - this is independent of source condition
-            _lines.Add($"    if ({fullDestPath} == null)");
-            _lines.Add($"        {fullDestPath} = new {objectCreation.Type}();");
+            // Only generate null check if the target property can actually be null
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                _lines.Add($"    if ({fullDestPath} == null)");
+                _lines.Add($"        {fullDestPath} = new {objectCreation.Type}();");
+            }
+            else
+            {
+                // For value types, we don't need a null check - just assign directly
+                // This handles cases where the target is a value type that can't be null
+                _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
+            }
 
             // Now update all properties of the target object
             if (objectCreation.Initializer?.Expressions != null)
@@ -134,10 +145,15 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             }
 
             _lines.Add("}");
-            _lines.Add("else");
-            _lines.Add("{");
-            _lines.Add($"    {fullDestPath} = null;");
-            _lines.Add("}");
+            
+            // Only add else clause to set target to null if the target can be null
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                _lines.Add("else");
+                _lines.Add("{");
+                _lines.Add($"    {fullDestPath} = null;");
+                _lines.Add("}");
+            }
         }
         else
         {
@@ -146,10 +162,15 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             _lines.Add("{");
             _lines.Add($"    {fullDestPath} = {objectExpression};");
             _lines.Add("}");
-            _lines.Add("else");
-            _lines.Add("{");
-            _lines.Add($"    {fullDestPath} = null;");
-            _lines.Add("}");
+            
+            // Only add else clause if the target can be null
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                _lines.Add("else");
+                _lines.Add("{");
+                _lines.Add($"    {fullDestPath} = null;");
+                _lines.Add("}");
+            }
         }
     }
 
@@ -205,9 +226,17 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             lines.Add($"{indent}if ({sourceCondition})");
             lines.Add($"{indent}{{");
 
-            // Ensure nested target object exists
-            lines.Add($"{indent}    if ({fullDestPath} == null)");
-            lines.Add($"{indent}        {fullDestPath} = new {objectCreation.Type}();");
+            // Ensure nested target object exists - only add null check if target can be null
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                lines.Add($"{indent}    if ({fullDestPath} == null)");
+                lines.Add($"{indent}        {fullDestPath} = new {objectCreation.Type}();");
+            }
+            else
+            {
+                // For value types, just assign directly
+                lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+            }
 
             // Process nested properties
             if (objectCreation.Initializer?.Expressions != null)
@@ -225,10 +254,15 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             }
 
             lines.Add($"{indent}}}");
-            lines.Add($"{indent}else");
-            lines.Add($"{indent}{{");
-            lines.Add($"{indent}    {fullDestPath} = null;");
-            lines.Add($"{indent}}}");
+            
+            // Only add else clause if target can be null
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                lines.Add($"{indent}else");
+                lines.Add($"{indent}{{");
+                lines.Add($"{indent}    {fullDestPath} = null;");
+                lines.Add($"{indent}}}");
+            }
         }
         else
         {
@@ -236,18 +270,31 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
             lines.Add($"{indent}{{");
             lines.Add($"{indent}    {fullDestPath} = {objectExpression};");
             lines.Add($"{indent}}}");
-            lines.Add($"{indent}else");
-            lines.Add($"{indent}{{");
-            lines.Add($"{indent}    {fullDestPath} = null;");
-            lines.Add($"{indent}}}");
+            
+            // Only add else clause if target can be null 
+            if (typeContext.CanPropertyBeNull(fullDestPath))
+            {
+                lines.Add($"{indent}else");
+                lines.Add($"{indent}{{");
+                lines.Add($"{indent}    {fullDestPath} = null;");
+                lines.Add($"{indent}}}");
+            }
         }
     }
 
     private void ProcessNestedObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
     {
         // Direct object creation - ensure target exists and update properties
-        lines.Add($"{indent}if ({fullDestPath} == null)");
-        lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+        if (typeContext.CanPropertyBeNull(fullDestPath))
+        {
+            lines.Add($"{indent}if ({fullDestPath} == null)");
+            lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+        }
+        else
+        {
+            // For value types, just assign directly
+            lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
+        }
 
         if (objectCreation.Initializer?.Expressions != null)
         {
@@ -266,8 +313,16 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
     private void ProcessDirectObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath)
     {
         // Direct object creation - ensure target exists and update properties
-        _lines.Add($"if ({fullDestPath} == null)");
-        _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
+        if (typeContext.CanPropertyBeNull(fullDestPath))
+        {
+            _lines.Add($"if ({fullDestPath} == null)");
+            _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
+        }
+        else
+        {
+            // For value types, just assign directly
+            _lines.Add($"{fullDestPath} = new {objectCreation.Type}();");
+        }
 
         if (objectCreation.Initializer?.Expressions != null)
         {
@@ -291,7 +346,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix)
 
 internal static class EmitHelpers
 {
-    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines)
+    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel = null)
     {
         if (inlinedBody is not ObjectCreationExpressionSyntax oce)
             return false;
@@ -299,7 +354,12 @@ internal static class EmitHelpers
         if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
             return false;
 
-        var processor = new UpdateableExpressionProcessor(destPrefix);
+        // Collect type information from the syntax tree
+        var typeContext = semanticModel != null 
+            ? TypeAnnotationCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
+            : new UpdateableTypeContext(); // Fallback to empty context for backward compatibility
+
+        var processor = new UpdateableExpressionProcessor(destPrefix, typeContext);
         var processedLines = processor.ProcessObjectCreation(oce);
 
         lines.AddRange(processedLines);

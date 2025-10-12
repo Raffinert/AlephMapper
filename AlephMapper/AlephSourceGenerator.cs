@@ -119,7 +119,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     if (mm.IsUpdateable)
                     {
                         var lines = new List<string>();
-                        if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(inlinedBody, "dest", lines))
+                        // Pass the semantic model to EmitHelpers for type information
+                        if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(inlinedBody, "dest", lines, mm.SemanticModel))
                         {
                             var updateMethodName = mm.Name;
 
