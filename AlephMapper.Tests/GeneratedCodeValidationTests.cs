@@ -154,7 +154,7 @@ public class GeneratedCodeValidationTests
         // Test with null BirthInfo to ensure null handling works in inlined code
         var sourceWithNullBirthInfo = new SourceDto
         {
-            Name = "Jane Doe", 
+            Name = "Jane Doe",
             BirthInfo = null,
             Email = "jane@example.com"
         };
@@ -188,6 +188,6 @@ public class GeneratedCodeValidationTests
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.4");
+        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.5");
     }
 }

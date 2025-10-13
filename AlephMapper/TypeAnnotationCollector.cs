@@ -1,128 +1,126 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Collections.Generic;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace AlephMapper
+namespace AlephMapper;
+
+/// <summary>
+/// Collects type information from object creation expressions for updateable method generation.
+/// This visitor walks through the syntax tree and gathers type information for each property path.
+/// </summary>
+internal class TypeAnnotationCollector : CSharpSyntaxWalker
 {
-    /// <summary>
-    /// Collects type information from object creation expressions for updateable method generation.
-    /// This visitor walks through the syntax tree and gathers type information for each property path.
-    /// </summary>
-    internal class TypeAnnotationCollector : CSharpSyntaxWalker
-    {
-        private readonly SemanticModel _semanticModel;
-        private readonly UpdateableTypeContext _typeContext;
-        private readonly string _currentPath;
-        
-        public TypeAnnotationCollector(SemanticModel semanticModel, UpdateableTypeContext typeContext, string rootPath = "")
-        {
-            _semanticModel = semanticModel;
-            _typeContext = typeContext;
-            _currentPath = rootPath;
-        }
+    private readonly SemanticModel _semanticModel;
+    private readonly UpdateableTypeContext _typeContext;
+    private readonly string _currentPath;
 
-        public static UpdateableTypeContext CollectTypeInformation(ExpressionSyntax expression, SemanticModel semanticModel, string destPrefix)
+    public TypeAnnotationCollector(SemanticModel semanticModel, UpdateableTypeContext typeContext, string rootPath = "")
+    {
+        _semanticModel = semanticModel;
+        _typeContext = typeContext;
+        _currentPath = rootPath;
+    }
+
+    public static UpdateableTypeContext CollectTypeInformation(ExpressionSyntax expression, SemanticModel semanticModel, string destPrefix)
+    {
+        var typeContext = new UpdateableTypeContext();
+
+        // Skip type collection if semantic model is null
+        if (semanticModel == null)
         {
-            var typeContext = new UpdateableTypeContext();
-            
-            // Skip type collection if semantic model is null
-            if (semanticModel == null)
-            {
-                return typeContext;
-            }
-            
-            try
-            {
-                var collector = new TypeAnnotationCollector(semanticModel, typeContext, destPrefix);
-                collector.Visit(expression);
-            }
-            catch
-            {
-                // If there's any issue with type collection, return empty context
-                // This ensures the generator doesn't fail
-                return new UpdateableTypeContext();
-            }
-            
             return typeContext;
         }
 
-        public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
+        try
         {
-            try
-            {
-                // Get type information for the object being created
-                var typeInfo = _semanticModel.GetTypeInfo(node);
-                if (typeInfo.Type != null)
-                {
-                    _typeContext.AddPropertyType(_currentPath, typeInfo.Type);
-                }
+            var collector = new TypeAnnotationCollector(semanticModel, typeContext, destPrefix);
+            collector.Visit(expression);
+        }
+        catch
+        {
+            // If there's any issue with type collection, return empty context
+            // This ensures the generator doesn't fail
+            return new UpdateableTypeContext();
+        }
 
-                // Process the initializer if present
-                if (node.Initializer?.Expressions != null)
+        return typeContext;
+    }
+
+    public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
+    {
+        try
+        {
+            // Get type information for the object being created
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type != null)
+            {
+                _typeContext.AddPropertyType(_currentPath, typeInfo.Type);
+            }
+
+            // Process the initializer if present
+            if (node.Initializer?.Expressions != null)
+            {
+                foreach (var expr in node.Initializer.Expressions)
                 {
-                    foreach (var expr in node.Initializer.Expressions)
+                    if (expr is AssignmentExpressionSyntax assignment)
                     {
-                        if (expr is AssignmentExpressionSyntax assignment)
-                        {
-                            ProcessAssignment(assignment);
-                        }
+                        ProcessAssignment(assignment);
                     }
                 }
             }
-            catch
-            {
-                // Ignore type collection errors and continue processing
-            }
-
-            base.VisitObjectCreationExpression(node);
         }
-
-        private void ProcessAssignment(AssignmentExpressionSyntax assignment)
+        catch
         {
-            try
-            {
-                var propertyName = assignment.Left.ToString();
-                var fullPropertyPath = string.IsNullOrEmpty(_currentPath) 
-                    ? propertyName 
-                    : $"{_currentPath}.{propertyName}";
-
-                // Get type information for the property being assigned
-                var leftTypeInfo = _semanticModel.GetTypeInfo(assignment.Left);
-                if (leftTypeInfo.Type != null)
-                {
-                    _typeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
-                }
-
-                // Recursively process nested object creations
-                var nestedCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, fullPropertyPath);
-                nestedCollector.Visit(assignment.Right);
-            }
-            catch
-            {
-                // Ignore type collection errors and continue processing
-            }
+            // Ignore type collection errors and continue processing
         }
 
-        public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
+        base.VisitObjectCreationExpression(node);
+    }
+
+    private void ProcessAssignment(AssignmentExpressionSyntax assignment)
+    {
+        try
         {
-            try
+            var propertyName = assignment.Left.ToString();
+            var fullPropertyPath = string.IsNullOrEmpty(_currentPath)
+                ? propertyName
+                : $"{_currentPath}.{propertyName}";
+
+            // Get type information for the property being assigned
+            var leftTypeInfo = _semanticModel.GetTypeInfo(assignment.Left);
+            if (leftTypeInfo.Type != null)
             {
-                // For conditional expressions, we need to analyze both the true and false branches
-                // to understand what types are being assigned
-                
-                var trueCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
-                trueCollector.Visit(node.WhenTrue);
-                
-                var falseCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
-                falseCollector.Visit(node.WhenFalse);
+                _typeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
             }
-            catch
-            {
-                // Ignore type collection errors and continue processing
-            }
-            
-            base.VisitConditionalExpression(node);
+
+            // Recursively process nested object creations
+            var nestedCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, fullPropertyPath);
+            nestedCollector.Visit(assignment.Right);
         }
+        catch
+        {
+            // Ignore type collection errors and continue processing
+        }
+    }
+
+    public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
+    {
+        try
+        {
+            // For conditional expressions, we need to analyze both the true and false branches
+            // to understand what types are being assigned
+
+            var trueCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
+            trueCollector.Visit(node.WhenTrue);
+
+            var falseCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
+            falseCollector.Visit(node.WhenFalse);
+        }
+        catch
+        {
+            // Ignore type collection errors and continue processing
+        }
+
+        base.VisitConditionalExpression(node);
     }
 }

@@ -115,7 +115,7 @@ public class SourceIndependentTargetCreationTests
         // Assert: Target objects should be created independently based on what needs updating
         await Assert.That(dest.Address).IsNotNull(); // Address created because source.Address != null
         await Assert.That(dest.Address.Line1).IsNotNull(); // Line1 created because source.Address.Line1 != null
-        await Assert.That(dest.Address.Line1.Street).IsEqualTo("Main St");
+        await Assert.That(dest.Address.Line1!.Street).IsEqualTo("Main St");
         await Assert.That(dest.Address.Line1.HouseNumber).IsEqualTo("123");
         await Assert.That(dest.Address.Line2).IsNull(); // Line2 is null because source.Address.Line2 == null
     }

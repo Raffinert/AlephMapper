@@ -21,7 +21,7 @@ public class UpdateTests
         await Assert.That(result).IsSameReferenceAs(dest);
         await Assert.That(dest.Name).IsEqualTo("John Doe");
         await Assert.That(dest.BirthInfo).IsNotNull();
-        await Assert.That(dest.BirthInfo.Age).IsEqualTo(30);
+        await Assert.That(dest.BirthInfo!.Age).IsEqualTo(30);
         await Assert.That(dest.BirthInfo.Address).IsEqualTo("123 Main St");
         await Assert.That(dest.ContactInfo).IsEqualTo("john@example.com");
     }
@@ -59,10 +59,10 @@ public class UpdateTests
         await Assert.That(dest.SurName).IsEqualTo("Smith");
         await Assert.That(dest.Address).IsNotNull();
         await Assert.That(dest.Address.Line1).IsNotNull();
-        await Assert.That(dest.Address.Line1.Street).IsEqualTo("Main St");
+        await Assert.That(dest.Address.Line1!.Street).IsEqualTo("Main St");
         await Assert.That(dest.Address.Line1.HouseNumber).IsEqualTo("123");
         await Assert.That(dest.Address.Line2).IsNotNull();
-        await Assert.That(dest.Address.Line2.Street).IsEqualTo("Second St");
+        await Assert.That(dest.Address.Line2!.Street).IsEqualTo("Second St");
         await Assert.That(dest.Address.Line2.HouseNumber).IsEqualTo("456");
     }
 
@@ -96,7 +96,7 @@ public class UpdateTests
         await Assert.That(dest.Address).IsNotNull();
         await Assert.That(dest.Address.Line1).IsNull(); // Should be null
         await Assert.That(dest.Address.Line2).IsNotNull();
-        await Assert.That(dest.Address.Line2.Street).IsEqualTo("Third St");
+        await Assert.That(dest.Address.Line2!.Street).IsEqualTo("Third St");
         await Assert.That(dest.Address.Line2.HouseNumber).IsEqualTo("789");
     }
 

@@ -90,6 +90,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         // Build inlined body for expressions
                         var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)!.WithoutTrivia();
 
+                        // Apply collection expression rewriter for expression tree compatibility
+                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
+                        var expressionTreeCompatibleBody = (ExpressionSyntax)collectionRewriter.Visit(nullHandledExpression)!.WithoutTrivia();
+
                         var expressionMethodName = mm.Name + "Expression";
 
                         sb.AppendLine("  /// <summary>");
@@ -111,13 +115,37 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         sb.AppendLine("  /// </para>");
                         sb.AppendLine("  /// </remarks>");
                         sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
+                        sb.AppendLine("      " + srcName + " => " + expressionTreeCompatibleBody.ToFullString() + ";");
                         sb.AppendLine();
                     }
 
-                    // Update method
+                    // Update method - no changes needed here as collection expressions are fine in regular C# code
                     if (mm.IsUpdateable)
                     {
+                        // Check if return type is a value type - if so, skip generation and emit warning
+                        if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
+                        {
+                            // Emit a diagnostic warning for value type updateable methods
+                            var descriptor = new DiagnosticDescriptor(
+                                "AM0001",
+                                "Updateable method with value type return type",
+                                "Updateable method '{0}' returns value type '{1}'. Value types are passed by value, so update semantics don't work as expected. Consider using a regular mapping method instead.",
+                                "AlephMapper",
+                                DiagnosticSeverity.Warning,
+                                isEnabledByDefault: true);
+
+                            var diagnostic = Diagnostic.Create(
+                                descriptor,
+                                mm.MethodSymbol.Locations.FirstOrDefault(),
+                                mm.MethodSymbol.Name,
+                                mm.ReturnType.ToDisplayString());
+
+                            spc.ReportDiagnostic(diagnostic);
+
+                            // Skip generating the updateable method
+                            continue;
+                        }
+
                         var lines = new List<string>();
                         // Pass the semantic model to EmitHelpers for type information
                         if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(inlinedBody, "dest", lines, mm.SemanticModel))
@@ -130,12 +158,30 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             sb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
                             sb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
                             sb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
-                            sb.AppendLine("  /// <remarks>");
-                            sb.AppendLine("  /// This method includes inlined method calls for improved performance and maintainability.");
-                            sb.AppendLine("  /// </remarks>");
                             sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
-                            sb.AppendLine("    if (" + srcName + " == null || dest == null) return dest;");
+                            
+                            // Build null check conditions
+                            var nullCheckConditions = new List<string>();
+                            
+                            // Only check source for null if it can be null
+                            if (SymbolHelpers.CanBeNull(mm.ParamType))
+                            {
+                                nullCheckConditions.Add($"{srcName} == null");
+                            }
+                            
+                            // Only check destination for null if it can be null
+                            if (SymbolHelpers.CanBeNull(mm.ReturnType))
+                            {
+                                nullCheckConditions.Add("dest == null");
+                            }
+                            
+                            // Generate null check only if there are conditions to check
+                            if (nullCheckConditions.Count > 0)
+                            {
+                                sb.AppendLine("    if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
+                            }
+                            
                             foreach (var l in lines) sb.AppendLine("    " + l);
                             sb.AppendLine("    return dest;");
                             sb.AppendLine("  }");

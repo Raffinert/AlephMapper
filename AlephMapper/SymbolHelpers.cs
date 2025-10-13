@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 
@@ -58,5 +58,30 @@ internal static class SymbolHelpers
             .FirstOrDefault();
 
         return attributeValue;
+    }
+
+    /// <summary>
+    /// Determines whether a type can be compared to null (i.e., can have null values).
+    /// Value types (except nullable value types) cannot be null.
+    /// </summary>
+    /// <param name="type">The type to check</param>
+    /// <returns>True if the type can be null, false otherwise</returns>
+    public static bool CanBeNull(ITypeSymbol type)
+    {
+        if (type == null) return true; // Conservative default
+
+        // Reference types can be null
+        if (type.IsReferenceType) return true;
+
+        // Check if it's a nullable value type (e.g., int?, DateTime?)
+        if (type.IsValueType && type is INamedTypeSymbol named &&
+            named.IsGenericType &&
+            named.ConstructedFrom?.ToDisplayString() == "System.Nullable<T>")
+        {
+            return true;
+        }
+
+        // Regular value types (int, DateTime, struct, etc.) cannot be null
+        return false;
     }
 }
