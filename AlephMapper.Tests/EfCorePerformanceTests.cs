@@ -169,8 +169,8 @@ public class EfCorePerformanceTests
         await Assert.That(isAdultExpressions.Count).IsGreaterThan(200);
 
         // Verify data quality
-        var agesWithValues = ageExpressions.Where(a => a.HasValue).Count();
-        var agesWithoutValues = ageExpressions.Where(a => !a.HasValue).Count();
+        var agesWithValues = ageExpressions.Count(a => a.HasValue);
+        var agesWithoutValues = ageExpressions.Count(a => !a.HasValue);
         await Assert.That(agesWithValues).IsGreaterThanOrEqualTo(100); // At least 100 with ages
         await Assert.That(agesWithoutValues).IsGreaterThanOrEqualTo(100); // At least 100 without ages
 
@@ -246,7 +246,7 @@ public class EfCorePerformanceTests
                 .ToListAsync();
 
             await Assert.That(pagedResults.Count).IsLessThanOrEqualTo(pageSize);
-            await Assert.That(pagedResults.Count > 0 || page >= 10).IsTrue(); // Should have data for first 10+ pages
+            await Assert.That(pagedResults.Count > 0).IsTrue(); // Should have data for first 10+ pages
 
             // Verify expressions work correctly in pagination
             foreach (var result in pagedResults)
@@ -284,7 +284,7 @@ public class EfCorePerformanceTests
             .Select(EfCoreMapper.GetTotalOrderAmountExpression())
             .SumAsync();
 
-        // Group by birth place and count
+        // Group by birthplace and count
         var birthPlaceCounts = await _context.Persons
             .Include(p => p.BirthInfo)
             .Select(EfCoreMapper.GetBirthPlaceExpression())

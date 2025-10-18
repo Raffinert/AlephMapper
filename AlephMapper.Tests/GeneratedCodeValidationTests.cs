@@ -126,6 +126,49 @@ public class GeneratedCodeValidationTests
     }
 
     [Test]
+    public async Task Updateable_Methods_Should_Inline_Method_Calls()
+    {
+        // This test verifies that updateable methods properly inline method calls
+        // We'll check the functionality by ensuring the inlined code works properly
+
+        var source = new SourceDto
+        {
+            Name = "John Doe",
+            BirthInfo = new BirthInfo { Age = 30, Address = "Kyiv" },
+            Email = "john@example.com"
+        };
+
+        var dest = new DestDto();
+
+        // Call the generated update method
+        var result = Mapper.MapToDestDto(source, dest);
+
+        // Verify the method worked correctly (including inlined method call)
+        await Assert.That(result).IsSameReferenceAs(dest);
+        await Assert.That(dest.Name).IsEqualTo("John Doe");
+        await Assert.That(dest.ContactInfo).IsEqualTo("john@example.com");
+        await Assert.That(dest.BirthInfo).IsNotNull();
+        await Assert.That(dest.BirthInfo.Age).IsEqualTo(30);
+        await Assert.That(dest.BirthInfo.Address).IsEqualTo("Kyiv");
+
+        // Test with null BirthInfo to ensure null handling works in inlined code
+        var sourceWithNullBirthInfo = new SourceDto
+        {
+            Name = "Jane Doe",
+            BirthInfo = null,
+            Email = "jane@example.com"
+        };
+
+        var dest2 = new DestDto();
+        var result2 = Mapper.MapToDestDto(sourceWithNullBirthInfo, dest2);
+
+        await Assert.That(result2).IsSameReferenceAs(dest2);
+        await Assert.That(dest2.Name).IsEqualTo("Jane Doe");
+        await Assert.That(dest2.ContactInfo).IsEqualTo("jane@example.com");
+        await Assert.That(dest2.BirthInfo).IsNull();
+    }
+
+    [Test]
     public async Task Generated_Methods_Should_Have_Proper_Attributes()
     {
         // Verify that generated classes have the proper attributes
@@ -145,6 +188,6 @@ public class GeneratedCodeValidationTests
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.4");
+        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.5");
     }
 }

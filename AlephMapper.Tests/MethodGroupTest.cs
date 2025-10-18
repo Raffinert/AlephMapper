@@ -41,7 +41,7 @@ internal static partial class SimpleObjectMapper
     [Expressive]
     public static SimpleDto MapToDto(SimpleObject so) => new SimpleDto
     {
-        Attributes = so.Attributes?.Select(MapFromAttribute).ToList() ?? new List<string>()
+        Attributes = so.Attributes?.Select(MapFromAttribute).ToList() ?? []
     };
 
     private static SimpleAttribute MapToAttribute(string name) => new SimpleAttribute

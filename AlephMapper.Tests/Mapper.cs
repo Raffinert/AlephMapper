@@ -1,12 +1,12 @@
 ﻿namespace AlephMapper.Tests;
 
-public static class Mapper1
+internal static class Mapper1
 {
     public static bool Older35(BirthInfo? source) => source?.Age > 35;
 }
 
 [Expressive]
-public static partial class Mapper
+internal static partial class Mapper
 {
     public static bool BornInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Younger65(source.BirthInfo);
 
@@ -21,6 +21,14 @@ public static partial class Mapper
     {
         Name = source.Name,
         BirthInfo = source.BirthInfo != null ? MapToBirthInfoDto(source.BirthInfo) : null,
+        ContactInfo = source.Email
+    };
+
+    [Updateable]
+    public static DestDto MapToDestDto1(SourceDto source) => new DestDto
+    {
+        Name = source.Name,
+        BirthInfo = source.BirthInfo == null ? null : MapToBirthInfoDto(source.BirthInfo),
         ContactInfo = source.Email
     };
 
