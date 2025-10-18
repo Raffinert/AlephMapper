@@ -1,5 +1,31 @@
 namespace AlephMapper.ComprehensiveTests;
 
+// Add a test mapper that uses conditional expressions like the PersonMapper
+[Updateable]
+public static partial class ConditionalUpdateMapper
+{
+    // This method mimics the PersonMapper pattern: source == null ? null : new TargetType { ... }
+    public static EmployeeSimpleDto ConditionalMapping(Employee? employee) =>
+        employee == null ? null : new EmployeeSimpleDto
+        {
+            Id = employee.Id,
+            FirstName = employee.FirstName,
+            LastName = employee.LastName,
+            Email = employee.Email,
+            DepartmentName = employee.Department?.Name ?? "No Department"
+        };
+
+    // Test with inverted conditional: source != null ? new TargetType { ... } : null  
+    public static DepartmentUpdateDto ConditionalDepartmentMapping(Department? department) =>
+        department != null ? new DepartmentUpdateDto
+        {
+            Id = department.Id,
+            Name = department.Name,
+            Description = department.Description,
+            IsActive = department.IsActive
+        } : null;
+}
+
 // Mappers testing Updateable functionality
 
 [Updateable]
