@@ -23,7 +23,7 @@ AlephMapper is a **Source Generator** that automatically creates projectable com
 
 - **Expression Tree Generation** - Automatically converts method bodies to expression trees
 - **Null-Conditional Operator Support** - Configurable handling of `?.` operators
-- **Updateable Methods** - Generate update methods that modify existing instances (now is in a very early development stage)
+- **Updateable Methods** - Generate update methods that modify existing instances
 
 ## 📦 Installation
 
@@ -138,10 +138,8 @@ For each method marked with `[Expressive]`:
 
 ## ⚠️ Limitations
 
-- Methods must be **static** and be member of a **partial static class**
-- Supported only simple lambda-bodied or return methods
-- Does not have circilar method call detection and protection. Be careful.
-- Update methods are WIP and do not support inlining yet
+- Methods must be **static** and be member of a **partial static class**.
+- Supported only simple lambda-bodied or return methods.
 
 ## 🔄 Migration from Other Mappers
 
