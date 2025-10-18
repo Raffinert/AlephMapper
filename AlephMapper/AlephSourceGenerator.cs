@@ -84,9 +84,49 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
 
+                    // Check for circular references and emit warnings
+                    foreach (var circularRef in resolver.CircularReferences)
+                    {
+                        var descriptor = new DiagnosticDescriptor(
+                            "AM0002",
+                            "Circular reference detected in method inlining",
+                            "Circular reference detected in method '{0}'. Call chain: {1}. The circular method call will not be inlined to prevent infinite recursion.",
+                            "AlephMapper",
+                            DiagnosticSeverity.Warning,
+                            isEnabledByDefault: true);
+
+                        var diagnostic = Diagnostic.Create(
+                            descriptor,
+                            mm.MethodSymbol.Locations.FirstOrDefault(),
+                            circularRef.Method.Name,
+                            circularRef.CallChain);
+
+                        spc.ReportDiagnostic(diagnostic);
+                    }
+
                     // Expression method
                     if (mm.IsExpressive)
                     {
+                        // Skip generating expression method if there are circular references
+                        if (resolver.CircularReferences.Any())
+                        {
+                            var descriptor = new DiagnosticDescriptor(
+                                "AM0003",
+                                "Expressive method generation skipped due to circular references",
+                                "Expression method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable expression generation.",
+                                "AlephMapper",
+                                DiagnosticSeverity.Warning,
+                                isEnabledByDefault: true);
+
+                            var diagnostic = Diagnostic.Create(
+                                descriptor,
+                                mm.MethodSymbol.Locations.FirstOrDefault(),
+                                mm.MethodSymbol.Name);
+
+                            spc.ReportDiagnostic(diagnostic);
+                            continue; // Skip expression generation
+                        }
+
                         // Build inlined body for expressions
                         var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)!.WithoutTrivia();
 
@@ -119,9 +159,29 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         sb.AppendLine();
                     }
 
-                    // Update method - no changes needed here as collection expressions are fine in regular C# code
+                    // Update method - check for circular references like expressive methods do
                     if (mm.IsUpdateable)
                     {
+                        // Skip generating updateable method if there are circular references
+                        if (resolver.CircularReferences.Any())
+                        {
+                            var descriptor = new DiagnosticDescriptor(
+                                "AM0004",
+                                "Updateable method generation skipped due to circular references",
+                                "Updateable method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable updateable method generation.",
+                                "AlephMapper",
+                                DiagnosticSeverity.Warning,
+                                isEnabledByDefault: true);
+
+                            var diagnostic = Diagnostic.Create(
+                                descriptor,
+                                mm.MethodSymbol.Locations.FirstOrDefault(),
+                                mm.MethodSymbol.Name);
+
+                            spc.ReportDiagnostic(diagnostic);
+                            continue; // Skip updateable method generation
+                        }
+
                         // Check if return type is a value type - if so, skip generation and emit warning
                         if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
                         {
@@ -160,28 +220,28 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             sb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
                             sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             sb.AppendLine("  {");
-                            
+
                             // Build null check conditions
                             var nullCheckConditions = new List<string>();
-                            
+
                             // Only check source for null if it can be null
                             if (SymbolHelpers.CanBeNull(mm.ParamType))
                             {
                                 nullCheckConditions.Add($"{srcName} == null");
                             }
-                            
+
                             // Only check destination for null if it can be null
                             if (SymbolHelpers.CanBeNull(mm.ReturnType))
                             {
                                 nullCheckConditions.Add("dest == null");
                             }
-                            
+
                             // Generate null check only if there are conditions to check
                             if (nullCheckConditions.Count > 0)
                             {
                                 sb.AppendLine("    if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
                             }
-                            
+
                             foreach (var l in lines) sb.AppendLine("    " + l);
                             sb.AppendLine("    return dest;");
                             sb.AppendLine("  }");
@@ -234,11 +294,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.ExpressiveAttribute")
-                            || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.ExpressiveAttribute");
+        var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, typeof(ExpressiveAttribute).FullName)
+                            || SymbolHelpers.HasAttribute(methodSymbol, typeof(ExpressiveAttribute).FullName);
 
-        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, "AlephMapper.UpdateableAttribute")
-                            || SymbolHelpers.HasAttribute(methodSymbol, "AlephMapper.UpdateableAttribute");
+        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, typeof(UpdateableAttribute).FullName)
+                            || SymbolHelpers.HasAttribute(methodSymbol, typeof(UpdateableAttribute).FullName);
 
         var bodyExpr = ExtractBodyExpression(methodDecl);
 
@@ -274,8 +334,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
     {
         var attributeValue = SymbolHelpers.GetAttributeArgumentValue(
             sym,
-            "AlephMapper.ExpressiveAttribute",
-            "NullConditionalRewrite");
+            typeof(ExpressiveAttribute).FullName,
+            nameof(NullConditionalRewrite));
 
         if (attributeValue is int intValue)
         {

@@ -6,14 +6,14 @@ public class CustomerDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public int Age { get; set; }
-    public string HomeAddressFormatted { get; set; } = string.Empty;
-    public string BillingAddressFormatted { get; set; } = string.Empty;
+    public string? HomeAddressFormatted { get; set; } = string.Empty;
+    public string? BillingAddressFormatted { get; set; } = string.Empty;
     public int TotalOrders { get; set; }
     public decimal TotalSpent { get; set; }
     public string CustomerTypeText { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public string MemberSince { get; set; } = string.Empty;
-    public string LastLogin { get; set; } = string.Empty;
+    public string? LastLogin { get; set; }
 }
 
 public class AddressDto

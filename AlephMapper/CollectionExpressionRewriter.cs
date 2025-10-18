@@ -2,7 +2,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Linq;
 
 namespace AlephMapper;
 
@@ -181,12 +180,11 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
     private static ExpressionSyntax CreateConstructorExpression(ITypeSymbol? targetType, SyntaxNode originalExpression)
     {
         if (targetType is INamedTypeSymbol namedType)
-        // Handle generic collection types
         {
             // For List<T>, create new List<T>()
-            if (namedType.Name == "List" && namedType.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+            if (CollectionHelper.IsListType(targetType))
             {
-                var elementType = namedType.TypeArguments.FirstOrDefault();
+                var elementType = CollectionHelper.GetElementType(targetType);
                 if (elementType != null)
                 {
                     return CreateListConstructor(elementType);
@@ -194,15 +192,19 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
             }
 
             // For arrays T[], create new T[0] or Array.Empty<T>()
-            if (targetType.TypeKind == TypeKind.Array && targetType is IArrayTypeSymbol arrayType)
+            if (CollectionHelper.IsArrayType(targetType))
             {
-                return CreateArrayExpression(arrayType.ElementType);
+                var elementType = CollectionHelper.GetElementType(targetType);
+                if (elementType != null)
+                {
+                    return CreateArrayExpression(elementType);
+                }
             }
 
             // For IEnumerable<T>, ICollection<T>, etc., default to List<T>
-            if (namedType.AllInterfaces.Any(i => i.Name == "IEnumerable" && i.ContainingNamespace.ToDisplayString() == "System.Collections.Generic"))
+            if (CollectionHelper.ImplementsGenericIEnumerable(targetType))
             {
-                var elementType = namedType.TypeArguments.FirstOrDefault();
+                var elementType = CollectionHelper.GetElementType(targetType);
                 if (elementType != null)
                 {
                     return CreateListConstructor(elementType);

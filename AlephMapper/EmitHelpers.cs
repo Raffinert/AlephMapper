@@ -1,23 +1,11 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace AlephMapper;
 
-//internal sealed class UpdateInliningResolver(SemanticModel model, IDictionary<IMethodSymbol, MappingModel> catalog)
-//{
-//    private readonly InliningResolver _inliningResolver = new(model, catalog);
-
-//    public SyntaxNode Visit(SyntaxNode node)
-//    {
-//        // For updateable methods, we use the same inlining logic as expressions
-//        // The difference is in how we process the inlined result in EmitHelpers
-//        return _inliningResolver.Visit(node);
-//    }
-//}
-
-internal sealed class UpdateableExpressionProcessor(string destPrefix, UpdateableTypeContext typeContext)
+internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyMappingContext typeContext)
 {
     private readonly List<string> _lines = [];
 
@@ -48,6 +36,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessExpression(ExpressionSyntax expression, string fullDestPath)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            _lines.Add($"// Skipping collection property: {fullDestPath}");
+            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         switch (expression)
         {
             case ConditionalExpressionSyntax conditional:
@@ -104,6 +100,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessConditionalWithObjectCreation(string sourceCondition, ExpressionSyntax objectExpression, string fullDestPath)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            _lines.Add($"// Skipping collection property: {fullDestPath}");
+            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         // This method handles the correct separation of source null checking from target object management
 
         if (objectExpression is ObjectCreationExpressionSyntax objectCreation)
@@ -154,7 +158,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
             }
 
             _lines.Add("}");
-            
+
             // Only add else clause to set target to null if the target can be null
             if (typeContext.CanPropertyBeNull(fullDestPath))
             {
@@ -171,7 +175,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
             _lines.Add("{");
             _lines.Add($"    {fullDestPath} = {objectExpression};");
             _lines.Add("}");
-            
+
             // Only add else clause if the target can be null
             if (typeContext.CanPropertyBeNull(fullDestPath))
             {
@@ -185,6 +189,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessNestedExpression(ExpressionSyntax expression, string fullDestPath, List<string> lines, string indent)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
+            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         switch (expression)
         {
             case ConditionalExpressionSyntax conditional:
@@ -230,6 +242,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessNestedConditionalWithObject(string sourceCondition, ExpressionSyntax objectExpression, string fullDestPath, List<string> lines, string indent)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
+            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         if (objectExpression is ObjectCreationExpressionSyntax objectCreation)
         {
             lines.Add($"{indent}if ({sourceCondition})");
@@ -263,7 +283,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
             }
 
             lines.Add($"{indent}}}");
-            
+
             // Only add else clause if target can be null
             if (typeContext.CanPropertyBeNull(fullDestPath))
             {
@@ -279,7 +299,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
             lines.Add($"{indent}{{");
             lines.Add($"{indent}    {fullDestPath} = {objectExpression};");
             lines.Add($"{indent}}}");
-            
+
             // Only add else clause if target can be null 
             if (typeContext.CanPropertyBeNull(fullDestPath))
             {
@@ -293,6 +313,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessNestedObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
+            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         // Direct object creation - ensure target exists and update properties
         if (typeContext.CanPropertyBeNull(fullDestPath))
         {
@@ -321,6 +349,14 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
 
     private void ProcessDirectObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath)
     {
+        // Skip collection properties - they are complex to update safely
+        if (typeContext.IsCollectionType(fullDestPath))
+        {
+            _lines.Add($"// Skipping collection property: {fullDestPath}");
+            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            return;
+        }
+
         // Check if we're trying to assign to a property of a value type
         // For example: dest.SomeStruct.Property = value
         // This won't work because SomeStruct returns a copy
@@ -382,11 +418,11 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, Updateabl
     {
         // For value type assignments, we need to construct the entire path
         // This is a complex case that requires reconstructing parent structs
-        
+
         // For now, let's just do a direct assignment to the full path
         // This will work for simple cases but may fail for deeply nested value types
         _lines.Add($"{fullDestPath} = {objectCreation};");
-        
+
         // Note: This is a simplified approach. A full solution would need to:
         // 1. Identify the value type property in the path
         // 2. Reconstruct that struct with the new nested value
@@ -411,9 +447,9 @@ internal static class EmitHelpers
             return false;
 
         // Collect type information from the syntax tree
-        var typeContext = semanticModel != null 
-            ? TypeAnnotationCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
-            : new UpdateableTypeContext(); // Fallback to empty context for backward compatibility
+        var typeContext = semanticModel != null
+            ? PropertyTypeInfoCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
+            : new PropertyMappingContext(); // Fallback to empty context for backward compatibility
 
         var processor = new UpdateableExpressionProcessor(destPrefix, typeContext);
         var processedLines = processor.ProcessObjectCreation(oce);

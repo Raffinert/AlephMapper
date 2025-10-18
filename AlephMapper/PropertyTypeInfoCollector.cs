@@ -1,29 +1,29 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper;
 
 /// <summary>
-/// Collects type information from object creation expressions for updateable method generation.
+/// Collects property type information from object creation expressions for updateable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class TypeAnnotationCollector : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
 {
     private readonly SemanticModel _semanticModel;
-    private readonly UpdateableTypeContext _typeContext;
+    private readonly PropertyMappingContext _typeContext;
     private readonly string _currentPath;
 
-    public TypeAnnotationCollector(SemanticModel semanticModel, UpdateableTypeContext typeContext, string rootPath = "")
+    public PropertyTypeInfoCollector(SemanticModel semanticModel, PropertyMappingContext typeContext, string rootPath = "")
     {
         _semanticModel = semanticModel;
         _typeContext = typeContext;
         _currentPath = rootPath;
     }
 
-    public static UpdateableTypeContext CollectTypeInformation(ExpressionSyntax expression, SemanticModel semanticModel, string destPrefix)
+    public static PropertyMappingContext CollectTypeInformation(ExpressionSyntax expression, SemanticModel semanticModel, string destPrefix)
     {
-        var typeContext = new UpdateableTypeContext();
+        var typeContext = new PropertyMappingContext();
 
         // Skip type collection if semantic model is null
         if (semanticModel == null)
@@ -33,14 +33,14 @@ internal class TypeAnnotationCollector : CSharpSyntaxWalker
 
         try
         {
-            var collector = new TypeAnnotationCollector(semanticModel, typeContext, destPrefix);
+            var collector = new PropertyTypeInfoCollector(semanticModel, typeContext, destPrefix);
             collector.Visit(expression);
         }
         catch
         {
             // If there's any issue with type collection, return empty context
             // This ensures the generator doesn't fail
-            return new UpdateableTypeContext();
+            return new PropertyMappingContext();
         }
 
         return typeContext;
@@ -94,7 +94,7 @@ internal class TypeAnnotationCollector : CSharpSyntaxWalker
             }
 
             // Recursively process nested object creations
-            var nestedCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, fullPropertyPath);
+            var nestedCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, fullPropertyPath);
             nestedCollector.Visit(assignment.Right);
         }
         catch
@@ -110,10 +110,10 @@ internal class TypeAnnotationCollector : CSharpSyntaxWalker
             // For conditional expressions, we need to analyze both the true and false branches
             // to understand what types are being assigned
 
-            var trueCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
+            var trueCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, _currentPath);
             trueCollector.Visit(node.WhenTrue);
 
-            var falseCollector = new TypeAnnotationCollector(_semanticModel, _typeContext, _currentPath);
+            var falseCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, _currentPath);
             falseCollector.Visit(node.WhenFalse);
         }
         catch

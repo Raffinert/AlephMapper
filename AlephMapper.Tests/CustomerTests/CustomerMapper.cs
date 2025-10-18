@@ -5,7 +5,7 @@ internal static partial class CustomerMapper
     [Updateable]
     public static CustomerDto MapToCustomerDto(Customer customer)
     {
-        if (customer == null) throw new ArgumentNullException(nameof(customer));
+        ArgumentNullException.ThrowIfNull(customer);
 
         return new CustomerDto
         {
@@ -20,7 +20,7 @@ internal static partial class CustomerMapper
             CustomerTypeText = customer.CustomerType.ToString(),
             IsActive = customer.IsActive,
             MemberSince = new DateTime(2025, 10, 10).ToString("d"),
-            LastLogin = customer.LastLoginDate?.ToString("d") ?? "Never"
+            LastLogin = customer.LastLoginDate?.ToString("d")
         };
     }
 
