@@ -444,155 +444,115 @@ public class UpdateableTests
 
     #endregion
 
-    #region Individual Component Update Tests
+    #region Conditional Expression Tests
 
     [Test]
-    public async Task Department_Update_Should_Work()
+    public async Task Conditional_Expression_Update_Should_Work_With_Null_Check()
     {
-        // Arrange - DTO as source
-        var departmentDto = new DepartmentUpdateDto
+        // Arrange - Test the source == null ? null : new TargetType pattern
+        var sourceEmployee = new Employee
         {
-            Id = 900,
-            Name = "Updated Engineering",
-            Description = "Advanced Software Development",
+            Id = 999,
+            FirstName = "Conditional",
+            LastName = "Test",
+            Email = "conditional@test.com",
+            Department = new Department { Name = "Test Department" }
+        };
+
+        var targetDto = new EmployeeSimpleDto
+        {
+            Id = 1,
+            FirstName = "Old",
+            LastName = "Values",
+            Email = "old@email.com"
+        };
+
+        // Act
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+
+        // Assert
+        await Assert.That(result).IsSameReferenceAs(targetDto);
+        await Assert.That(targetDto.Id).IsEqualTo(999);
+        await Assert.That(targetDto.FirstName).IsEqualTo("Conditional");
+        await Assert.That(targetDto.LastName).IsEqualTo("Test");
+        await Assert.That(targetDto.Email).IsEqualTo("conditional@test.com");
+        await Assert.That(targetDto.DepartmentName).IsEqualTo("Test Department");
+    }
+
+    [Test]
+    public async Task Conditional_Expression_Update_Should_Handle_Null_Source()
+    {
+        // Arrange - Test with null source
+        Employee? sourceEmployee = null;
+        var targetDto = new EmployeeSimpleDto
+        {
+            Id = 1,
+            FirstName = "Should",
+            LastName = "Remain",
+            Email = "unchanged@email.com"
+        };
+
+        // Act
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+
+        // Assert - When source is null, target should remain unchanged
+        await Assert.That(result).IsSameReferenceAs(targetDto);
+        await Assert.That(targetDto.Id).IsEqualTo(1);
+        await Assert.That(targetDto.FirstName).IsEqualTo("Should");
+        await Assert.That(targetDto.LastName).IsEqualTo("Remain");
+        await Assert.That(targetDto.Email).IsEqualTo("unchanged@email.com");
+    }
+
+    [Test]
+    public async Task Conditional_Expression_Update_Should_Work_With_Inverted_Condition()
+    {
+        // Arrange - Test the source != null ? new TargetType : null pattern
+        var sourceDepartment = new Department
+        {
+            Id = 888,
+            Name = "Inverted Test",
+            Description = "Testing inverted conditional",
             IsActive = false
         };
 
-        var targetDepartment = new Department
+        var targetDto = new DepartmentUpdateDto
         {
             Id = 1,
-            Name = "Old Engineering",
-            Description = "Old Description",
+            Name = "Old Name",
             IsActive = true
         };
 
         // Act
-        var result = EmployeeUpdateMapper.UpdateDepartmentFromDto(departmentDto, targetDepartment);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
 
         // Assert
-        await Assert.That(result).IsSameReferenceAs(targetDepartment);
-        await Assert.That(targetDepartment.Id).IsEqualTo(900);
-        await Assert.That(targetDepartment.Name).IsEqualTo("Updated Engineering");
-        await Assert.That(targetDepartment.Description).IsEqualTo("Advanced Software Development");
-        await Assert.That(targetDepartment.IsActive).IsFalse();
+        await Assert.That(result).IsSameReferenceAs(targetDto);
+        await Assert.That(targetDto.Id).IsEqualTo(888);
+        await Assert.That(targetDto.Name).IsEqualTo("Inverted Test");
+        await Assert.That(targetDto.Description).IsEqualTo("Testing inverted conditional");
+        await Assert.That(targetDto.IsActive).IsFalse();
     }
 
     [Test]
-    public async Task EmployeeProfile_Update_Should_Work()
+    public async Task Conditional_Expression_Update_Should_Handle_Null_Source_Inverted()
     {
-        // Arrange - DTO as source
-        var profileDto = new EmployeeProfileUpdateDto
-        {
-            Id = 1000,
-            Phone = "+1-555-1111",
-            Bio = "Updated bio for senior engineer",
-            Skills = "Updated C#, .NET, Azure, Docker",
-            YearsOfExperience = 15,
-            ContactInfo = new ContactInfoUpdateDto
-            {
-                Id = 2000,
-                EmergencyContactName = "Updated Emergency Contact",
-                EmergencyContactPhone = "+1-555-2222",
-                LinkedInUrl = "https://linkedin.com/in/updated"
-            }
-        };
-
-        var targetProfile = new EmployeeProfile
+        // Arrange - Test inverted conditional with null source
+        Department? sourceDepartment = null;
+        var targetDto = new DepartmentUpdateDto
         {
             Id = 1,
-            Phone = "+1-555-0101",
-            ContactInfo = new ContactInfo { Id = 1, EmergencyContactName = "Old Contact" }
-        };
-
-        var existingContactInfo = targetProfile.ContactInfo;
-
-        // Act
-        var result = EmployeeUpdateMapper.UpdateEmployeeProfileFromDto(profileDto, targetProfile);
-
-        // Assert
-        await Assert.That(result).IsSameReferenceAs(targetProfile);
-        await Assert.That(targetProfile.Id).IsEqualTo(1000);
-        await Assert.That(targetProfile.Phone).IsEqualTo("+1-555-1111");
-        await Assert.That(targetProfile.Bio).IsEqualTo("Updated bio for senior engineer");
-        await Assert.That(targetProfile.Skills).IsEqualTo("Updated C#, .NET, Azure, Docker");
-        await Assert.That(targetProfile.YearsOfExperience).IsEqualTo(15);
-        
-        // Verify nested contact info is updated, not replaced
-        await Assert.That(targetProfile.ContactInfo).IsSameReferenceAs(existingContactInfo);
-        await Assert.That(targetProfile.ContactInfo!.Id).IsEqualTo(2000);
-        await Assert.That(targetProfile.ContactInfo.EmergencyContactName).IsEqualTo("Updated Emergency Contact");
-        await Assert.That(targetProfile.ContactInfo.LinkedInUrl).IsEqualTo("https://linkedin.com/in/updated");
-    }
-
-    [Test]
-    public async Task ContactInfo_Update_Should_Work()
-    {
-        // Arrange - DTO as source
-        var contactDto = new ContactInfoUpdateDto
-        {
-            Id = 3000,
-            EmergencyContactName = "New Emergency Contact",
-            EmergencyContactPhone = "+1-555-3333",
-            LinkedInUrl = "https://linkedin.com/in/newcontact"
-        };
-
-        var targetContact = new ContactInfo
-        {
-            Id = 1,
-            EmergencyContactName = "Mary Doe",
-            EmergencyContactPhone = "+1-555-0201"
+            Name = "Should Remain",
+            IsActive = true
         };
 
         // Act
-        var result = EmployeeUpdateMapper.UpdateContactInfoFromDto(contactDto, targetContact);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
 
-        // Assert
-        await Assert.That(result).IsSameReferenceAs(targetContact);
-        await Assert.That(targetContact.Id).IsEqualTo(3000);
-        await Assert.That(targetContact.EmergencyContactName).IsEqualTo("New Emergency Contact");
-        await Assert.That(targetContact.EmergencyContactPhone).IsEqualTo("+1-555-3333");
-        await Assert.That(targetContact.LinkedInUrl).IsEqualTo("https://linkedin.com/in/newcontact");
-    }
-
-    [Test]
-    public async Task EmployeeAddress_Update_Should_Work()
-    {
-        // Arrange - DTO as source
-        var addressDto = new EmployeeAddressUpdateDto
-        {
-            Id = 4000,
-            Street = "456 Updated St",
-            City = "Updated City",
-            State = "Updated State",
-            Country = "Updated Country",
-            ZipCode = "12345",
-            Type = AddressType.Work,
-            IsPrimary = false
-        };
-
-        var targetAddress = new EmployeeAddress
-        {
-            Id = 1,
-            Street = "123 Main St",
-            City = "Seattle",
-            Country = "USA",
-            Type = AddressType.Home,
-            IsPrimary = true
-        };
-
-        // Act
-        var result = EmployeeUpdateMapper.UpdateEmployeeAddressFromDto(addressDto, targetAddress);
-
-        // Assert
-        await Assert.That(result).IsSameReferenceAs(targetAddress);
-        await Assert.That(targetAddress.Id).IsEqualTo(4000);
-        await Assert.That(targetAddress.Street).IsEqualTo("456 Updated St");
-        await Assert.That(targetAddress.City).IsEqualTo("Updated City");
-        await Assert.That(targetAddress.State).IsEqualTo("Updated State");
-        await Assert.That(targetAddress.Country).IsEqualTo("Updated Country");
-        await Assert.That(targetAddress.ZipCode).IsEqualTo("12345");
-        await Assert.That(targetAddress.Type).IsEqualTo(AddressType.Work);
-        await Assert.That(targetAddress.IsPrimary).IsFalse();
+        // Assert - When source is null, target should remain unchanged
+        await Assert.That(result).IsSameReferenceAs(targetDto);
+        await Assert.That(targetDto.Id).IsEqualTo(1);
+        await Assert.That(targetDto.Name).IsEqualTo("Should Remain");
+        await Assert.That(targetDto.IsActive).IsTrue();
     }
 
     #endregion

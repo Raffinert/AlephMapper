@@ -25,6 +25,13 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         return _lines.ToList();
     }
 
+    public List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
+    {
+        _lines.Clear();
+        ProcessConditionalExpression(conditional, currentDestPath);
+        return _lines.ToList();
+    }
+
     private void ProcessAssignment(AssignmentExpressionSyntax assignment, string currentDestPath)
     {
         var propertyName = assignment.Left.ToString();
@@ -440,19 +447,32 @@ internal static class EmitHelpers
 {
     public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel = null)
     {
-        if (inlinedBody is not ObjectCreationExpressionSyntax oce)
-            return false;
-
-        if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
-            return false;
-
         // Collect type information from the syntax tree
         var typeContext = semanticModel != null
             ? PropertyTypeInfoCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
             : new PropertyMappingContext(); // Fallback to empty context for backward compatibility
 
         var processor = new UpdateableExpressionProcessor(destPrefix, typeContext);
-        var processedLines = processor.ProcessObjectCreation(oce);
+        List<string> processedLines;
+
+        switch (inlinedBody)
+        {
+            case ObjectCreationExpressionSyntax oce:
+                if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
+                    return false;
+                
+                processedLines = processor.ProcessObjectCreation(oce);
+                break;
+
+            case ConditionalExpressionSyntax conditional:
+                // Handle conditional expressions like: condition ? new Type { ... } : null
+                // or: condition ? null : new Type { ... }
+                processedLines = processor.ProcessRootConditionalExpression(conditional, destPrefix);
+                break;
+
+            default:
+                return false;
+        }
 
         lines.AddRange(processedLines);
         return lines.Count > 0;
