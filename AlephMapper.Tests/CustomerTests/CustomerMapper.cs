@@ -2,7 +2,7 @@
 
 internal static partial class CustomerMapper
 {
-    [Updateable]
+    [Updatable]
     public static CustomerDto MapToCustomerDto(Customer customer)
     {
         ArgumentNullException.ThrowIfNull(customer);

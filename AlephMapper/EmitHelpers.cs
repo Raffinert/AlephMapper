@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace AlephMapper;
 
-internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyMappingContext typeContext)
+internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMappingContext typeContext)
 {
     private readonly List<string> _lines = [];
 
@@ -40,7 +40,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -112,7 +112,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -190,7 +190,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -226,7 +226,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -304,7 +304,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in updateable methods for safety");
+            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -340,7 +340,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in updateable methods for safety");
+            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -432,7 +432,7 @@ internal static class EmitHelpers
             ? PropertyTypeInfoCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
             : new PropertyMappingContext(); // Fallback to empty context for backward compatibility
 
-        var processor = new UpdateableExpressionProcessor(destPrefix, typeContext);
+        var processor = new UpdatableExpressionProcessor(destPrefix, typeContext);
         List<string> processedLines;
 
         switch (inlinedBody)

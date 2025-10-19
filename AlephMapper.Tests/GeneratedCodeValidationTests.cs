@@ -126,9 +126,9 @@ public class GeneratedCodeValidationTests
     }
 
     [Test]
-    public async Task Updateable_Methods_Should_Inline_Method_Calls()
+    public async Task Updatable_Methods_Should_Inline_Method_Calls()
     {
-        // This test verifies that updateable methods properly inline method calls
+        // This test verifies that Updatable methods properly inline method calls
         // We'll check the functionality by ensuring the inlined code works properly
 
         var source = new SourceDto
@@ -188,6 +188,6 @@ public class GeneratedCodeValidationTests
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.1.7");
+        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.2.0");
     }
 }

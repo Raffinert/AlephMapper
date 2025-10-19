@@ -19,15 +19,15 @@ internal static partial class CircularMapper
         Value = MapToDto(source).ProcessedValue // Calls MapToDto - creates cycle
     };
     
-    // Updateable method with circular reference
-    [Updateable]
+    // Updatable method with circular reference
+    [Updatable]
     public static CircularDto UpdateCircularDto(CircularTestModel source) => new CircularDto
     {
         ProcessedValue = MapToOtherDto(source).Value // Calls MapToOtherDto which has circular reference
     };
     
-    // Another updateable method with circular reference
-    [Updateable] 
+    // Another Updatable method with circular reference
+    [Updatable] 
     public static OtherCircularDto UpdateOtherCircularDto(CircularTestModel source) => new OtherCircularDto
     {
         Value = MapToDto(source).ProcessedValue // Calls MapToDto which has circular reference
@@ -36,8 +36,8 @@ internal static partial class CircularMapper
     // A helper method without circular reference for comparison
     public static string ProcessValue(CircularTestModel source) => source?.Value?.ToUpper() ?? "";
     
-    // Updateable method without circular reference for comparison
-    [Updateable]
+    // Updatable method without circular reference for comparison
+    [Updatable]
     public static CircularDto UpdateSimpleDto(CircularTestModel source) => new CircularDto
     {
         ProcessedValue = source?.Value?.ToUpper() ?? "" // Direct assignment without method call

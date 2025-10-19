@@ -7,23 +7,23 @@ namespace AlephMapper.Tests;
 public class CollectionSkippingTests
 {
     [Test]
-    public async Task Collection_Properties_Should_Be_Skipped_In_Updateable_Methods()
+    public async Task Collection_Properties_Should_Be_Skipped_In_Updatable_Methods()
     {
-        // This test verifies that collection properties are skipped in updateable methods
+        // This test verifies that collection properties are skipped in Updatable methods
         
         var mapperType = typeof(CollectionMapper);
         
         // Verify the type exists 
         await Assert.That(mapperType).IsNotNull();
         
-        // The basic updateable methods should exist
+        // The basic Updatable methods should exist
         var mapToDestWithCollectionsMethod = mapperType.GetMethod("MapToDestWithCollections", new[] { typeof(SourceWithCollections) });
         var mapToDestSimpleMethod = mapperType.GetMethod("MapToDestSimple", new[] { typeof(SourceWithCollections) });
         
         await Assert.That(mapToDestWithCollectionsMethod).IsNotNull();
         await Assert.That(mapToDestSimpleMethod).IsNotNull();
         
-        // The updateable overloads should be generated
+        // The Updatable overloads should be generated
         var mapToDestWithCollectionsOverload = mapperType.GetMethod("MapToDestWithCollections", 
             new[] { typeof(SourceWithCollections), typeof(DestWithCollections) });
         var mapToDestSimpleOverload = mapperType.GetMethod("MapToDestSimple", 
@@ -36,7 +36,7 @@ public class CollectionSkippingTests
     }
     
     [Test]
-    public async Task Updateable_Method_Should_Skip_Collection_Properties_But_Update_Regular_Properties()
+    public async Task Updatable_Method_Should_Skip_Collection_Properties_But_Update_Regular_Properties()
     {
         // Test that collection properties are skipped but regular properties are updated
         var source = new SourceWithCollections
@@ -67,7 +67,7 @@ public class CollectionSkippingTests
             }
         };
         
-        // Test the generated updateable method
+        // Test the generated Updatable method
         var result = CollectionMapper.MapToDestWithCollections(source, dest);
         
         // Verify it returns the same destination object
@@ -84,11 +84,11 @@ public class CollectionSkippingTests
         // This behavior depends on implementation - collections might be skipped entirely
         // or they might be left unchanged. The key is they shouldn't cause errors.
         
-        Console.WriteLine("Updateable method with collections completed without errors");
+        Console.WriteLine("Updatable method with collections completed without errors");
     }
     
     [Test]
-    public async Task Simple_Updateable_Method_Should_Work_Without_Collections()
+    public async Task Simple_Updatable_Method_Should_Work_Without_Collections()
     {
         // Test that non-collection properties work normally
         var source = new SourceWithCollections
@@ -109,7 +109,7 @@ public class CollectionSkippingTests
             }
         };
         
-        // Test the generated updateable method
+        // Test the generated Updatable method
         var result = CollectionMapper.MapToDestSimple(source, dest);
         
         // Verify it returns the same destination object
@@ -120,29 +120,29 @@ public class CollectionSkippingTests
         await Assert.That(dest.NestedObject).IsNotNull();
         await Assert.That(dest.NestedObject.Value).IsEqualTo("Nested Value");
         
-        Console.WriteLine("Simple updateable method worked correctly");
+        Console.WriteLine("Simple Updatable method worked correctly");
     }
     
     [Test]
     public async Task Collection_Skipping_Should_Not_Prevent_Method_Generation()
     {
-        // This test verifies that having collection properties doesn't prevent updateable method generation
+        // This test verifies that having collection properties doesn't prevent Updatable method generation
         
         var mapperType = typeof(CollectionMapper);
         var methods = mapperType.GetMethods(BindingFlags.Public | BindingFlags.Static);
         
         // Count methods
         var basicMethods = methods.Where(m => m.GetParameters().Length == 1).ToArray();
-        var updateableMethods = methods.Where(m => m.GetParameters().Length == 2).ToArray(); // Updateable overloads
+        var UpdatableMethods = methods.Where(m => m.GetParameters().Length == 2).ToArray(); // Updatable overloads
         var expressionMethods = methods.Where(m => m.Name.EndsWith("Expression")).ToArray();
         
-        // We should have basic methods, updateable overloads, and expressions
+        // We should have basic methods, Updatable overloads, and expressions
         await Assert.That(basicMethods.Length).IsEqualTo(2); // MapToDestWithCollections, MapToDestSimple
-        await Assert.That(updateableMethods.Length).IsEqualTo(2); // Both should have updateable overloads
+        await Assert.That(UpdatableMethods.Length).IsEqualTo(2); // Both should have Updatable overloads
         await Assert.That(expressionMethods.Length).IsEqualTo(2); // Both should have expressions
         
         Console.WriteLine($"Basic methods: {basicMethods.Length}");
-        Console.WriteLine($"Updateable overload methods: {updateableMethods.Length}");
+        Console.WriteLine($"Updatable overload methods: {UpdatableMethods.Length}");
         Console.WriteLine($"Expression methods: {expressionMethods.Length}");
         Console.WriteLine("Collection properties did not prevent method generation");
     }

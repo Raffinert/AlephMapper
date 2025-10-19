@@ -17,13 +17,13 @@ To learn more about the war and how you can help, [click here](https://stand-wit
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Raffinert/AlephMapper/build.yml?branch=main)](https://github.com/Raffinert/AlephMapper/actions)
 
-AlephMapper is a **Source Generator** that automatically creates projectable companion methods from your mapping logic. It enables you to write mapping methods once and use them both for in-memory objects and as expression trees for database queries (Entity Framework Core projections).
+AlephMapper is a **Source Generator** that automatically creates projectable and/or updatable companion methods from your mapping logic. It enables you to write mapping methods once and use them both for in-memory objects and as expression trees for database queries (Entity Framework Core projections).
 
 ## 🚀 Features
 
 - **Expression Tree Generation** - Automatically converts method bodies to expression trees
 - **Null-Conditional Operator Support** - Configurable handling of `?.` operators
-- **Updateable Methods** - Generate update methods that modify existing instances
+- **Updatable Methods** - Generate update methods that modify existing instances
 
 ## 📦 Installation
 
@@ -99,41 +99,38 @@ public static partial class SafeMapper
 - `Ignore` - Remove null-conditional operators (may cause NullReferenceException)
 - `Rewrite` - Convert to explicit null checks: `person.BirthInfo?.Age` becomes `person.BirthInfo != null ? person.BirthInfo.Age : null`
 
-### Updateable Methods
+### Updatable Methods
 
-Generate update methods that modify existing instances instead of creating new ones:
+From a single mapping, AlephMapper can emit an **update-in-place** overload that writes into an existing instance (instead of creating a new one). This is especially suitable for **EF Core entity updates with change tracking**: you keep the **same tracked instance**, so EF can detect modified properties and produce the correct `UPDATE`.
 
 ```csharp
-public static partial class PersonMapper
+[Updatable]
+public static Person MapToPerson(PersonUpdateDto dto) => new Person
 {
-    [Updateable]
-    public static PersonDto MapToPersonDto(Employee employee) => new PersonDto
-    {
-        Id = employee.EmployeeId,
-        FullName = GetFullName(employee),
-        Email = employee.ContactInfo.Email
-    };
-}
+    FirstName = dto.FirstName,
+    LastName  = dto.LastName,
+    Email     = dto.Email
+    // ...
+};
 
-// Usage:
-var existingDto = new PersonDto();
-var employee = GetEmployee();
-
-// Generated method signature: UpdatePerson(Employee source, PersonDto target)
-PersonMapper.MapToPersonDto(employee, existingDto);
-// existingDto is now updated with employee data
+// Generated usage with EF Core change tracking:
+var person = await db.People.FindAsync(id);           // tracked entity
+PersonMapper.MapToPerson(source: dto, target: person); // mutate in-place
+await db.SaveChangesAsync();                           // EF sees changes on the same instance
 ```
 
 ## 🔍 How It Works
-
-AlephMapper uses **Roslyn Source Generators** to analyze your mapping methods at compile time and generates corresponding expression tree methods.
 
 For each method marked with `[Expressive]`:
 
 1. **`MapToPersonDto(Employee employee)`** → generates **`MapToPersonDtoExpression()`** returning `Expression<Func<Employee, PersonDto>>`
 2. **Method calls are inlined** - Calls to other methods in the same class are automatically inlined into the expression tree
 3. **Null-conditional operators are handled** according to your specified rewrite policy
-4. **Update methods** generate overloads that accept a target instance to modify
+
+For each method marked with `[Updatable]`:
+
+1. **`MapToPersonDto(Employee employee)`** → generates **`MapToPersonDto(Employee employee, PersonDto target)`** returning `PersonDto`
+2. **Method calls are inlined** - Calls to other methods in the same class are automatically inlined into the method
 
 ## ⚠️ Limitations
 
@@ -210,6 +207,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Expressionify](https://github.com/ClaveConsulting/Expressionify) - Similar concept with different approach
 - [AutoMapper](https://automapper.org/) - Popular object-to-object mapper
 - [Mapster](https://github.com/MapsterMapper/Mapster) - Fast object mapper
+- [Facet](https://github.com/Tim-Maes/Facet)
 
 ---
 

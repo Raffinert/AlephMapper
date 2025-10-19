@@ -51,7 +51,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 var mapperType = kvp.Key;
                 var methods = kvp.Value;
 
-                if (!methods.Any(m => (m.IsExpressive || m.IsUpdateable) && m.IsClassPartial))
+                if (!methods.Any(m => (m.IsExpressive || m.IsUpdatable) && m.IsClassPartial))
                 {
                     continue;
                 }
@@ -79,7 +79,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                    if (!mm.IsExpressive && !mm.IsUpdateable) continue;
+                    if (!mm.IsExpressive && !mm.IsUpdatable) continue;
 
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
@@ -160,15 +160,15 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     }
 
                     // Update method - check for circular references like expressive methods do
-                    if (mm.IsUpdateable)
+                    if (mm.IsUpdatable)
                     {
-                        // Skip generating updateable method if there are circular references
+                        // Skip generating Updatable method if there are circular references
                         if (resolver.CircularReferences.Any())
                         {
                             var descriptor = new DiagnosticDescriptor(
                                 "AM0004",
-                                "Updateable method generation skipped due to circular references",
-                                "Updateable method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable updateable method generation.",
+                                "Updatable method generation skipped due to circular references",
+                                "Updatable method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable Updatable method generation.",
                                 "AlephMapper",
                                 DiagnosticSeverity.Warning,
                                 isEnabledByDefault: true);
@@ -179,17 +179,17 @@ public class AlephSourceGenerator : IIncrementalGenerator
                                 mm.MethodSymbol.Name);
 
                             spc.ReportDiagnostic(diagnostic);
-                            continue; // Skip updateable method generation
+                            continue; // Skip Updatable method generation
                         }
 
                         // Check if return type is a value type - if so, skip generation and emit warning
                         if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
                         {
-                            // Emit a diagnostic warning for value type updateable methods
+                            // Emit a diagnostic warning for value type Updatable methods
                             var descriptor = new DiagnosticDescriptor(
                                 "AM0001",
-                                "Updateable method with value type return type",
-                                "Updateable method '{0}' returns value type '{1}'. Value types are passed by value, so update semantics don't work as expected. Consider using a regular mapping method instead.",
+                                "Updatable method with value type return type",
+                                "Updatable method '{0}' returns value type '{1}'. Value types are passed by value, so update semantics don't work as expected. Consider using a regular mapping method instead.",
                                 "AlephMapper",
                                 DiagnosticSeverity.Warning,
                                 isEnabledByDefault: true);
@@ -202,7 +202,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                             spc.ReportDiagnostic(diagnostic);
 
-                            // Skip generating the updateable method
+                            // Skip generating the Updatable method
                             continue;
                         }
 
@@ -297,8 +297,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var hasExpressive = SymbolHelpers.HasAttribute(classSymbol, typeof(ExpressiveAttribute).FullName)
                             || SymbolHelpers.HasAttribute(methodSymbol, typeof(ExpressiveAttribute).FullName);
 
-        var hasUpdateable = SymbolHelpers.HasAttribute(classSymbol, typeof(UpdateableAttribute).FullName)
-                            || SymbolHelpers.HasAttribute(methodSymbol, typeof(UpdateableAttribute).FullName);
+        var hasUpdatable = SymbolHelpers.HasAttribute(classSymbol, typeof(UpdatableAttribute).FullName)
+                            || SymbolHelpers.HasAttribute(methodSymbol, typeof(UpdatableAttribute).FullName);
 
         var bodyExpr = ExtractBodyExpression(methodDecl);
 
@@ -324,7 +324,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             bodyExpr,
             model,
             hasExpressive,
-            hasUpdateable,
+            hasUpdatable,
             isClassPartial,
             nullStrategy
         );

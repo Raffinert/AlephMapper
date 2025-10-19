@@ -60,7 +60,7 @@ public static partial class SimpleIgnoreMapper
     };
 }
 
-[Updateable]
+[Updatable]
 public static partial class SimpleUpdateMapper
 {
     public static EmployeeSimpleDto MapToSimpleDto(Employee employee) => new()

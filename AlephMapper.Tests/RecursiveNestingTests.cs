@@ -3,7 +3,7 @@
 public class RecursiveNestingTests
 {
     [Test]
-    public async Task Should_Handle_Deep_Nesting_With_Proper_Updateable_Logic()
+    public async Task Should_Handle_Deep_Nesting_With_Proper_Updatable_Logic()
     {
         // Test that verifies the recursive approach works for deeply nested objects
 
@@ -36,7 +36,7 @@ public class RecursiveNestingTests
         // Act
         var result = TestModel1Mapper.MapToTestModel1Dto(source, dest);
 
-        // Assert - verify deep nesting updateable behavior
+        // Assert - verify deep nesting Updatable behavior
         await Assert.That(result).IsSameReferenceAs(dest);
 
         // Verify top level properties

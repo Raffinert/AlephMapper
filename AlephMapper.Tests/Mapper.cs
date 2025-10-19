@@ -16,7 +16,7 @@ internal static partial class Mapper
 
     public static bool LivesIn(BirthInfo source) => source.Address == "Kyiv";
 
-    [Updateable]
+    [Updatable]
     public static DestDto MapToDestDto(SourceDto source) => new DestDto
     {
         Name = source.Name,
@@ -24,7 +24,7 @@ internal static partial class Mapper
         ContactInfo = source.Email
     };
 
-    [Updateable]
+    [Updatable]
     public static DestDto MapToDestDto1(SourceDto source) => new DestDto
     {
         Name = source.Name,

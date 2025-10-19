@@ -5,10 +5,10 @@ namespace AlephMapper.Tests;
 public class ValueTypeToReferenceTypeTests
 {
     [Test]
-    public async Task Should_Generate_Updateable_Method_For_Reference_Type_Destination()
+    public async Task Should_Generate_Updatable_Method_For_Reference_Type_Destination()
     {
         // This test verifies that when mapping FROM value type TO reference type,
-        // the updateable method should be generated (because destination is reference type)
+        // the Updatable method should be generated (because destination is reference type)
             
         var source = new ComplexValueTypeSource
         {
@@ -18,7 +18,7 @@ public class ValueTypeToReferenceTypeTests
 
         var destination = new ComplexReferenceTypeDestination();
             
-        // This call should work because destination is reference type, so updateable method should be generated
+        // This call should work because destination is reference type, so Updatable method should be generated
         // Even though source is value type, the decision is based on the RETURN type (destination)
         ValueToReferenceMapper.MapToReferenceDestination(source, destination);
 
@@ -72,7 +72,7 @@ public class ValueTypeToReferenceTypeTests
             }
         };
 
-        // Act - Map to reference type (this should generate updateable method)
+        // Act - Map to reference type (this should generate Updatable method)
         var destination = new ComplexReferenceTypeDestination();
         ValueToReferenceMapper.MapToReferenceDestination(source, destination);
 
@@ -287,7 +287,7 @@ internal class TagsClass
 [Expressive]
 internal static partial class ValueToReferenceMapper
 {
-    [Updateable]
+    [Updatable]
     public static ComplexReferenceTypeDestination MapToReferenceDestination(ComplexValueTypeSource source)
         => new ComplexReferenceTypeDestination
         {

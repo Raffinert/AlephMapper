@@ -118,7 +118,7 @@ internal class ValueTypeOnlyDestination
 [Expressive]
 internal static partial class ValueTypeOnlyMapper
 {
-    [Updateable]
+    [Updatable]
     public static ValueTypeOnlyDestination MapToDestination(ValueTypeOnlySource source)
         => new ValueTypeOnlyDestination
         {
@@ -150,7 +150,7 @@ internal class SimpleReferenceObject
 [Expressive]
 internal static partial class ReferenceTypeOnlyMapper
 {
-    [Updateable]
+    [Updatable]
     public static ReferenceTypeOnlyDestination MapToDestination(ReferenceTypeOnlySource source)
         => new ReferenceTypeOnlyDestination
         {
@@ -180,7 +180,7 @@ internal class NullableValueTypeDestination
 [Expressive]
 internal static partial class NullableValueTypeMapper
 {
-    [Updateable]
+    [Updatable]
     public static NullableValueTypeDestination MapToDestination(NullableValueTypeSource source)
         => new NullableValueTypeDestination
         {

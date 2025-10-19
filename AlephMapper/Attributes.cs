@@ -46,4 +46,4 @@ public sealed class ExpressiveAttribute : Attribute
 /// Marks a class to generate update companion methods.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class UpdateableAttribute : Attribute;
+public sealed class UpdatableAttribute : Attribute;

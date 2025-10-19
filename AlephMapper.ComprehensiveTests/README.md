@@ -23,7 +23,7 @@ This test project provides comprehensive coverage of the AlephMapper source gene
 - Verifies method inlining occurs properly
 - Checks for proper string concatenation handling
 
-### 2. Updateable Mapping Tests (`SimpleUpdateTests`)
+### 2. Updatable Mapping Tests (`SimpleUpdateTests`)
 
 #### Basic Update Operations
 - **Simple Update**: Tests basic property updates on target objects
@@ -66,7 +66,7 @@ The test project uses a comprehensive domain model representing an employee mana
 - Same functionality as above but with ignore policy
 - Demonstrates different null handling behavior
 
-#### `SimpleUpdateMapper` (Updateable)
+#### `SimpleUpdateMapper` (Updatable)
 - Simple property updates
 - Nested object updates
 - Demonstrates reference preservation
@@ -100,9 +100,9 @@ Gets converted to:
 ```
 
 ### 4. Update Method Generation
-Updateable mappers generate overloads that update existing target instances:
+Updatable mappers generate overloads that update existing target instances:
 ```csharp
-[Updateable]
+[Updatable]
 public static EmployeeSimpleDto UpdateSimpleDto(Employee employee) => new EmployeeSimpleDto { ... }
 ```
 

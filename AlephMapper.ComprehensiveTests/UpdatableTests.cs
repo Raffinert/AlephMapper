@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.ComprehensiveTests;
 
-public class UpdateableTests
+public class UpdatableTests
 {
     private SqliteConnection _connection = null!;
     private ComprehensiveTestDbContext _context = null!;
@@ -368,7 +368,7 @@ public class UpdateableTests
 
     #endregion
 
-    #region Combined Expressive and Updateable Tests
+    #region Combined Expressive and Updatable Tests
 
     [Test]
     public async Task Combined_Mapper_Expressive_Methods_Should_Work()
@@ -397,7 +397,7 @@ public class UpdateableTests
     }
 
     [Test]
-    public async Task Combined_Mapper_Updateable_Methods_Should_Work()
+    public async Task Combined_Mapper_Updatable_Methods_Should_Work()
     {
         // Arrange - DTOs as source
         var simpleDto = new EmployeeSimpleDto

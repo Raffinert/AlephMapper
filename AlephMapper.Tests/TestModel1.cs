@@ -45,7 +45,7 @@ internal class AddressLineDto
 [Expressive]
 internal static partial class TestModel1Mapper
 {
-    [Updateable]
+    [Updatable]
     public static TestModel1Dto MapToTestModel1Dto(TestModel1 source)
         => new TestModel1Dto
         {

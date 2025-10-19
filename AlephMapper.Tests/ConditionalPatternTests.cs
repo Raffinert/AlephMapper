@@ -31,7 +31,7 @@ public class NestedDest
 public static partial class ConditionalPatternMapper
 {
     // Pattern 1: Both sides object creation
-    [Updateable]
+    [Updatable]
     public static DestModel BothSidesObjects(SourceModel source) => new DestModel
     {
         Name = source.Name,
@@ -41,7 +41,7 @@ public static partial class ConditionalPatternMapper
     };
 
     // Pattern 4: Existing pattern (condition ? object : null)
-    [Updateable]
+    [Updatable]
     public static DestModel ObjectThenNull(SourceModel source) => new DestModel
     {
         Name = source.Name,
@@ -51,7 +51,7 @@ public static partial class ConditionalPatternMapper
     };
 
     // Pattern 5: Existing pattern (condition ? null : object)
-    [Updateable]
+    [Updatable]
     public static DestModel NullThenObject(SourceModel source) => new DestModel
     {
         Name = source.Name,
@@ -61,7 +61,7 @@ public static partial class ConditionalPatternMapper
     };
 
     // Pattern 6: Complex nested both sides object creation
-    [Updateable]
+    [Updatable]
     public static DestModel NestedBothSides(SourceModel source) => new DestModel
     {
         Name = source.Name,
@@ -71,7 +71,7 @@ public static partial class ConditionalPatternMapper
     };
 
     // Pattern 7: Existing pattern (condition ? object : throw)
-    [Updateable]
+    [Updatable]
     public static DestModel ObjectThenThrow(SourceModel source) => new DestModel
     {
         Name = source.Name,
@@ -81,7 +81,7 @@ public static partial class ConditionalPatternMapper
     };
 
     // Pattern 8: Existing pattern (condition ? throw : object)
-    [Updateable]
+    [Updatable]
     public static DestModel ThrowThenObject(SourceModel source) => new DestModel
     {
         Name = source.Name,

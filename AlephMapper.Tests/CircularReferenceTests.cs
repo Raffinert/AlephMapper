@@ -50,14 +50,14 @@ public class CircularReferenceTests
     }
     
     [Test]
-    public async Task Circular_References_Should_Be_Detected_And_Updateable_Methods_Skipped()
+    public async Task Circular_References_Should_Be_Detected_And_Updatable_Methods_Skipped()
     {
-        // This test verifies that circular references in updateable methods are detected
-        // and the updateable methods are NOT generated for those methods
+        // This test verifies that circular references in Updatable methods are detected
+        // and the Updatable methods are NOT generated for those methods
         
         var mapperType = typeof(CircularMapper);
         
-        // The basic updateable methods should exist (these are the original method signatures)
+        // The basic Updatable methods should exist (these are the original method signatures)
         var updateCircularDtoMethod = mapperType.GetMethod("UpdateCircularDto", new[] { typeof(CircularTestModel) });
         var updateOtherCircularDtoMethod = mapperType.GetMethod("UpdateOtherCircularDto", new[] { typeof(CircularTestModel) });
         var updateSimpleDtoMethod = mapperType.GetMethod("UpdateSimpleDto", new[] { typeof(CircularTestModel) });
@@ -66,8 +66,8 @@ public class CircularReferenceTests
         await Assert.That(updateOtherCircularDtoMethod).IsNotNull();
         await Assert.That(updateSimpleDtoMethod).IsNotNull();
         
-        // The generated updateable overloads should NOT be created for circular methods
-        // Generated updateable methods have signature: Method(Source source, Target target)
+        // The generated Updatable overloads should NOT be created for circular methods
+        // Generated Updatable methods have signature: Method(Source source, Target target)
         var updateCircularDtoOverload = mapperType.GetMethod("UpdateCircularDto", 
             new[] { typeof(CircularTestModel), typeof(CircularDto) });
         var updateOtherCircularDtoOverload = mapperType.GetMethod("UpdateOtherCircularDto", 
@@ -76,14 +76,14 @@ public class CircularReferenceTests
         await Assert.That(updateCircularDtoOverload).IsNull();
         await Assert.That(updateOtherCircularDtoOverload).IsNull();
         
-        // But updateable overloads SHOULD be generated for non-circular methods
+        // But Updatable overloads SHOULD be generated for non-circular methods
         var updateSimpleDtoOverload = mapperType.GetMethod("UpdateSimpleDto", 
             new[] { typeof(CircularTestModel), typeof(CircularDto) });
         await Assert.That(updateSimpleDtoOverload).IsNotNull();
         
-        Console.WriteLine("Updateable circular reference detection working correctly:");
-        Console.WriteLine("- Circular updateable methods: no overloads generated");
-        Console.WriteLine("- Non-circular updateable methods: overloads generated");
+        Console.WriteLine("Updatable circular reference detection working correctly:");
+        Console.WriteLine("- Circular Updatable methods: no overloads generated");
+        Console.WriteLine("- Non-circular Updatable methods: overloads generated");
     }
     
     [Test]
@@ -108,13 +108,13 @@ public class CircularReferenceTests
     }
     
     [Test]
-    public async Task Non_Circular_Updateable_Method_Should_Work()
+    public async Task Non_Circular_Updatable_Method_Should_Work()
     {
-        // Test that the non-circular updateable method works correctly
+        // Test that the non-circular Updatable method works correctly
         var source = new CircularTestModel { Value = "test" };
         var dest = new CircularDto();
         
-        // Test the generated updateable method
+        // Test the generated Updatable method
         var result = CircularMapper.UpdateSimpleDto(source, dest);
         
         // Verify it returns the same destination object
@@ -123,7 +123,7 @@ public class CircularReferenceTests
         // Verify the destination was updated correctly
         await Assert.That(dest.ProcessedValue).IsEqualTo("TEST");
         
-        Console.WriteLine("Non-circular updateable method working correctly");
+        Console.WriteLine("Non-circular Updatable method working correctly");
     }
     
     [Test] 
@@ -135,18 +135,18 @@ public class CircularReferenceTests
         var mapperType = typeof(CircularMapper);
         var methods = mapperType.GetMethods(BindingFlags.Public | BindingFlags.Static);
         
-        // Count methods - should have basic methods but only expression/updateable methods for non-circular ones
+        // Count methods - should have basic methods but only expression/Updatable methods for non-circular ones
         var basicMethods = methods.Where(m => !m.Name.EndsWith("Expression") && m.GetParameters().Length == 1).ToArray();
         var expressionMethods = methods.Where(m => m.Name.EndsWith("Expression")).ToArray();
-        var updateableMethods = methods.Where(m => m.GetParameters().Length == 2).ToArray(); // Updateable overloads
+        var UpdatableMethods = methods.Where(m => m.GetParameters().Length == 2).ToArray(); // Updatable overloads
         
         await Assert.That(basicMethods.Length).IsEqualTo(7); // All basic methods should exist
         await Assert.That(expressionMethods.Length).IsEqualTo(2); // ProcessValueExpression and UpdateSimpleDtoExpression
-        await Assert.That(updateableMethods.Length).IsEqualTo(1); // Only UpdateSimpleDto overload
+        await Assert.That(UpdatableMethods.Length).IsEqualTo(1); // Only UpdateSimpleDto overload
         
         Console.WriteLine($"Basic methods: {basicMethods.Length}");
         Console.WriteLine($"Expression methods: {expressionMethods.Length}");
-        Console.WriteLine($"Updateable overload methods: {updateableMethods.Length}");
+        Console.WriteLine($"Updatable overload methods: {UpdatableMethods.Length}");
         Console.WriteLine("Code generation completed successfully without infinite loops");
     }
 }

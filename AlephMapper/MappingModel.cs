@@ -13,7 +13,7 @@ internal sealed class MappingModel(
     ExpressionSyntax bodySyntax,
     SemanticModel semanticModel,
     bool isExpressive,
-    bool isUpdateable,
+    bool isUpdatable,
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy)
 {
@@ -27,7 +27,7 @@ internal sealed class MappingModel(
     public readonly SemanticModel SemanticModel = semanticModel;
 
     public readonly bool IsExpressive = isExpressive;
-    public readonly bool IsUpdateable = isUpdateable;
+    public readonly bool IsUpdatable = isUpdatable;
     public readonly bool IsClassPartial = classIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
