@@ -1,7 +1,7 @@
 namespace AlephMapper.ComprehensiveTests;
 
 // Add a test mapper that uses conditional expressions like the PersonMapper
-[Updateable]
+[Updatable]
 public static partial class ConditionalUpdateMapper
 {
     // This method mimics the PersonMapper pattern: source == null ? null : new TargetType { ... }
@@ -26,9 +26,9 @@ public static partial class ConditionalUpdateMapper
         } : null;
 }
 
-// Mappers testing Updateable functionality
+// Mappers testing Updatable functionality
 
-[Updateable]
+[Updatable]
 public static partial class EmployeeUpdateMapper
 {
     // Simple property update
@@ -155,7 +155,7 @@ public static partial class EmployeeUpdateMapper
     };
 }
 
-// Test both Expressive and Updateable on the same class
+// Test both Expressive and Updatable on the same class
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class EmployeeCombinedMapper
 {
@@ -175,8 +175,8 @@ public static partial class EmployeeCombinedMapper
         IsActive = employee.IsActive
     };
 
-    // Updateable methods
-    [Updateable]
+    // Updatable methods
+    [Updatable]
     public static EmployeeSimpleDto UpdateEmployeeSimple(Employee employee) => new EmployeeSimpleDto
     {
         Id = employee.Id,
@@ -186,7 +186,7 @@ public static partial class EmployeeCombinedMapper
         DepartmentName = GetDepartmentName(employee) // This should get inlined
     };
 
-    [Updateable]
+    [Updatable]
     public static EmployeeUpdateDto UpdateEmployeeWithDepartment(Employee employee) => new EmployeeUpdateDto
     {
         Id = employee.Id,
@@ -204,7 +204,7 @@ public static partial class EmployeeCombinedMapper
     };
 
     // Reverse mapping methods for combined testing
-    [Updateable]
+    [Updatable]
     public static Employee UpdateEmployeeFromSimpleDto(EmployeeSimpleDto dto) => new Employee
     {
         Id = dto.Id,
@@ -213,7 +213,7 @@ public static partial class EmployeeCombinedMapper
         Email = dto.Email
     };
 
-    [Updateable]
+    [Updatable]
     public static Employee UpdateEmployeeFromDto(EmployeeUpdateDto dto) => new Employee
     {
         Id = dto.Id,

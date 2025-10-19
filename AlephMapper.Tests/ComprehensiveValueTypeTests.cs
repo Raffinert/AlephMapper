@@ -96,7 +96,7 @@ internal class TestObject
 [Expressive]
 internal static partial class MixedTypeMapper
 {
-    [Updateable]
+    [Updatable]
     public static MixedTypeDestination MapToDestination(MixedTypeSource source)
         => new MixedTypeDestination
         {

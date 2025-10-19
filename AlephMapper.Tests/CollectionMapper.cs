@@ -33,7 +33,7 @@ public class NestedModel
 [Expressive]
 internal static partial class CollectionMapper
 {
-    [Updateable]
+    [Updatable]
     public static DestWithCollections MapToDestWithCollections(SourceWithCollections source) => new DestWithCollections
     {
         Name = source.Name,
@@ -46,7 +46,7 @@ internal static partial class CollectionMapper
         } : null
     };
 
-    [Updateable]
+    [Updatable]
     public static DestWithCollections MapToDestSimple(SourceWithCollections source) => new DestWithCollections
     {
         Name = source.Name, // This should NOT be skipped (string is not treated as collection)

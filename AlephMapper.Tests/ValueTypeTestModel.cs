@@ -22,7 +22,7 @@ internal struct ValueTypeDestination
 
 internal static partial class ValueTypeMapper
 {
-    [Updateable]
+    [Updatable]
     public static ValueTypeDestination MapToDestination(ValueTypeSource source)
         => new ValueTypeDestination
         {

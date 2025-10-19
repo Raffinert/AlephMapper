@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace AlephMapper;
 
 /// <summary>
-/// Collects property type information from object creation expressions for updateable method generation.
+/// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
 internal class PropertyTypeInfoCollector : CSharpSyntaxWalker

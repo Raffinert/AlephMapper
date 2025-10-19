@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace AlephMapper;
 
 /// <summary>
-/// Represents type information for a property path during updateable method generation.
+/// Represents type information for a property path during Updatable method generation.
 /// This helps determine whether null checks are needed based on the actual type.
 /// </summary>
 internal class PropertyMappingTypeInfo
@@ -35,7 +35,7 @@ internal class PropertyMappingTypeInfo
 }
 
 /// <summary>
-/// Contains type information for all properties involved in an updateable mapping.
+/// Contains type information for all properties involved in an Updatable mapping.
 /// Provides a context for analyzing property types during mapping code generation.
 /// </summary>
 internal class PropertyMappingContext

@@ -48,7 +48,7 @@ public class ComplexValueTypeTests
             }
         };
 
-        // Act - Use single-parameter method since updateable methods aren't generated for value types
+        // Act - Use single-parameter method since Updatable methods aren't generated for value types
         var destination = ComplexValueTypeMapper.MapToDestination(source);
 
         // Assert - Verify all properties are correctly mapped
@@ -233,7 +233,7 @@ internal enum TagCategory
 [Expressive]
 internal static partial class ComplexValueTypeMapper
 {
-    [Updateable]
+    [Updatable]
     public static ComplexValueTypeDestination MapToDestination(ComplexValueTypeSource source)
         => new()
         {

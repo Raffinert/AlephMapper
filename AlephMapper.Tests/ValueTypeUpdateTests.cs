@@ -25,7 +25,7 @@ public class ValueTypeUpdateTests
             Name = "Original Name"
         };
 
-        // Use the single-parameter mapping method since updateable methods
+        // Use the single-parameter mapping method since Updatable methods
         // are not generated for value types (they don't make sense)
         dest = ValueTypeMapper.MapToDestination(source);
 

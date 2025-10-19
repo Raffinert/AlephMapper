@@ -33,7 +33,7 @@ public class ValueTypeToReferenceTypeEdgeCaseTests
         var source = new SimpleValueTypeSource { Value = 100, Name = "Source" };
         var destination = new SimpleReferenceTypeDestination { Value = 0, Name = "Original" };
             
-        // This should call the generated updateable method with proper null checks
+        // This should call the generated Updatable method with proper null checks
         var result = SimpleValueToReferenceMapper.Map(source, destination);
             
         await Assert.That(result).IsSameReferenceAs(destination);
@@ -114,7 +114,7 @@ internal class SimpleReferenceTypeDestination
 [Expressive]
 internal static partial class SimpleValueToReferenceMapper
 {
-    [Updateable]
+    [Updatable]
     public static SimpleReferenceTypeDestination Map(SimpleValueTypeSource source) => new SimpleReferenceTypeDestination
     {
         Value = source.Value,
@@ -158,7 +158,7 @@ internal class DeeplyNestedReferenceType
 [Expressive]
 internal static partial class ComplexPropertyMapper
 {
-    [Updateable]
+    [Updatable]
     public static ComplexPropertyTestDestination Map(ComplexPropertyTestSource source) => new ComplexPropertyTestDestination
     {
         NestedClass = new NestedReferenceType
@@ -210,7 +210,7 @@ internal class NestedEdgeCaseClass
 [Expressive]
 internal static partial class EdgeCaseMapper
 {
-    [Updateable]
+    [Updatable]
     public static EdgeCaseReferenceTypeDestination Map(EdgeCaseValueTypeSource source) => new EdgeCaseReferenceTypeDestination
     {
         SimpleValue = source.SimpleValue,
