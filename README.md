@@ -104,11 +104,10 @@ public static partial class SafeMapper
 Generate update methods that modify existing instances instead of creating new ones:
 
 ```csharp
-[Expressive]
 public static partial class PersonMapper
 {
     [Updateable]
-    public static PersonDto UpdatePerson(Employee employee) => new PersonDto
+    public static PersonDto MapToPersonDto(Employee employee) => new PersonDto
     {
         Id = employee.EmployeeId,
         FullName = GetFullName(employee),
@@ -121,7 +120,7 @@ var existingDto = new PersonDto();
 var employee = GetEmployee();
 
 // Generated method signature: UpdatePerson(Employee source, PersonDto target)
-PersonMapper.UpdatePerson(employee, existingDto);
+PersonMapper.MapToPersonDto(employee, existingDto);
 // existingDto is now updated with employee data
 ```
 
