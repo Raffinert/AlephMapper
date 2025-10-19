@@ -606,14 +606,8 @@ public class UpdateableTests
 
         var targetEmployee = new Employee
         {
-            Addresses = new List<EmployeeAddress> 
-            { 
-                new EmployeeAddress { Id = 999, Street = "Existing Address" }
-            },
-            Projects = new List<Project>
-            {
-                new Project { Id = 888, Name = "Existing Project" }
-            }
+            Addresses = [new EmployeeAddress { Id = 999, Street = "Existing Address" }],
+            Projects = [new Project { Id = 888, Name = "Existing Project" }]
         };
 
         var existingAddresses = targetEmployee.Addresses;

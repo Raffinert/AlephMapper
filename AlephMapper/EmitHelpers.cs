@@ -25,13 +25,6 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         return _lines.ToList();
     }
 
-    public List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
-    {
-        _lines.Clear();
-        ProcessConditionalExpression(conditional, currentDestPath);
-        return _lines.ToList();
-    }
-
     private void ProcessAssignment(AssignmentExpressionSyntax assignment, string currentDestPath)
     {
         var propertyName = assignment.Left.ToString();
@@ -83,29 +76,37 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         var whenTrue = conditional.WhenTrue;
         var whenFalse = conditional.WhenFalse;
 
+        ProcessConditional(conditionText, whenTrue, whenFalse, fullDestPath);
+    }
+
+    internal List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
+    {
+        _lines.Clear();
+        var conditionText = conditional.Condition.WithoutTrivia().ToString();
+        var whenTrue = conditional.WhenTrue;
+        var whenFalse = conditional.WhenFalse;
+
         var isTrueNull = IsNullExpression(whenTrue);
         var isFalseNull = IsNullExpression(whenFalse);
 
+
         if (!isTrueNull && isFalseNull)
         {
-            // Pattern: condition ? object_creation : null
-            // Source check: if condition is true, assign object; if false, assign null
-            ProcessConditionalWithObjectCreation(conditionText, whenTrue, fullDestPath);
+            ProcessExpression(whenTrue, currentDestPath);
         }
         else if (isTrueNull && !isFalseNull)
         {
-            // Pattern: condition ? null : object_creation
-            // Source check: if condition is true, assign null; if false, assign object  
-            ProcessConditionalWithObjectCreation($"!({conditionText})", whenFalse, fullDestPath);
+            ProcessExpression(whenFalse, currentDestPath);
         }
         else
         {
-            // Both sides non-null or both null - direct assignment
-            _lines.Add($"{fullDestPath} = {conditional};");
+            ProcessNestedConditionalWithBothObjects(conditionText, whenTrue, whenFalse, currentDestPath, _lines, "");
         }
+         
+        return _lines.ToList();
     }
 
-    private void ProcessConditionalWithObjectCreation(string sourceCondition, ExpressionSyntax objectExpression, string fullDestPath)
+    private void ProcessConditional(string conditionText, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, string fullDestPath)
     {
         // Skip collection properties - they are complex to update safely
         if (typeContext.IsCollectionType(fullDestPath))
@@ -115,81 +116,70 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
             return;
         }
 
-        // This method handles the correct separation of source null checking from target object management
+        _lines.Add($"if ({conditionText})");
+        _lines.Add("{");
 
-        if (objectExpression is ObjectCreationExpressionSyntax objectCreation)
+        // Process the true branch
+        if (whenTrue is ObjectCreationExpressionSyntax trueObjectCreation)
         {
-            // Generate the logic:
-            // if (source condition is met for object creation)
-            //   ensure target object exists (create if null, reuse if exists)  
-            //   update all properties of target object
-            // else
-            //   set target to null (only if target can be null)
-
-            _lines.Add($"if ({sourceCondition})");
-            _lines.Add("{");
-
-            // Ensure target object exists - this is independent of source condition
-            // Only generate null check if the target property can actually be null
-            if (typeContext.CanPropertyBeNull(fullDestPath))
-            {
-                _lines.Add($"    if ({fullDestPath} == null)");
-                _lines.Add($"        {fullDestPath} = new {objectCreation.Type}();");
-            }
-            else
-            {
-                // For value types, we don't need a null check - just assign directly
-                // This handles cases where the target is a value type that can't be null
-                _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
-            }
-
-            // Now update all properties of the target object
-            if (objectCreation.Initializer?.Expressions != null)
-            {
-                foreach (var expr in objectCreation.Initializer.Expressions)
-                {
-                    if (expr is AssignmentExpressionSyntax nestedAssignment)
-                    {
-                        var nestedPropertyName = nestedAssignment.Left.ToString();
-                        var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
-
-                        // Add indentation for the nested processing
-                        var nestedLines = new List<string>();
-
-                        // Process the nested assignment
-                        ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, nestedLines, "    ");
-
-                        _lines.AddRange(nestedLines);
-                    }
-                }
-            }
-
-            _lines.Add("}");
-
-            // Only add else clause to set target to null if the target can be null
-            if (typeContext.CanPropertyBeNull(fullDestPath))
-            {
-                _lines.Add("else");
-                _lines.Add("{");
-                _lines.Add($"    {fullDestPath} = null;");
-                _lines.Add("}");
-            }
+            ProcessObjectCreationWithIndent(trueObjectCreation, fullDestPath, "    ");
+        }
+        else if (whenTrue is ThrowExpressionSyntax)
+        {
+            _lines.Add($"    {whenTrue.WithoutTrivia()};");
         }
         else
         {
-            // Simple conditional assignment
-            _lines.Add($"if ({sourceCondition})");
-            _lines.Add("{");
-            _lines.Add($"    {fullDestPath} = {objectExpression};");
-            _lines.Add("}");
+            _lines.Add($"    {fullDestPath} = {whenTrue.WithoutTrivia()};");
+        }
 
-            // Only add else clause if the target can be null
-            if (typeContext.CanPropertyBeNull(fullDestPath))
+        _lines.Add("}");
+        _lines.Add("else");
+        _lines.Add("{");
+
+        // Process the false branch
+        if (whenFalse is ObjectCreationExpressionSyntax falseObjectCreation)
+        {
+            ProcessObjectCreationWithIndent(falseObjectCreation, fullDestPath, "    ");
+        }
+        else if (whenFalse is ThrowExpressionSyntax)
+        {
+            _lines.Add($"    {whenFalse.WithoutTrivia()};");
+        }
+        else
+        {
+            _lines.Add($"    {fullDestPath} = {whenFalse.WithoutTrivia()};");
+        }
+
+        _lines.Add("}");
+    }
+
+    private void ProcessObjectCreationWithIndent(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, string indent)
+    {
+        // Ensure target object exists - only add null check if target can be null
+        if (typeContext.CanPropertyBeNull(fullDestPath))
+        {
+            _lines.Add($"{indent}if ({fullDestPath} == null)");
+            _lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+        }
+        else
+        {
+            // For value types, just assign directly
+            _lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
+        }
+
+        // Process nested properties
+        if (objectCreation.Initializer?.Expressions != null)
+        {
+            foreach (var expr in objectCreation.Initializer.Expressions)
             {
-                _lines.Add("else");
-                _lines.Add("{");
-                _lines.Add($"    {fullDestPath} = null;");
-                _lines.Add("}");
+                if (expr is AssignmentExpressionSyntax nestedAssignment)
+                {
+                    var nestedPropertyName = nestedAssignment.Left.ToString();
+                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
+
+                    ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, _lines, indent);
+                }
             }
         }
     }
@@ -216,7 +206,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
 
             default:
                 // Simple property assignment
-                lines.Add($"{indent}{fullDestPath} = {expression};");
+                lines.Add($"{indent}{fullDestPath} = {expression.WithoutTrivia()};");
                 break;
         }
     }
@@ -227,27 +217,10 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         var whenTrue = conditional.WhenTrue;
         var whenFalse = conditional.WhenFalse;
 
-        var isTrueNull = IsNullExpression(whenTrue);
-        var isFalseNull = IsNullExpression(whenFalse);
-
-        if (!isTrueNull && isFalseNull)
-        {
-            // Pattern: condition ? object_creation : null
-            ProcessNestedConditionalWithObject(conditionText, whenTrue, fullDestPath, lines, indent);
-        }
-        else if (isTrueNull && !isFalseNull)
-        {
-            // Pattern: condition ? null : object_creation
-            ProcessNestedConditionalWithObject($"!({conditionText})", whenFalse, fullDestPath, lines, indent);
-        }
-        else
-        {
-            // Direct assignment
-            lines.Add($"{indent}{fullDestPath} = {conditional};");
-        }
+        ProcessNestedConditionalWithBothObjects(conditionText, whenTrue, whenFalse, fullDestPath, lines, indent);
     }
 
-    private void ProcessNestedConditionalWithObject(string sourceCondition, ExpressionSyntax objectExpression, string fullDestPath, List<string> lines, string indent)
+    private void ProcessNestedConditionalWithBothObjects(string conditionText, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, string fullDestPath, List<string> lines, string indent)
     {
         // Skip collection properties - they are complex to update safely
         if (typeContext.IsCollectionType(fullDestPath))
@@ -257,63 +230,70 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
             return;
         }
 
-        if (objectExpression is ObjectCreationExpressionSyntax objectCreation)
+        lines.Add($"{indent}if ({conditionText})");
+        lines.Add($"{indent}{{");
+
+        // Process the true branch
+        if (whenTrue is ObjectCreationExpressionSyntax trueObjectCreation)
         {
-            lines.Add($"{indent}if ({sourceCondition})");
-            lines.Add($"{indent}{{");
-
-            // Ensure nested target object exists - only add null check if target can be null
-            if (typeContext.CanPropertyBeNull(fullDestPath))
-            {
-                lines.Add($"{indent}    if ({fullDestPath} == null)");
-                lines.Add($"{indent}        {fullDestPath} = new {objectCreation.Type}();");
-            }
-            else
-            {
-                // For value types, just assign directly
-                lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
-            }
-
-            // Process nested properties
-            if (objectCreation.Initializer?.Expressions != null)
-            {
-                foreach (var expr in objectCreation.Initializer.Expressions)
-                {
-                    if (expr is AssignmentExpressionSyntax nestedAssignment)
-                    {
-                        var nestedPropertyName = nestedAssignment.Left.ToString();
-                        var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
-
-                        ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, lines, indent + "    ");
-                    }
-                }
-            }
-
-            lines.Add($"{indent}}}");
-
-            // Only add else clause if target can be null
-            if (typeContext.CanPropertyBeNull(fullDestPath))
-            {
-                lines.Add($"{indent}else");
-                lines.Add($"{indent}{{");
-                lines.Add($"{indent}    {fullDestPath} = null;");
-                lines.Add($"{indent}}}");
-            }
+            ProcessNestedObjectCreationInBranch(trueObjectCreation, fullDestPath, lines, indent + "    ");
+        }
+        else if (whenTrue is ThrowExpressionSyntax)
+        {
+            lines.Add($"{indent}    {whenTrue.WithoutTrivia()};");
         }
         else
         {
-            lines.Add($"{indent}if ({sourceCondition})");
-            lines.Add($"{indent}{{");
-            lines.Add($"{indent}    {fullDestPath} = {objectExpression};");
-            lines.Add($"{indent}}}");
+            lines.Add($"{indent}    {fullDestPath} = {whenTrue.WithoutTrivia()};");
+        }
 
-            // Only add else clause if target can be null 
-            if (typeContext.CanPropertyBeNull(fullDestPath))
+        lines.Add($"{indent}}}");
+        lines.Add($"{indent}else");
+        lines.Add($"{indent}{{");
+
+        // Process the false branch
+        if (whenFalse is ObjectCreationExpressionSyntax falseObjectCreation)
+        {
+            ProcessNestedObjectCreationInBranch(falseObjectCreation, fullDestPath, lines, indent + "    ");
+        }
+        else if (whenFalse is ThrowExpressionSyntax)
+        {
+            lines.Add($"{indent}    {whenFalse.WithoutTrivia()};");
+        }
+        else
+        {
+            lines.Add($"{indent}    {fullDestPath} = {whenFalse.WithoutTrivia()};");
+        }
+
+        lines.Add($"{indent}}}");
+    }
+
+    private void ProcessNestedObjectCreationInBranch(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
+    {
+        // Ensure nested target object exists - only add null check if target can be null
+        if (typeContext.CanPropertyBeNull(fullDestPath))
+        {
+            lines.Add($"{indent}if ({fullDestPath} == null)");
+            lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+        }
+        else
+        {
+            // For value types, just assign directly
+            lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
+        }
+
+        // Process nested properties
+        if (objectCreation.Initializer?.Expressions != null)
+        {
+            foreach (var expr in objectCreation.Initializer.Expressions)
             {
-                lines.Add($"{indent}else");
-                lines.Add($"{indent}{{");
-                lines.Add($"{indent}    {fullDestPath} = null;");
-                lines.Add($"{indent}}}");
+                if (expr is AssignmentExpressionSyntax nestedAssignment)
+                {
+                    var nestedPropertyName = nestedAssignment.Left.ToString();
+                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
+
+                    ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, lines, indent);
+                }
             }
         }
     }
@@ -428,7 +408,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
 
         // For now, let's just do a direct assignment to the full path
         // This will work for simple cases but may fail for deeply nested value types
-        _lines.Add($"{fullDestPath} = {objectCreation};");
+        _lines.Add($"{fullDestPath} = {objectCreation.WithoutTrivia()};");
 
         // Note: This is a simplified approach. A full solution would need to:
         // 1. Identify the value type property in the path
