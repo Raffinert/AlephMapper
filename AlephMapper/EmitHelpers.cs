@@ -25,12 +25,12 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         return _lines.ToList();
     }
 
-    public List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
-    {
-        _lines.Clear();
-        ProcessConditionalExpression(conditional, currentDestPath);
-        return _lines.ToList();
-    }
+    //public List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
+    //{
+    //    _lines.Clear();
+    //    ProcessConditionalExpression(conditional, currentDestPath);
+    //    return _lines.ToList();
+    //}
 
     private void ProcessAssignment(AssignmentExpressionSyntax assignment, string currentDestPath)
     {
@@ -103,6 +103,31 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
             // Both sides non-null or both null - direct assignment
             _lines.Add($"{fullDestPath} = {conditional};");
         }
+    }
+
+    internal List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
+    {
+        _lines.Clear();
+        var whenTrue = conditional.WhenTrue;
+        var whenFalse = conditional.WhenFalse;
+
+        var isTrueNull = IsNullExpression(whenTrue);
+        var isFalseNull = IsNullExpression(whenFalse);
+
+        if (!isTrueNull && isFalseNull)
+        {
+            ProcessExpression(whenTrue, currentDestPath);
+        }
+        else if (isTrueNull && !isFalseNull)
+        {
+            ProcessExpression(whenFalse, currentDestPath);
+        }
+        else
+        {
+            // Both sides non-null or both null - direct assignment
+            _lines.Add($"{currentDestPath} = {conditional};");
+        }
+        return _lines;
     }
 
     private void ProcessConditionalWithObjectCreation(string sourceCondition, ExpressionSyntax objectExpression, string fullDestPath)
@@ -180,7 +205,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
             // Simple conditional assignment
             _lines.Add($"if ({sourceCondition})");
             _lines.Add("{");
-            _lines.Add($"    {fullDestPath} = {objectExpression};");
+            _lines.Add($"    {fullDestPath} = {objectExpression.WithoutTrivia()};");
             _lines.Add("}");
 
             // Only add else clause if the target can be null
@@ -216,7 +241,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
 
             default:
                 // Simple property assignment
-                lines.Add($"{indent}{fullDestPath} = {expression};");
+                lines.Add($"{indent}{fullDestPath} = {expression.WithoutTrivia()};");
                 break;
         }
     }
@@ -304,7 +329,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
         {
             lines.Add($"{indent}if ({sourceCondition})");
             lines.Add($"{indent}{{");
-            lines.Add($"{indent}    {fullDestPath} = {objectExpression};");
+            lines.Add($"{indent}    {fullDestPath} = {objectExpression.WithoutTrivia()};");
             lines.Add($"{indent}}}");
 
             // Only add else clause if target can be null 
@@ -428,7 +453,7 @@ internal sealed class UpdateableExpressionProcessor(string destPrefix, PropertyM
 
         // For now, let's just do a direct assignment to the full path
         // This will work for simple cases but may fail for deeply nested value types
-        _lines.Add($"{fullDestPath} = {objectCreation};");
+        _lines.Add($"{fullDestPath} = {objectCreation.WithoutTrivia()};");
 
         // Note: This is a simplified approach. A full solution would need to:
         // 1. Identify the value type property in the path

@@ -30,32 +30,17 @@ internal sealed class ParameterSubstitutionRewriter(string paramName, Expression
 /// <summary>
 /// Contains information about a circular reference detected during inlining
 /// </summary>
-internal class CircularReferenceInfo
+internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSymbol> callStack)
 {
-    public IMethodSymbol Method { get; }
-    public string CallChain { get; }
-    
-    public CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSymbol> callStack)
-    {
-        Method = method;
-        CallChain = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
-    }
+    public IMethodSymbol Method { get; } = method;
+    public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
 }
 
-internal sealed class InliningResolver : CSharpSyntaxRewriter
+internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodSymbol, MappingModel> catalog)
+    : CSharpSyntaxRewriter
 {
-    private readonly SemanticModel _model;
-    private readonly IDictionary<IMethodSymbol, MappingModel> _catalog;
-    private readonly HashSet<IMethodSymbol> _callStack;
-    private readonly List<CircularReferenceInfo> _circularReferences;
-
-    public InliningResolver(SemanticModel model, IDictionary<IMethodSymbol, MappingModel> catalog)
-    {
-        _model = model;
-        _catalog = catalog;
-        _callStack = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
-        _circularReferences = new List<CircularReferenceInfo>();
-    }
+    private readonly HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
+    private readonly List<CircularReferenceInfo> _circularReferences = [];
 
     /// <summary>
     /// Gets any circular references detected during inlining
@@ -64,7 +49,7 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
 
     private IMethodSymbol ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
-        var si = _model.GetSymbolInfo(expr);
+        var si = model.GetSymbolInfo(expr);
         if (si.Symbol is IMethodSymbol ms) return ms;
         return null;
     }
@@ -94,7 +79,7 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
             return base.VisitImplicitObjectCreationExpression(implicitNew);
         }
 
-        var type = _model.GetTypeInfo(implicitNew).Type;
+        var type = model.GetTypeInfo(implicitNew).Type;
 
         if (type == null)
         {
@@ -103,14 +88,14 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
 
         return ObjectCreationExpression(IdentifierName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
                     .WithInitializer((InitializerExpressionSyntax)VisitInitializerExpression(implicitNew.Initializer!))
-                    .WithArgumentList(ArgumentList())
+                    .WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList))
                     .WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
     }
 
 
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (_model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
+        if (model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
         {
             return base.VisitInvocationExpression(node);
         }
@@ -134,7 +119,7 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
             {
                 var normalizedMethod = SymbolHelpers.Normalize(methodGroup);
 
-                if (_catalog.TryGetValue(normalizedMethod, out var callee))
+                if (catalog.TryGetValue(normalizedMethod, out var callee))
                 {
                     // Check for circular reference
                     if (IsCircularReference(normalizedMethod))
@@ -175,9 +160,9 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
 
         // Direct-call inlining (MapToDto(s) -> inline)
         var directCallMethod = SymbolHelpers.Normalize(invokedMethod);
-        if (!_catalog.TryGetValue(directCallMethod, out var callee2))
+        if (!catalog.TryGetValue(directCallMethod, out var callee2))
         {
-            return base.VisitInvocationExpression(node);
+            return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
 
         // Check for circular reference
@@ -185,7 +170,7 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
         {
             RecordCircularReference(directCallMethod);
             // Return original node without inlining to break the cycle
-            return base.VisitInvocationExpression(node);
+            return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
 
         // Add method to call stack before inlining
@@ -194,7 +179,8 @@ internal sealed class InliningResolver : CSharpSyntaxRewriter
         {
             var inlinedBody2 = Visit(callee2.BodySyntax);
             var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
-                .Visit(inlinedBody2);
+                .Visit(inlinedBody2)
+                ?.WithoutTrivia();
 
             return substituted;
         }

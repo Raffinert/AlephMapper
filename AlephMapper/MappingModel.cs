@@ -3,49 +3,34 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper;
 
-internal sealed class MappingModel
+internal sealed class MappingModel(
+    INamedTypeSymbol containingType,
+    IMethodSymbol methodSymbol,
+    string name,
+    string paramName,
+    ITypeSymbol paramType,
+    ITypeSymbol returnType,
+    ExpressionSyntax bodySyntax,
+    SemanticModel semanticModel,
+    bool isExpressive,
+    bool isUpdateable,
+    bool classIsStaticAndPartial,
+    NullConditionalRewrite nullStrategy)
 {
-    public readonly INamedTypeSymbol ContainingType;
-    public readonly IMethodSymbol MethodSymbol;
-    public readonly string Name;
-    public readonly string ParamName;
-    public readonly ITypeSymbol ParamType;
-    public readonly ITypeSymbol ReturnType;
-    public readonly ExpressionSyntax BodySyntax;
-    public readonly SemanticModel SemanticModel;
+    public readonly INamedTypeSymbol ContainingType = containingType;
+    public readonly IMethodSymbol MethodSymbol = methodSymbol;
+    public readonly string Name = name;
+    public readonly string ParamName = paramName;
+    public readonly ITypeSymbol ParamType = paramType;
+    public readonly ITypeSymbol ReturnType = returnType;
+    public readonly ExpressionSyntax BodySyntax = bodySyntax;
+    public readonly SemanticModel SemanticModel = semanticModel;
 
-    public readonly bool IsExpressive;
-    public readonly bool IsUpdateable;
-    public readonly bool IsClassPartial;
+    public readonly bool IsExpressive = isExpressive;
+    public readonly bool IsUpdateable = isUpdateable;
+    public readonly bool IsClassPartial = classIsStaticAndPartial;
 
-    public readonly NullConditionalRewrite NullStrategy; 
-
-    public MappingModel(INamedTypeSymbol containingType,
-        IMethodSymbol methodSymbol,
-        string name,
-        string paramName,
-        ITypeSymbol paramType,
-        ITypeSymbol returnType,
-        ExpressionSyntax bodySyntax,
-        SemanticModel semanticModel,
-        bool isExpressive,
-        bool isUpdateable,
-        bool classIsStaticAndPartial,
-        NullConditionalRewrite nullStrategy)
-    {
-        ContainingType = containingType;
-        MethodSymbol = methodSymbol;
-        Name = name;
-        ParamName = paramName;
-        ParamType = paramType;
-        ReturnType = returnType;
-        BodySyntax = bodySyntax;
-        SemanticModel = semanticModel;
-        IsExpressive = isExpressive;
-        IsUpdateable = isUpdateable;
-        IsClassPartial = classIsStaticAndPartial;
-        NullStrategy = nullStrategy;
-    }
+    public readonly NullConditionalRewrite NullStrategy = nullStrategy;
 
     public override bool Equals(object? obj)
     {
