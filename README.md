@@ -115,7 +115,7 @@ public static Person MapToPerson(PersonUpdateDto dto) => new Person
 
 // Generated usage with EF Core change tracking:
 var person = await db.People.FindAsync(id);           // tracked entity
-PersonMapper.MapToPerson(source: dto, target: person); // mutate in-place
+PersonMapper.MapToPerson(dto, target: person); // mutate in-place
 await db.SaveChangesAsync();                           // EF sees changes on the same instance
 ```
 
