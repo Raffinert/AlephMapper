@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -82,7 +83,12 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
 
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
-                    var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax));
+                    var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax.Expression));
+
+                    //var originalCompilation = mm.SemanticModel.Compilation;
+                    //var newTree = CSharpSyntaxTree.Create(inlinedBody);
+                    //var reboundCompilation = originalCompilation.ReplaceSyntaxTree(oldTree, newTree);
+                    //var newModel = reboundCompilation.GetSemanticModel(newTree);
 
                     // Check for circular references and emit warnings
                     foreach (var circularRef in resolver.CircularReferences)
@@ -132,7 +138,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         // Apply collection expression rewriter for expression tree compatibility
                         var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                        var expressionTreeCompatibleBody = (ExpressionSyntax)collectionRewriter.Visit(nullHandledExpression)!.WithoutTrivia();
+                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(nullHandledExpression)!.WithoutTrivia();
 
                         var expressionMethodName = mm.Name + "Expression";
 
@@ -155,7 +161,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         sb.AppendLine("  /// </para>");
                         sb.AppendLine("  /// </remarks>");
                         sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + expressionTreeCompatibleBody.ToFullString() + ";");
+                        sb.AppendLine("      " + srcName + " => " + collectionRewrittenExpression.ToFullString() + ";");
                         sb.AppendLine();
                     }
 
@@ -207,8 +213,15 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         }
 
                         var lines = new List<string>();
-                        // Pass the semantic model to EmitHelpers for type information
-                        if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(inlinedBody, "dest", lines, mm.SemanticModel))
+
+                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
+                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+                        var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, collectionRewrittenExpression);
+
+                        if (mm.SemanticModel.TryGetSpeculativeSemanticModel(
+                                position: mm.BodySyntax.SpanStart, // an anchor inside the original tree
+                                replacedMethod,        // the rewritten subtree (member/statement/expression)
+                                out var specModel) && EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel))
                         {
                             var updateMethodName = mm.Name;
 
@@ -345,14 +358,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
         return null;
     }
 
-    private static ExpressionSyntax ExtractBodyExpression(MethodDeclarationSyntax mds)
+    private static ArrowExpressionClauseSyntax ExtractBodyExpression(MethodDeclarationSyntax mds)
     {
-        if (mds.ExpressionBody != null) return mds.ExpressionBody.Expression;
-        if (mds.Body == null) return null;
-        foreach (var statement in mds.Body.Statements)
-        {
-            if (statement is ReturnStatementSyntax rs) return rs.Expression;
-        }
+        if (mds.ExpressionBody != null) return mds.ExpressionBody;
+        //if (mds.Body == null) return null;
+        //foreach (var statement in mds.Body.Statements)
+        //{
+        //    if (statement is ReturnStatementSyntax rs) return rs.Expression;
+        //}
         return null;
     }
 }

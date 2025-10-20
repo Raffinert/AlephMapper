@@ -12,7 +12,7 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
     public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
     {
         _lines.Clear();
-
+        
         if (objectCreation?.Initializer?.Expressions == null) return [];
         foreach (var expr in objectCreation.Initializer.Expressions)
         {
@@ -427,6 +427,7 @@ internal static class EmitHelpers
 {
     public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel = null)
     {
+        // todo: it's not possible to collect type information here because it's already inlined and does not belong to semantic model
         // Collect type information from the syntax tree
         var typeContext = semanticModel != null
             ? PropertyTypeInfoCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)

@@ -10,7 +10,7 @@ internal sealed class MappingModel(
     string paramName,
     ITypeSymbol paramType,
     ITypeSymbol returnType,
-    ExpressionSyntax bodySyntax,
+    ArrowExpressionClauseSyntax bodySyntax,
     SemanticModel semanticModel,
     bool isExpressive,
     bool isUpdatable,
@@ -23,7 +23,7 @@ internal sealed class MappingModel(
     public readonly string ParamName = paramName;
     public readonly ITypeSymbol ParamType = paramType;
     public readonly ITypeSymbol ReturnType = returnType;
-    public readonly ExpressionSyntax BodySyntax = bodySyntax;
+    public readonly ArrowExpressionClauseSyntax BodySyntax = bodySyntax;
     public readonly SemanticModel SemanticModel = semanticModel;
 
     public readonly bool IsExpressive = isExpressive;

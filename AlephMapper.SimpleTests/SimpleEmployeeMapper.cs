@@ -4,11 +4,11 @@ using System.ComponentModel.DataAnnotations;
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class SimpleEmployeeMapper
 {
-    public static string GetEmail(Employee employee) => 
+    public static string GetEmail(Employee employee) =>
         employee.Email;
 
     // Null conditional operators
-    public static string GetDepartmentName(Employee employee) => 
+    public static string GetDepartmentName(Employee employee) =>
         employee.Department?.Name ?? "No Department";
 
     public static EmployeeSimpleDto MapToSimpleDto(Employee employee) => new()

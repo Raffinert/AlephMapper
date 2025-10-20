@@ -139,7 +139,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
                         _callStack.Add(normalizedMethod);
                         try
                         {
-                            var inlinedBody = (ExpressionSyntax)Visit(callee.BodySyntax);
+                            var inlinedBody = (ExpressionSyntax)Visit(callee.BodySyntax.Expression);
                             var substitutedBody = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName, IdentifierName(paramName))
                                     .Visit(inlinedBody)!
                                     .WithoutTrivia();
@@ -177,7 +177,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         _callStack.Add(directCallMethod);
         try
         {
-            var inlinedBody2 = Visit(callee2.BodySyntax);
+            var inlinedBody2 = Visit(callee2.BodySyntax.Expression);
             var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
                 .Visit(inlinedBody2)
                 ?.WithoutTrivia();
