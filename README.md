@@ -70,6 +70,7 @@ partial class PersonMapper
         Age = DateTime.Now.Year - employee.BirthDate.Year,
         Department = employee.Department.Name ?? "Unknown"
     };
+}
 ```
 
 ### 3. Use generated expression methods in Entity Framework queries
