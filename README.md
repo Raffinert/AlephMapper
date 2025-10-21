@@ -56,7 +56,23 @@ public static partial class PersonMapper
 }
 ```
 
-### 2. Use generated expression methods in Entity Framework queries
+### 2. AlephMapper will generate the following method for you:
+
+```csharp
+partial class PersonMapper 
+{
+  public static Expression<Func<Employee, PersonDto>> MapToPersonExpression() => 
+      employee => new PersonDto
+    {
+        Id = employee.EmployeeId,
+        FullName = $"{employee.FirstName} {employee.LastName}",
+        Email = employee.ContactInfo.Email,
+        Age = DateTime.Now.Year - employee.BirthDate.Year,
+        Department = employee.Department.Name ?? "Unknown"
+    };
+```
+
+### 3. Use generated expression methods in Entity Framework queries
 
 ```csharp
 // The source generator creates PersonMapper.MapToPersonExpression() automatically
@@ -65,7 +81,7 @@ var personDtos = await dbContext.Employees
     .ToListAsync();
 ```
 
-### 3. Use the original methods for in-memory operations
+### 4. Use the original methods for in-memory operations
 
 ```csharp
 var employee = GetEmployee();
