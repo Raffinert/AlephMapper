@@ -40,7 +40,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -112,7 +111,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -190,7 +188,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -226,7 +223,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -304,7 +300,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            lines.Add($"{indent}// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -340,7 +335,6 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         if (typeContext.IsCollectionType(fullDestPath))
         {
             _lines.Add($"// Skipping collection property: {fullDestPath}");
-            _lines.Add($"// Collection properties are not updated in Updatable methods for safety");
             return;
         }
 
@@ -427,11 +421,12 @@ internal static class EmitHelpers
 {
     public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel = null)
     {
+        var propertyInfoCollector = new PropertyTypeInfoCollector(semanticModel, destPrefix);
+
+        propertyInfoCollector.Visit(inlinedBody);
         // todo: it's not possible to collect type information here because it's already inlined and does not belong to semantic model
         // Collect type information from the syntax tree
-        var typeContext = semanticModel != null
-            ? PropertyTypeInfoCollector.CollectTypeInformation(inlinedBody, semanticModel, destPrefix)
-            : new PropertyMappingContext(); // Fallback to empty context for backward compatibility
+        var typeContext = propertyInfoCollector.TypeContext;
 
         var processor = new UpdatableExpressionProcessor(destPrefix, typeContext);
         List<string> processedLines;

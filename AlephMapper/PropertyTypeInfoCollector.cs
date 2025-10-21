@@ -1,7 +1,8 @@
-using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Diagnostics;
+using System.Linq.Expressions;
 
 namespace AlephMapper;
 
@@ -9,53 +10,19 @@ namespace AlephMapper;
 /// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string rootPath = "") : CSharpSyntaxWalker
 {
-    private readonly SemanticModel _semanticModel;
-    private readonly PropertyMappingContext _typeContext;
-    private readonly string _currentPath;
-
-    public PropertyTypeInfoCollector(SemanticModel semanticModel, PropertyMappingContext typeContext, string rootPath = "")
-    {
-        _semanticModel = semanticModel;
-        _typeContext = typeContext;
-        _currentPath = rootPath;
-    }
-
-    public static PropertyMappingContext CollectTypeInformation(ExpressionSyntax expression, SemanticModel semanticModel, string destPrefix)
-    {
-        var typeContext = new PropertyMappingContext();
-
-        // Skip type collection if semantic model is null
-        if (semanticModel == null)
-        {
-            return typeContext;
-        }
-
-        try
-        {
-            var collector = new PropertyTypeInfoCollector(semanticModel, typeContext, destPrefix);
-            collector.Visit(expression);
-        }
-        catch
-        {
-            // If there's any issue with type collection, return empty context
-            // This ensures the generator doesn't fail
-            return new PropertyMappingContext();
-        }
-
-        return typeContext;
-    }
+    public PropertyMappingContext TypeContext { get; private set; } = new();
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
         try
         {
             // Get type information for the object being created
-            var typeInfo = _semanticModel.GetTypeInfo(node);
+            var typeInfo = semanticModel.GetTypeInfo(node);
             if (typeInfo.Type != null)
             {
-                _typeContext.AddPropertyType(_currentPath, typeInfo.Type);
+                TypeContext.AddPropertyType(rootPath, typeInfo.Type);
             }
 
             // Process the initializer if present
@@ -74,8 +41,6 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
         {
             // Ignore type collection errors and continue processing
         }
-
-        base.VisitObjectCreationExpression(node);
     }
 
     private void ProcessAssignment(AssignmentExpressionSyntax assignment)
@@ -83,28 +48,28 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
         try
         {
             var propertyName = assignment.Left.ToString();
-            var fullPropertyPath = string.IsNullOrEmpty(_currentPath)
+            var fullPropertyPath = string.IsNullOrEmpty(rootPath)
                 ? propertyName
-                : $"{_currentPath}.{propertyName}";
+                : $"{rootPath}.{propertyName}";
 
             // Get type information for the property being assigned
 
-            var leftTypeInfo = _semanticModel.GetTypeInfo(assignment.Left);
+            var leftTypeInfo = semanticModel.GetTypeInfo(assignment.Left);
             if (leftTypeInfo.Type != null)
             {
-                _typeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
+                TypeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
             }
             else
             {
-                var rightTypeInfo = _semanticModel.GetTypeInfo(assignment.Right);
+                var rightTypeInfo = semanticModel.GetTypeInfo(assignment.Right);
                 if (rightTypeInfo.Type != null)
                 {
-                    _typeContext.AddPropertyType(fullPropertyPath, rightTypeInfo.Type);
+                    TypeContext.AddPropertyType(fullPropertyPath, rightTypeInfo.Type);
                 }
             }
 
             // Recursively process nested object creations
-            var nestedCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, fullPropertyPath);
+            var nestedCollector = new PropertyTypeInfoCollector(semanticModel, fullPropertyPath){ TypeContext = TypeContext };
             nestedCollector.Visit(assignment.Right);
         }
         catch
@@ -117,20 +82,13 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
     {
         try
         {
-            // For conditional expressions, we need to analyze both the true and false branches
-            // to understand what types are being assigned
-
-            var trueCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, _currentPath);
+            var trueCollector = new PropertyTypeInfoCollector(semanticModel, rootPath){ TypeContext = TypeContext};
             trueCollector.Visit(node.WhenTrue);
-
-            var falseCollector = new PropertyTypeInfoCollector(_semanticModel, _typeContext, _currentPath);
-            falseCollector.Visit(node.WhenFalse);
+            trueCollector.Visit(node.WhenFalse);
         }
         catch
         {
             // Ignore type collection errors and continue processing
         }
-
-        base.VisitConditionalExpression(node);
     }
 }
