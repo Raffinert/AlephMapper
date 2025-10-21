@@ -61,8 +61,7 @@ public static partial class PersonMapper
 ```csharp
 partial class PersonMapper 
 {
-  public static Expression<Func<Employee, PersonDto>> MapToPersonExpression() => 
-      employee => new PersonDto
+    public static Expression<Func<Employee, PersonDto>> MapToPersonExpression() => employee => new PersonDto
     {
         Id = employee.EmployeeId,
         FullName = $"{employee.FirstName} {employee.LastName}",
