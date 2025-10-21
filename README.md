@@ -36,9 +36,9 @@ dotnet add package AlephMapper
 ### 1. Mark your mapping class or method with `[Expressive]. Please ensure that your class is static and partial.`
 
 ```csharp
-[Expressive]
 public static partial class PersonMapper
 {
+    [Expressive]
     public static PersonDto MapToPerson(Employee employee) => new PersonDto
     {
         Id = employee.EmployeeId,
