@@ -3,7 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -84,7 +83,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax.Expression));
-
+                    
                     //var originalCompilation = mm.SemanticModel.Compilation;
                     //var newTree = CSharpSyntaxTree.Create(inlinedBody);
                     //var reboundCompilation = originalCompilation.ReplaceSyntaxTree(oldTree, newTree);
@@ -110,6 +109,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         spc.ReportDiagnostic(diagnostic);
                     }
 
+                    var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
+                    var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+
                     // Expression method
                     if (mm.IsExpressive)
                     {
@@ -134,11 +136,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         }
 
                         // Build inlined body for expressions
-                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(inlinedBody)!.WithoutTrivia();
-
-                        // Apply collection expression rewriter for expression tree compatibility
-                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(nullHandledExpression)!.WithoutTrivia();
+                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(collectionRewrittenExpression)!.WithoutTrivia();
 
                         var expressionMethodName = mm.Name + "Expression";
 
@@ -161,7 +159,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         sb.AppendLine("  /// </para>");
                         sb.AppendLine("  /// </remarks>");
                         sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + collectionRewrittenExpression.ToFullString() + ";");
+                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
                         sb.AppendLine();
                     }
 
@@ -214,8 +212,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var lines = new List<string>();
 
-                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
                         var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, collectionRewrittenExpression);
 
                         if (mm.SemanticModel.TryGetSpeculativeSemanticModel(
