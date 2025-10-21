@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -87,10 +88,19 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
                 : $"{_currentPath}.{propertyName}";
 
             // Get type information for the property being assigned
+
             var leftTypeInfo = _semanticModel.GetTypeInfo(assignment.Left);
             if (leftTypeInfo.Type != null)
             {
                 _typeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
+            }
+            else
+            {
+                var rightTypeInfo = _semanticModel.GetTypeInfo(assignment.Right);
+                if (rightTypeInfo.Type != null)
+                {
+                    _typeContext.AddPropertyType(fullPropertyPath, rightTypeInfo.Type);
+                }
             }
 
             // Recursively process nested object creations

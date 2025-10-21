@@ -82,18 +82,5 @@ internal class PropertyMappingContext
         }
 
         return false;
-
-        // Fallback: Check property name patterns that suggest collections
-        // This helps when type information is not available
-        //var propertyName = propertyPath.Split('.').Last().ToLowerInvariant();
-        //return propertyName.EndsWith("list") ||
-        //       propertyName.EndsWith("collection") ||
-        //       propertyName.EndsWith("set") ||
-        //       propertyName.EndsWith("array") ||
-        //       propertyName.EndsWith("items") ||
-        //       propertyName.EndsWith("tags") ||
-        //       propertyName.EndsWith("categories") ||
-        //       propertyName.EndsWith("numbers") ||
-        //       propertyName == "metadata";
     }
 }
