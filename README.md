@@ -15,7 +15,6 @@ To learn more about the war and how you can help, [click here](https://stand-wit
 
 [![NuGet](https://img.shields.io/nuget/v/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Raffinert/AlephMapper/build.yml?branch=main)](https://github.com/Raffinert/AlephMapper/actions)
 
 AlephMapper is a **Source Generator** that automatically creates projectable and/or updatable companion methods from your mapping logic. It enables you to write mapping methods once and use them both for in-memory objects and as expression trees for database queries (Entity Framework Core projections).
 
