@@ -84,11 +84,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
                     var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax.Expression));
                     
-                    //var originalCompilation = mm.SemanticModel.Compilation;
-                    //var newTree = CSharpSyntaxTree.Create(inlinedBody);
-                    //var reboundCompilation = originalCompilation.ReplaceSyntaxTree(oldTree, newTree);
-                    //var newModel = reboundCompilation.GetSemanticModel(newTree);
-
                     // Check for circular references and emit warnings
                     foreach (var circularRef in resolver.CircularReferences)
                     {
