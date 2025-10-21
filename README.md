@@ -150,8 +150,10 @@ For each method marked with `[Updatable]`:
 
 ## ⚠️ Limitations
 
-- Methods must be [**expression-bodied**](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/statements-expressions-operators/expression-bodied-members),  **static** and be member of a **partial static class**.
-- Supported only simple lambda-bodied or return methods.
+Methods must be:
+- [**expression-bodied**](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/statements-expressions-operators/expression-bodied-members),
+- **static**
+- be member of a **partial static class**.
 
 ## 🔄 Migration from Other Mappers
 
