@@ -58,14 +58,33 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 var nameSpace = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
                 var sb = new StringBuilder();
-                sb.AppendLine("using System;");
-                sb.AppendLine("using System.Linq;");
-                sb.AppendLine("using System.Linq.Expressions;");
-                sb.AppendLine("using System.CodeDom.Compiler;");
-                sb.AppendLine();
-
+                
                 var membersSb = new StringBuilder();
-                var inlinedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+                
+                // Collect all unique using directives from all methods in this class
+                var allUsingDirectives = new HashSet<string>();
+                
+                foreach (var mm in methods)
+                {
+                    if (mm.IsExpressive || mm.IsUpdatable)
+                    {
+                        foreach (var usingDirective in mm.UsingDirectives)
+                        {
+                            allUsingDirectives.Add(usingDirective);
+                        }
+                    }
+                }
+
+                // Add using directives to the generated file, filtering out the current namespace
+                foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
+                {
+                    if (usingDirective != nameSpace && !string.IsNullOrEmpty(usingDirective))
+                    {
+                        sb.AppendLine($"using {usingDirective};");
+                    }
+                }
+                
+                sb.AppendLine();
 
                 foreach (var mm in methods)
                 {
@@ -74,7 +93,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
-                    inlinedTypes.Add(mm.ParamType);
 
 
                     // Expression method
@@ -82,7 +100,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     {
                         var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false);
                         var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
-                        inlinedTypes.UnionWith(expressionInliner.InlinedTypes);
                         var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
                         var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
 
@@ -139,7 +156,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     {
                         var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true);
                         var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
-                        inlinedTypes.UnionWith(expressionInliner.InlinedTypes);
                         var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
                         var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
 
@@ -236,17 +252,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     }
                 }
 
-                if (inlinedTypes.Count > 0)
-                {
-                    var inlinedNamespacesTypesList = string.Join("\r\n", inlinedTypes.Select(t => t.ContainingNamespace.ToDisplayString(SymbolHelpers.FullyQualifiedWithoutGlobal))
-                        .Distinct()
-                        .OrderBy(x => x)
-                        .Where(x => x != "System" && x != nameSpace)
-                        .Select(x => $"using {x};"));
-
-                    sb.AppendLine(inlinedNamespacesTypesList);
-                }
-
                 if (!string.IsNullOrEmpty(nameSpace))
                 {
                     sb.AppendLine();
@@ -326,6 +331,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var isClassPartial = classDecl.Modifiers
                                       .Any(m => m.IsKind(SyntaxKind.PartialKeyword));
 
+        var usingDirectives = ExtractUsingDirectives(methodDecl);
+
         return new MappingModel(
             classSymbol,
             methodSymbol,
@@ -339,7 +346,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
             hasUpdatable,
             isClassPartial,
             nullStrategy,
-            collectionUpdatePolicy
+            collectionUpdatePolicy,
+            usingDirectives
         );
     }
 
@@ -382,5 +390,42 @@ public class AlephSourceGenerator : IIncrementalGenerator
         //    if (statement is ReturnStatementSyntax rs) return rs.Expression;
         //}
         return null;
+    }
+
+    private static IReadOnlyList<string> ExtractUsingDirectives(SyntaxNode node)
+    {
+        var compilationUnit = node.SyntaxTree.GetRoot() as CompilationUnitSyntax;
+        if (compilationUnit == null) return [];
+
+        var usings = new HashSet<string>();
+
+        // Add using directives from compilation unit
+        foreach (var usingDirective in compilationUnit.Usings)
+        {
+            if (usingDirective.Name != null)
+            {
+                usings.Add(usingDirective.Name.ToString());
+            }
+        }
+
+        // Add using directives from any namespace declarations
+        foreach (var namespaceDeclSyntax in compilationUnit.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
+        {
+            foreach (var usingDirective in namespaceDeclSyntax.Usings)
+            {
+                if (usingDirective.Name != null)
+                {
+                    usings.Add(usingDirective.Name.ToString());
+                }
+            }
+        }
+
+        // Always include essential system namespaces that are commonly used in generated code
+        usings.Add("System");
+        usings.Add("System.Linq");
+        usings.Add("System.Linq.Expressions");
+        usings.Add("System.CodeDom.Compiler");
+
+        return usings.OrderBy(x => x).ToList();
     }
 }

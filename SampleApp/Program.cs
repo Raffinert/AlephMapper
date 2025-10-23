@@ -69,6 +69,7 @@ Console.WriteLine($"   Orders Count: {personDto.Orders.Count}");
 // Demonstrate reverse mapping
 Console.WriteLine("\n2. DTO to Entity Reverse Mapping:");
 var mappedBackEntity = PersonMapper.ToEntity(personDto);
+PersonMapper.ToEntity(personDto, mappedBackEntity);
 Console.WriteLine($"   Mapped Back - Full Name: {mappedBackEntity.FullName}");
 Console.WriteLine($"   Age: {mappedBackEntity.Age}");
 

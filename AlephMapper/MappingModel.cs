@@ -1,5 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
 
 namespace AlephMapper;
 
@@ -16,7 +17,8 @@ internal sealed class MappingModel(
     bool isUpdatable,
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
-    CollectionPropertiesPolicy collectionProperties)
+    CollectionPropertiesPolicy collectionProperties,
+    IReadOnlyList<string> usingDirectives)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
@@ -33,6 +35,7 @@ internal sealed class MappingModel(
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
     public readonly CollectionPropertiesPolicy CollectionProperties = collectionProperties;
+    public readonly IReadOnlyList<string> UsingDirectives = usingDirectives;
 
     public override bool Equals(object? obj)
     {
