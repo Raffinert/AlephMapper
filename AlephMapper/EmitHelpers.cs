@@ -12,7 +12,7 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
     public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
     {
         _lines.Clear();
-        
+
         if (objectCreation?.Initializer?.Expressions == null) return [];
         foreach (var expr in objectCreation.Initializer.Expressions)
         {
@@ -101,7 +101,7 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
         {
             ProcessNestedConditionalWithBothObjects(conditionText, whenTrue, whenFalse, currentDestPath, _lines, "");
         }
-         
+
         return _lines.ToList();
     }
 
@@ -436,7 +436,7 @@ internal static class EmitHelpers
             case ObjectCreationExpressionSyntax oce:
                 if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
                     return false;
-                
+
                 processedLines = processor.ProcessObjectCreation(oce);
                 break;
 
