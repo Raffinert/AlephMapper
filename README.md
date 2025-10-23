@@ -139,7 +139,7 @@ await db.SaveChangesAsync();                           // EF sees changes on the
 For each method marked with `[Expressive]`:
 
 1. **`MapToPersonDto(Employee employee)`** → generates **`MapToPersonDtoExpression()`** returning `Expression<Func<Employee, PersonDto>>`
-2. **Method calls are inlined** - Calls to other methods in the same class are automatically inlined into the expression tree
+2. **Method calls are inlined** - Calls to other methods are automatically inlined into the expression tree
 3. **Null-conditional operators are handled** according to your specified rewrite policy
 
 For each method marked with `[Updatable]`:
