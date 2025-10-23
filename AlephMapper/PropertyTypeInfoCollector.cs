@@ -1,8 +1,6 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Diagnostics;
-using System.Linq.Expressions;
 
 namespace AlephMapper;
 
@@ -10,36 +8,24 @@ namespace AlephMapper;
 /// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string rootPath = "") : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string rootPath) : CSharpSyntaxWalker
 {
     public PropertyMappingContext TypeContext { get; private set; } = new();
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
-        try
-        {
-            // Get type information for the object being created
-            var typeInfo = semanticModel.GetTypeInfo(node);
-            if (typeInfo.Type != null)
-            {
-                TypeContext.AddPropertyType(rootPath, typeInfo.Type);
-            }
 
-            // Process the initializer if present
-            if (node.Initializer?.Expressions != null)
-            {
-                foreach (var expr in node.Initializer.Expressions)
-                {
-                    if (expr is AssignmentExpressionSyntax assignment)
-                    {
-                        ProcessAssignment(assignment);
-                    }
-                }
-            }
-        }
-        catch
+        if (node.Initializer?.Expressions == null)
         {
-            // Ignore type collection errors and continue processing
+            return;
+        }
+
+        foreach (var expr in node.Initializer.Expressions)
+        {
+            if (expr is AssignmentExpressionSyntax assignment)
+            {
+                ProcessAssignment(assignment);
+            }
         }
     }
 
@@ -69,7 +55,7 @@ internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string roo
             }
 
             // Recursively process nested object creations
-            var nestedCollector = new PropertyTypeInfoCollector(semanticModel, fullPropertyPath){ TypeContext = TypeContext };
+            var nestedCollector = new PropertyTypeInfoCollector(semanticModel, fullPropertyPath) { TypeContext = TypeContext };
             nestedCollector.Visit(assignment.Right);
         }
         catch
@@ -82,7 +68,7 @@ internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string roo
     {
         try
         {
-            var trueCollector = new PropertyTypeInfoCollector(semanticModel, rootPath){ TypeContext = TypeContext};
+            var trueCollector = new PropertyTypeInfoCollector(semanticModel, rootPath) { TypeContext = TypeContext };
             trueCollector.Visit(node.WhenTrue);
             trueCollector.Visit(node.WhenFalse);
         }
