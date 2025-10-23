@@ -1,5 +1,6 @@
-using AlephMapper;
 using System.ComponentModel.DataAnnotations;
+
+namespace AlephMapper.SimpleTests;
 
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class SimpleEmployeeMapper

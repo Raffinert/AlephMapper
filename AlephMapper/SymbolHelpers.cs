@@ -1,11 +1,22 @@
-﻿using System.Collections.Generic;
+﻿using Microsoft.CodeAnalysis;
+using System.Collections.Generic;
 using System.Linq;
-using Microsoft.CodeAnalysis;
 
 namespace AlephMapper;
 
 internal static class SymbolHelpers
 {
+    public static readonly SymbolDisplayFormat FullyQualifiedWithoutGlobal = new(
+        globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        genericsOptions:
+        SymbolDisplayGenericsOptions.IncludeTypeParameters |
+        SymbolDisplayGenericsOptions.IncludeVariance,
+        miscellaneousOptions:
+        SymbolDisplayMiscellaneousOptions.ExpandNullable |
+        SymbolDisplayMiscellaneousOptions.UseSpecialTypes
+    );
+
     public static IMethodSymbol Normalize(IMethodSymbol m)
     {
         var reduced = m.ReducedFrom;
@@ -31,7 +42,7 @@ internal static class SymbolHelpers
         public static readonly MethodComparer Instance = new MethodComparer();
     }
 
-    public static bool HasAttribute( ISymbol sym, string fullName)
+    public static bool HasAttribute(ISymbol sym, string fullName)
     {
         var attribute = GetAttribute(sym, fullName);
 

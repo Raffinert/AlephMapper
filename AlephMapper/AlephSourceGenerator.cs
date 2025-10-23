@@ -64,57 +64,33 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 sb.AppendLine("using System.CodeDom.Compiler;");
                 sb.AppendLine();
 
-                if (!string.IsNullOrEmpty(nameSpace))
-                {
-                    sb.AppendLine("namespace " + nameSpace + ";");
-                    sb.AppendLine();
-                }
-
-                sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
-                sb.AppendLine("partial class " + mapperType.Name + " {");
+                var membersSb = new StringBuilder();
+                var inlinedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
 
                 foreach (var mm in methods)
                 {
                     var srcName = string.IsNullOrEmpty(mm.ParamName) ? "source" : mm.ParamName;
-                    var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                    var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
-
-                    var resolver = new InliningResolver(mm.SemanticModel, modelsByMethod);
-                    var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(resolver.Visit(mm.BodySyntax.Expression));
+                    inlinedTypes.Add(mm.ParamType);
                     
-                    // Check for circular references and emit warnings
-                    foreach (var circularRef in resolver.CircularReferences)
-                    {
-                        var descriptor = new DiagnosticDescriptor(
-                            "AM0002",
-                            "Circular reference detected in method inlining",
-                            "Circular reference detected in method '{0}'. Call chain: {1}. The circular method call will not be inlined to prevent infinite recursion.",
-                            "AlephMapper",
-                            DiagnosticSeverity.Warning,
-                            isEnabledByDefault: true);
-
-                        var diagnostic = Diagnostic.Create(
-                            descriptor,
-                            mm.MethodSymbol.Locations.FirstOrDefault(),
-                            circularRef.Method.Name,
-                            circularRef.CallChain);
-
-                        spc.ReportDiagnostic(diagnostic);
-                    }
-
-                    var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                    var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
 
                     // Expression method
                     if (mm.IsExpressive)
                     {
+                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false);
+                        var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
+                        inlinedTypes.UnionWith(expressionInliner.InlinedTypes);
+                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
+                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+
                         // Skip generating expression method if there are circular references
-                        if (resolver.CircularReferences.Any())
+                        if (expressionInliner.CircularReferences.Any())
                         {
                             var descriptor = new DiagnosticDescriptor(
-                                "AM0003",
+                                "AM0002",
                                 "Expressive method generation skipped due to circular references",
                                 "Expression method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable expression generation.",
                                 "AlephMapper",
@@ -135,10 +111,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var expressionMethodName = mm.Name + "Expression";
 
-                        sb.AppendLine("  /// <summary>");
-                        sb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
-                        sb.AppendLine("  /// </summary>");
-                        sb.AppendLine("  /// <remarks>");
+                        membersSb.AppendLine("  /// <summary>");
+                        membersSb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
+                        membersSb.AppendLine("  /// </summary>");
+                        membersSb.AppendLine("  /// <remarks>");
 
                         // Add null strategy information
                         string nullStrategyDescription = mm.NullStrategy switch
@@ -149,23 +125,29 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             _ => "Default null handling strategy is applied."
                         };
 
-                        sb.AppendLine("  /// <para>");
-                        sb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
-                        sb.AppendLine("  /// </para>");
-                        sb.AppendLine("  /// </remarks>");
-                        sb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        sb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
-                        sb.AppendLine();
+                        membersSb.AppendLine("  /// <para>");
+                        membersSb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
+                        membersSb.AppendLine("  /// </para>");
+                        membersSb.AppendLine("  /// </remarks>");
+                        membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                        membersSb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
+                        membersSb.AppendLine();
                     }
 
                     // Update method - check for circular references like expressive methods do
                     if (mm.IsUpdatable)
                     {
+                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true);
+                        var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
+                        inlinedTypes.UnionWith(expressionInliner.InlinedTypes);
+                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
+                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+
                         // Skip generating Updatable method if there are circular references
-                        if (resolver.CircularReferences.Any())
+                        if (expressionInliner.CircularReferences.Any())
                         {
                             var descriptor = new DiagnosticDescriptor(
-                                "AM0004",
+                                "AM0003",
                                 "Updatable method generation skipped due to circular references",
                                 "Updatable method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable Updatable method generation.",
                                 "AlephMapper",
@@ -216,14 +198,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         {
                             var updateMethodName = mm.Name;
 
-                            sb.AppendLine("  /// <summary>");
-                            sb.AppendLine($"  /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
-                            sb.AppendLine("  /// </summary>");
-                            sb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
-                            sb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
-                            sb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
-                            sb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
-                            sb.AppendLine("  {");
+                            membersSb.AppendLine("  /// <summary>");
+                            membersSb.AppendLine($"  /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
+                            membersSb.AppendLine("  /// </summary>");
+                            membersSb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
+                            membersSb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
+                            membersSb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
+                            membersSb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                            membersSb.AppendLine("  {");
 
                             // Build null check conditions
                             var nullCheckConditions = new List<string>();
@@ -243,16 +225,38 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             // Generate null check only if there are conditions to check
                             if (nullCheckConditions.Count > 0)
                             {
-                                sb.AppendLine("    if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
+                                membersSb.AppendLine("    if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
                             }
 
-                            foreach (var l in lines) sb.AppendLine("    " + l);
-                            sb.AppendLine("    return dest;");
-                            sb.AppendLine("  }");
-                            sb.AppendLine();
+                            foreach (var l in lines) membersSb.AppendLine("    " + l);
+                            membersSb.AppendLine("    return dest;");
+                            membersSb.AppendLine("  }");
+                            membersSb.AppendLine();
                         }
                     }
                 }
+
+                if (inlinedTypes.Count > 0)
+                {
+                    var inlinedNamespacesTypesList = string.Join("\r\n", inlinedTypes.Select(t => t.ContainingNamespace.ToDisplayString(SymbolHelpers.FullyQualifiedWithoutGlobal))
+                        .Distinct()
+                        .OrderBy(x => x)
+                        .Where(x => x != "System" && x != nameSpace)
+                        .Select(x => $"using {x};"));
+
+                    sb.AppendLine(inlinedNamespacesTypesList);
+                }
+
+                if (!string.IsNullOrEmpty(nameSpace))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("namespace " + nameSpace + ";");
+                    sb.AppendLine();
+                }
+
+                sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
+                sb.AppendLine("partial class " + mapperType.Name + " {");
+                sb.AppendLine(membersSb.ToString());
 
                 sb.AppendLine("}"); // class
 

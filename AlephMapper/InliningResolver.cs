@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -36,16 +37,15 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
 }
 
-internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodSymbol, MappingModel> catalog)
+internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodSymbol, MappingModel> catalog, bool forUpdateMethod)
     : CSharpSyntaxRewriter
 {
-    private readonly HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
-    private readonly List<CircularReferenceInfo> _circularReferences = [];
+    private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
+    private List<CircularReferenceInfo> _circularReferences = [];
+    private HashSet<ITypeSymbol> _inlinedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
 
-    /// <summary>
-    /// Gets any circular references detected during inlining
-    /// </summary>
     public IReadOnlyList<CircularReferenceInfo> CircularReferences => _circularReferences;
+    public HashSet<ITypeSymbol> InlinedTypes => _inlinedTypes;
 
     private IMethodSymbol ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
@@ -79,19 +79,135 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
             return base.VisitImplicitObjectCreationExpression(implicitNew);
         }
 
-        var type = model.GetTypeInfo(implicitNew).Type;
+        string type = model.GetTypeInfo(implicitNew).Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
         if (type == null)
         {
             return base.VisitImplicitObjectCreationExpression(implicitNew);
         }
 
-        return ObjectCreationExpression(IdentifierName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
+        return ObjectCreationExpression(IdentifierName(type))
                     .WithInitializer((InitializerExpressionSyntax)VisitInitializerExpression(implicitNew.Initializer!))
                     .WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList))
                     .WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
     }
 
+    public override SyntaxNode VisitSwitchExpression(SwitchExpressionSyntax node)
+    {
+        if (forUpdateMethod)
+        {
+            // fix missing leading trivia on 'switch' keyword
+            var switchExpression = (SwitchExpressionSyntax)base.VisitSwitchExpression(node);
+            return switchExpression?.WithSwitchKeyword(node.SwitchKeyword.WithLeadingTrivia(Space));
+        }
+
+        // Reverse arms order to start from the default value
+        var arms = node.Arms.Reverse();
+
+        ExpressionSyntax currentExpression = null;
+
+        foreach (var arm in arms)
+        {
+            var armExpression = (ExpressionSyntax)Visit(arm.Expression.WithoutTrivia());
+
+            // Handle fallback value
+            if (currentExpression == null)
+            {
+                currentExpression = arm.Pattern is DiscardPatternSyntax
+                    ? armExpression
+                    : LiteralExpression(SyntaxKind.NullLiteralExpression);
+
+                continue;
+            }
+
+            // Handle each arm, only if it's a constant expression
+            if (arm.Pattern is ConstantPatternSyntax constant)
+            {
+                ExpressionSyntax expression = BinaryExpression(SyntaxKind.EqualsExpression, (ExpressionSyntax)Visit(node.GoverningExpression.WithoutTrivia()), constant.Expression.WithoutTrivia());
+
+                // Add the when clause as a AND expression
+                if (arm.WhenClause != null)
+                {
+                    expression = BinaryExpression(
+                        SyntaxKind.LogicalAndExpression,
+                        expression,
+                        (ExpressionSyntax)Visit(arm.WhenClause.Condition.WithoutTrivia())
+                    );
+                }
+
+                currentExpression = ConditionalExpression(
+                    expression,
+                    armExpression,
+                    currentExpression
+                );
+
+                continue;
+            }
+
+            if (arm.Pattern is DeclarationPatternSyntax declaration)
+            {
+                var getTypeExpression = MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    (ExpressionSyntax)Visit(node.GoverningExpression.WithoutTrivia()),
+                    IdentifierName("GetType")
+                );
+
+                var getTypeCall = InvocationExpression(getTypeExpression);
+                var typeofExpression = TypeOfExpression(declaration.Type);
+                var equalsExpression = BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    getTypeCall,
+                    typeofExpression
+                );
+
+                ExpressionSyntax condition = equalsExpression;
+                if (arm.WhenClause != null)
+                {
+                    condition = BinaryExpression(
+                        SyntaxKind.LogicalAndExpression,
+                        equalsExpression,
+                        (ExpressionSyntax)Visit(arm.WhenClause.Condition.WithoutTrivia())
+                    );
+                }
+
+                var modifiedArmExpression = ReplaceVariableWithCast(armExpression, declaration, node.GoverningExpression.WithoutTrivia());
+                currentExpression = ConditionalExpression(
+                    condition,
+                    modifiedArmExpression,
+                    currentExpression
+                );
+
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"Switch expressions rewriting supports only constant values and declaration patterns (Type var). " +
+                $"Unsupported pattern: {arm.Pattern.GetType().Name}"
+            );
+        }
+
+        return currentExpression;
+    }
+
+    private ExpressionSyntax ReplaceVariableWithCast(ExpressionSyntax expression, DeclarationPatternSyntax declaration, ExpressionSyntax governingExpression)
+    {
+        if (declaration.Designation is SingleVariableDesignationSyntax variableDesignation)
+        {
+            var variableName = variableDesignation.Identifier.ValueText;
+
+            var castExpression = ParenthesizedExpression(
+                CastExpression(
+                    declaration.Type,
+                    (ExpressionSyntax)Visit(governingExpression)
+                )
+            );
+
+            var rewriter = new ParameterSubstitutionRewriter(variableName, castExpression);
+            return (ExpressionSyntax)rewriter.Visit(expression);
+        }
+
+        return expression;
+    }
 
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
@@ -139,7 +255,14 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
                         _callStack.Add(normalizedMethod);
                         try
                         {
-                            var inlinedBody = (ExpressionSyntax)Visit(callee.BodySyntax.Expression);
+                            _inlinedTypes.Add(callee.ReturnType);
+                            var inlinedBody = (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod)
+                            {
+                                _callStack = _callStack, 
+                                _circularReferences = _circularReferences, 
+                                _inlinedTypes = _inlinedTypes
+                            }.Visit(callee.BodySyntax.Expression);
+
                             var substitutedBody = (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName, IdentifierName(paramName))
                                     .Visit(inlinedBody)!
                                     .WithoutTrivia();
@@ -177,7 +300,14 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         _callStack.Add(directCallMethod);
         try
         {
-            var inlinedBody2 = Visit(callee2.BodySyntax.Expression);
+            _inlinedTypes.Add(callee2.ReturnType);
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod)
+            {
+                _callStack = _callStack, 
+                _circularReferences = _circularReferences,
+                _inlinedTypes = _inlinedTypes
+            }.Visit(callee2.BodySyntax.Expression);
+
             var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
                 .Visit(inlinedBody2)
                 ?.WithoutTrivia();
