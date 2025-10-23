@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace AlephMapper;
 
@@ -46,4 +46,26 @@ public sealed class ExpressiveAttribute : Attribute
 /// Marks a class to generate update companion methods.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class UpdatableAttribute : Attribute;
+public sealed class UpdatableAttribute : Attribute
+{
+    /// <summary>
+    /// Gets or sets the policy for handling collection updates during mapping operations
+    /// </summary>
+    public CollectionPropertiesPolicy CollectionProperties { get; set; } = CollectionPropertiesPolicy.Skip;
+}
+
+/// <summary>
+/// Defines the policy for handling collection updates during mapping operations
+/// </summary>
+public enum CollectionPropertiesPolicy
+{
+    /// <summary>
+    /// Skip collection updates - collections will not be modified during mapping
+    /// </summary>
+    Skip,
+
+    /// <summary>
+    /// Update collections - collections will be updated during mapping operations
+    /// </summary>
+    Update
+}

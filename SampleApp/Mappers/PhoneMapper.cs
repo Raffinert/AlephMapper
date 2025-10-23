@@ -1,7 +1,7 @@
-﻿using ConsoleApp1.Entities;
-using ConsoleApp1.Models;
+﻿using SampleApp.Entities;
+using SampleApp.Models;
 
-namespace ConsoleApp1.Mappers;
+namespace SampleApp.Mappers;
 
 public static class PhoneMapper
 {
