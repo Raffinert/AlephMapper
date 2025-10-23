@@ -1,13 +1,14 @@
-﻿namespace ConsoleApp1.Mappers;
-using AlephMapper;
-using ConsoleApp1.Entities;
-using ConsoleApp1.Models;
+﻿using AlephMapper;
+using SampleApp.Entities;
+using SampleApp.Models;
+
+namespace SampleApp.Mappers;
 
 public static partial class PersonMapper
 {
     // Main entity to DTO mapping with expression-bodied syntax
     [Expressive]
-    [Updatable]
+    [Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
     public static PersonDto ToDto(Person entity) => new()
     {
         Id = entity.PersonId,

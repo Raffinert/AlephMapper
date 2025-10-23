@@ -1,8 +1,9 @@
-﻿using ConsoleApp1.Entities;
-using ConsoleApp1.Mappers;
-using ConsoleApp1.Models;
+﻿using SampleApp.Entities;
+using SampleApp.Mappers;
+using SampleApp.Models;
+using PersonMapper = SampleApp.Mappers.PersonMapper;
 
-namespace ConsoleApp1.Services;
+namespace SampleApp.Services;
 
 public static class MappingService
 {
@@ -25,7 +26,7 @@ public static class MappingService
     // Complex person mapping with validation using expression-bodied syntax
     public static PersonDto? MapPersonWithValidation(Person? person) =>
         person is null ? null :
-        IsValidPerson(person) ? PersonMapper.ToDto(person) : 
+        IsValidPerson(person) ? PersonMapper.ToDto(person) :
         throw new ArgumentException("Invalid person data");
 
     // Conditional mapping based on business rules with expression-bodied syntax

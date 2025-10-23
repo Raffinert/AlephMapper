@@ -1,4 +1,4 @@
-﻿namespace ConsoleApp1.Entities;
+﻿namespace SampleApp.Entities;
 
 public class Person
 {

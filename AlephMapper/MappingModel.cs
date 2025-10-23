@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper;
@@ -15,7 +15,8 @@ internal sealed class MappingModel(
     bool isExpressive,
     bool isUpdatable,
     bool classIsStaticAndPartial,
-    NullConditionalRewrite nullStrategy)
+    NullConditionalRewrite nullStrategy,
+    CollectionPropertiesPolicy collectionProperties)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
@@ -31,6 +32,7 @@ internal sealed class MappingModel(
     public readonly bool IsClassPartial = classIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
+    public readonly CollectionPropertiesPolicy CollectionProperties = collectionProperties;
 
     public override bool Equals(object? obj)
     {

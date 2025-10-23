@@ -1,4 +1,4 @@
-﻿namespace ConsoleApp1.Models;
+﻿namespace SampleApp.Models;
 
 public class PersonDto
 {

@@ -1,6 +1,6 @@
-﻿using ConsoleApp1.Entities;
-using ConsoleApp1.Mappers;
-using ConsoleApp1.Services;
+﻿using SampleApp.Entities;
+using SampleApp.Mappers;
+using SampleApp.Services;
 
 // Create sample entity data
 var person = new Person

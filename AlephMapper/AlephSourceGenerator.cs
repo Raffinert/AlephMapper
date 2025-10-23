@@ -75,7 +75,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
                     inlinedTypes.Add(mm.ParamType);
-                    
+
 
                     // Expression method
                     if (mm.IsExpressive)
@@ -194,7 +194,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         if (mm.SemanticModel.TryGetSpeculativeSemanticModel(
                                 position: mm.BodySyntax.SpanStart, // an anchor inside the original tree
                                 replacedMethod,        // the rewritten subtree (member/statement/expression)
-                                out var specModel) && EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel))
+                                out var specModel) && EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel, mm.CollectionProperties))
                         {
                             var updateMethodName = mm.Name;
 
@@ -319,6 +319,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
                            ?? GetNullStrategy(classSymbol)
                            ?? NullConditionalRewrite.Ignore;
 
+        var collectionUpdatePolicy = GetCollectionPropertiesPolicy(methodSymbol)
+                                     ?? GetCollectionPropertiesPolicy(classSymbol)
+                                     ?? CollectionPropertiesPolicy.Skip;
+
         var isClassPartial = classDecl.Modifiers
                                       .Any(m => m.IsKind(SyntaxKind.PartialKeyword));
 
@@ -334,7 +338,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
             hasExpressive,
             hasUpdatable,
             isClassPartial,
-            nullStrategy
+            nullStrategy,
+            collectionUpdatePolicy
         );
     }
 
@@ -343,11 +348,26 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var attributeValue = SymbolHelpers.GetAttributeArgumentValue(
             sym,
             typeof(ExpressiveAttribute).FullName,
-            nameof(NullConditionalRewrite));
+            nameof(ExpressiveAttribute.NullConditionalRewrite));
 
         if (attributeValue is int intValue)
         {
             return (NullConditionalRewrite)intValue;
+        }
+
+        return null;
+    }
+
+    private static CollectionPropertiesPolicy? GetCollectionPropertiesPolicy(ISymbol sym)
+    {
+        var attributeValue = SymbolHelpers.GetAttributeArgumentValue(
+            sym,
+            typeof(UpdatableAttribute).FullName,
+            nameof(UpdatableAttribute.CollectionProperties));
+
+        if (attributeValue is int intValue)
+        {
+            return (CollectionPropertiesPolicy)intValue;
         }
 
         return null;
