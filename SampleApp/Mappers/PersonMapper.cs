@@ -8,7 +8,7 @@ public static partial class PersonMapper
 {
     // Main entity to DTO mapping with expression-bodied syntax
     [Expressive]
-    [Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
+    //[Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
     public static PersonDto ToDto(Person entity) => new()
     {
         Id = entity.PersonId,
@@ -16,13 +16,13 @@ public static partial class PersonMapper
         LastName = entity.LastName,
         Email = entity.EmailAddress,
         DateOfBirth = entity.BirthDate,
-        Address = AddressMapper.ToDto(entity.HomeAddress),
-        PhoneNumbers = entity.ContactNumbers.Select(PhoneMapper.ToDto).ToList(),
+        Address = entity.HomeAddress.ToDto(),
+        PhoneNumbers = entity.ContactNumbers.Select(cn => cn.ToDto()).ToList(),
         Orders = entity.CustomerOrders.Select(OrderMapper.ToDto).ToList()
     };
 
     // DTO to entity mapping with expression-bodied syntax
-    [Updatable]
+    //[Updatable]
     public static Person ToEntity(PersonDto dto) => new()
     {
         PersonId = dto.Id,

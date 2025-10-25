@@ -59,7 +59,7 @@ Console.WriteLine("=== Complex Manual Mapping Demonstration ===\n");
 Console.WriteLine("1. Basic Entity to DTO Mapping:");
 var personDto = PersonMapper.ToDto(person);
 var expression = PersonMapper.ToDtoExpression();
-PersonMapper.ToDto(person, personDto);
+//PersonMapper.ToDto(person, personDto);
 Console.WriteLine($"   Person: {personDto.FirstName} {personDto.LastName}");
 Console.WriteLine($"   Email: {personDto.Email}");
 Console.WriteLine($"   Address: {AddressMapper.GetFormattedAddress(personDto.Address)}");
@@ -69,7 +69,7 @@ Console.WriteLine($"   Orders Count: {personDto.Orders.Count}");
 // Demonstrate reverse mapping
 Console.WriteLine("\n2. DTO to Entity Reverse Mapping:");
 var mappedBackEntity = PersonMapper.ToEntity(personDto);
-PersonMapper.ToEntity(personDto, mappedBackEntity);
+//PersonMapper.ToEntity(personDto, mappedBackEntity);
 Console.WriteLine($"   Mapped Back - Full Name: {mappedBackEntity.FullName}");
 Console.WriteLine($"   Age: {mappedBackEntity.Age}");
 

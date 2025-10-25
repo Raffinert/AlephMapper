@@ -1,12 +1,14 @@
-﻿using SampleApp.Entities;
+﻿using AlephMapper;
+using SampleApp.Entities;
 using SampleApp.Models;
 
 namespace SampleApp.Mappers;
 
-public static class AddressMapper
+public static partial class AddressMapper
 {
     // Entity to DTO mapping with expression-bodied syntax
-    public static AddressDto ToDto(Address entity) => new()
+    [Expressive]
+    public static AddressDto ToDto(this Address entity) => new()
     {
         Street = entity.StreetAddress,
         City = entity.CityName,

@@ -217,19 +217,36 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
         }
 
         var args = node.ArgumentList.Arguments;
-
-        if (args.Count != 1)
+        
+        // Handle extension methods without arguments differently - they show up as static methods with the first parameter being 'this'
+        // For extension methods, we need to treat the receiver (left side of the dot) as the first argument
+        ExpressionSyntax firstArg;
+        if (invokedMethod.IsExtensionMethod && args.Count == 0)
         {
-            return base.VisitInvocationExpression(node);
+            // For extension methods like obj.ExtMethod(), the receiver 'obj' is our first argument
+            if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                firstArg = memberAccess.Expression;
+            }
+            else
+            {
+                return base.VisitInvocationExpression(node);
+            }
+        }
+        else
+        {
+            // For regular methods, check if we have exactly one argument
+            if (args.Count != 1)
+            {
+                return base.VisitInvocationExpression(node);
+            }
+            firstArg = args[0].Expression;
         }
 
-        var arg = args[0];
-        var argExpr = arg.Expression;
-
         // Handle method-group arguments first (Select(MapToX))
-        if (argExpr is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax)
+        if (firstArg is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax)
         {
-            var methodGroup = ResolveMethodGroupSymbol(argExpr);
+            var methodGroup = ResolveMethodGroupSymbol(firstArg);
 
             if (methodGroup is { Parameters.Length: 1 })
             {
@@ -268,7 +285,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
                                     .WithoutTrivia();
 
                             var lambda = SimpleLambdaExpression(lambdaParam, substitutedBody);
-                            var newArgs = SeparatedList([arg.WithExpression(lambda)]);
+                            var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
                             return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
                         }
                         finally
@@ -308,7 +325,7 @@ internal sealed class InliningResolver(SemanticModel model, IDictionary<IMethodS
                 _inlinedTypes = _inlinedTypes
             }.Visit(callee2.BodySyntax.Expression);
 
-            var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, argExpr)
+            var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, firstArg)
                 .Visit(inlinedBody2)
                 ?.WithoutTrivia();
 

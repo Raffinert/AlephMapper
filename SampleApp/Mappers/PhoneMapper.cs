@@ -6,7 +6,7 @@ namespace SampleApp.Mappers;
 public static class PhoneMapper
 {
     // Entity to DTO mapping with expression-bodied syntax
-    public static PhoneDto ToDto(PhoneNumber entity) => new()
+    public static PhoneDto ToDto(this PhoneNumber entity) => new()
     {
         Type = GetPhoneTypeString(entity.PhoneType),
         Number = FormatPhoneNumber(entity.PhoneNumberValue)
