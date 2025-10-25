@@ -57,6 +57,7 @@ Console.WriteLine("=== Complex Manual Mapping Demonstration ===\n");
 
 // Demonstrate basic mapping with expression-bodied methods
 Console.WriteLine("1. Basic Entity to DTO Mapping:");
+var ae = AddressMapper.ToDtoExpression();
 var personDto = PersonMapper.ToDto(person);
 var expression = PersonMapper.ToDtoExpression();
 //PersonMapper.ToDto(person, personDto);
