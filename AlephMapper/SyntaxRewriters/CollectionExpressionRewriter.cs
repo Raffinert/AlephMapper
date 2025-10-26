@@ -1,15 +1,17 @@
 ﻿#nullable enable
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
-namespace AlephMapper;
+namespace AlephMapper.SyntaxRewriters;
 
 /// <summary>
 /// Rewrites collection expressions to explicit constructor calls for expression tree compatibility.
 /// Collection expressions (like []) are not supported in expression trees and cause CS9175.
 /// </summary>
-internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CSharpSyntaxRewriter
+internal sealed partial class InliningResolver
 {
     public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
     {
@@ -20,8 +22,10 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         // Check if the right side is a collection expression (represented as [] in older Roslyn)
         if (!IsCollectionExpression(right)) return base.VisitBinaryExpression(node);
         var rewrittenRight = RewriteCollectionExpression(right, node.Left);
-        return node.WithRight(rewrittenRight);
 
+        return node
+            .WithLeft((ExpressionSyntax)Visit(node.Left))
+            .WithRight(rewrittenRight);
     }
 
     public override SyntaxNode? VisitAssignmentExpression(AssignmentExpressionSyntax node)
@@ -29,8 +33,9 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         // Handle assignment expressions where the right side is a collection expression
         if (!IsCollectionExpression(node.Right)) return base.VisitAssignmentExpression(node);
         var rewritten = RewriteCollectionExpression(node.Right, node.Left);
-        return node.WithRight(rewritten);
-
+        return node
+            .WithLeft((ExpressionSyntax)Visit(node.Left))
+            .WithRight(rewritten);
     }
 
     public override SyntaxNode? VisitEqualsValueClause(EqualsValueClauseSyntax node)
@@ -39,7 +44,6 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         if (!IsCollectionExpression(node.Value)) return base.VisitEqualsValueClause(node);
         var rewritten = RewriteCollectionExpression(node.Value, null);
         return node.WithValue(rewritten);
-
     }
 
     public override SyntaxNode? VisitArgument(ArgumentSyntax node)
@@ -48,7 +52,6 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         if (!IsCollectionExpression(node.Expression)) return base.VisitArgument(node);
         var rewritten = RewriteCollectionExpression(node.Expression, null);
         return node.WithExpression(rewritten);
-
     }
 
     private static bool IsCollectionExpression(SyntaxNode node)
@@ -97,7 +100,7 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         try
         {
             // First, try to get the type from the semantic model of the collection expression itself
-            var typeInfo = semanticModel.GetTypeInfo(collectionExpression);
+            var typeInfo = model.GetTypeInfo(collectionExpression);
             if (typeInfo.Type != null && typeInfo.Type.TypeKind != TypeKind.Error)
             {
                 return typeInfo.Type;
@@ -107,14 +110,14 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
             if (contextNode != null)
             {
                 // For binary expressions (null coalescing), use the left side type
-                var leftTypeInfo = semanticModel.GetTypeInfo(contextNode);
+                var leftTypeInfo = model.GetTypeInfo(contextNode);
                 if (leftTypeInfo.Type != null)
                     return leftTypeInfo.Type;
 
                 // For assignments, get the type of the left side
                 if (contextNode.Parent is AssignmentExpressionSyntax assignment)
                 {
-                    var leftType = semanticModel.GetTypeInfo(assignment.Left);
+                    var leftType = model.GetTypeInfo(assignment.Left);
                     if (leftType.Type != null)
                         return leftType.Type;
                 }
@@ -123,7 +126,7 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
                 if (contextNode.Parent is EqualsValueClauseSyntax equalsValue &&
                     equalsValue.Parent is PropertyDeclarationSyntax property)
                 {
-                    var propType = semanticModel.GetTypeInfo(property.Type);
+                    var propType = model.GetTypeInfo(property.Type);
                     if (propType.Type != null)
                         return propType.Type;
                 }
@@ -138,7 +141,7 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
                 if (currentNode is AssignmentExpressionSyntax assignmentExpr &&
                     IsDescendantOf(collectionExpression, assignmentExpr.Right))
                 {
-                    var leftSideType = semanticModel.GetTypeInfo(assignmentExpr.Left);
+                    var leftSideType = model.GetTypeInfo(assignmentExpr.Left);
                     if (leftSideType.Type != null)
                         return leftSideType.Type;
                 }
@@ -148,7 +151,7 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
                     binaryExpr.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken) &&
                     IsDescendantOf(collectionExpression, binaryExpr.Right))
                 {
-                    var leftSideType = semanticModel.GetTypeInfo(binaryExpr.Left);
+                    var leftSideType = model.GetTypeInfo(binaryExpr.Left);
                     if (leftSideType.Type != null)
                         return leftSideType.Type;
                 }
@@ -216,61 +219,61 @@ internal class CollectionExpressionRewriter(SemanticModel semanticModel) : CShar
         }
 
         // Ultimate fallback - create a generic empty list with string type for common scenarios
-        return SyntaxFactory.ObjectCreationExpression(
-            SyntaxFactory.GenericName(SyntaxFactory.Identifier("List"))
+        return ObjectCreationExpression(
+            GenericName(Identifier("List"))
                 .WithTypeArgumentList(
-                    SyntaxFactory.TypeArgumentList(
-                        SyntaxFactory.SingletonSeparatedList<TypeSyntax>(
-                            SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword))
+                    TypeArgumentList(
+                        SingletonSeparatedList<TypeSyntax>(
+                            PredefinedType(Token(SyntaxKind.StringKeyword))
                         )
                     )
-                ).WithLeadingTrivia(SyntaxFactory.Space)
-        ).WithArgumentList(SyntaxFactory.ArgumentList())
+                ).WithLeadingTrivia(Space)
+        ).WithArgumentList(ArgumentList())
         .WithLeadingTrivia(originalExpression.GetLeadingTrivia())
         .WithTrailingTrivia(originalExpression.GetTrailingTrivia());
     }
 
     private static ExpressionSyntax CreateListConstructor(ITypeSymbol elementType)
     {
-        var elementTypeSyntax = SyntaxFactory.IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        var elementTypeSyntax = IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
 
-        return SyntaxFactory.ObjectCreationExpression(
-            SyntaxFactory.GenericName(SyntaxFactory.Identifier("List"))
+        return ObjectCreationExpression(
+            GenericName(Identifier("List"))
                 .WithTypeArgumentList(
-                    SyntaxFactory.TypeArgumentList(
-                        SyntaxFactory.SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
+                    TypeArgumentList(
+                        SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
                     )
                 )
-                .WithLeadingTrivia(SyntaxFactory.Space)
-        ).WithArgumentList(SyntaxFactory.ArgumentList())
-         .WithNewKeyword(SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+                .WithLeadingTrivia(Space)
+        ).WithArgumentList(ArgumentList())
+         .WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
     }
 
     private static ExpressionSyntax CreateArrayExpression(ITypeSymbol elementType)
     {
         // Create Array.Empty<T>() for better performance
-        var elementTypeSyntax = SyntaxFactory.IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        var elementTypeSyntax = IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
 
-        return SyntaxFactory.InvocationExpression(
-            SyntaxFactory.MemberAccessExpression(
+        return InvocationExpression(
+            MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
-                SyntaxFactory.IdentifierName("Array"),
-                SyntaxFactory.GenericName(SyntaxFactory.Identifier("Empty"))
+                IdentifierName("Array"),
+                GenericName(Identifier("Empty"))
                     .WithTypeArgumentList(
-                        SyntaxFactory.TypeArgumentList(
-                            SyntaxFactory.SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
+                        TypeArgumentList(
+                            SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
                         )
                     )
             )
-        ).WithArgumentList(SyntaxFactory.ArgumentList());
+        ).WithArgumentList(ArgumentList());
     }
 
     private static ExpressionSyntax CreateGenericConstructor(INamedTypeSymbol namedType)
     {
-        var typeSyntax = SyntaxFactory.IdentifierName(namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        var typeSyntax = IdentifierName(namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
 
-        return SyntaxFactory.ObjectCreationExpression(typeSyntax.WithLeadingTrivia(SyntaxFactory.Space))
-            .WithArgumentList(SyntaxFactory.ArgumentList());
+        return ObjectCreationExpression(typeSyntax.WithLeadingTrivia(Space))
+            .WithArgumentList(ArgumentList());
     }
 }
 

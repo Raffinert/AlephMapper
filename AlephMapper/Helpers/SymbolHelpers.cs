@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace AlephMapper;
+namespace AlephMapper.Helpers;
 
 internal static class SymbolHelpers
 {

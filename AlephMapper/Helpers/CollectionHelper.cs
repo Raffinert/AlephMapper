@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using System.Linq;
 
-namespace AlephMapper;
+namespace AlephMapper.Helpers;
 
 /// <summary>
 /// Utility class for collection type detection and analysis.

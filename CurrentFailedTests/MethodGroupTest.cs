@@ -1,6 +1,7 @@
 ﻿using AgileObjects.ReadableExpressions;
+using AlephMapper;
 
-namespace AlephMapper.Tests;
+namespace CurrentFailedTests;
 
 public class MethodGroupTest
 {

@@ -148,7 +148,7 @@ public class GeneratedCodeValidationTests
         await Assert.That(dest.Name).IsEqualTo("John Doe");
         await Assert.That(dest.ContactInfo).IsEqualTo("john@example.com");
         await Assert.That(dest.BirthInfo).IsNotNull();
-        await Assert.That(dest.BirthInfo.Age).IsEqualTo(30);
+        await Assert.That(dest.BirthInfo!.Age).IsEqualTo(30);
         await Assert.That(dest.BirthInfo.Address).IsEqualTo("Kyiv");
 
         // Test with null BirthInfo to ensure null handling works in inlined code
@@ -188,6 +188,6 @@ public class GeneratedCodeValidationTests
         // Verify the tool and version information
         var mapperGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)mapperGeneratedAttributes[0];
         await Assert.That(mapperGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.2.7");
+        await Assert.That(mapperGenAttr.Version).IsEqualTo("0.2.8");
     }
 }

@@ -1,7 +1,8 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using AlephMapper.Helpers;
+using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 
-namespace AlephMapper;
+namespace AlephMapper.Models;
 
 /// <summary>
 /// Represents type information for a property path during Updatable method generation.
