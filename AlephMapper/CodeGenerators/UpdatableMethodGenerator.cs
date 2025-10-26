@@ -1,11 +1,12 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using AlephMapper.Models;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace AlephMapper;
+namespace AlephMapper.CodeGenerators;
 
-internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMappingContext typeContext)
+internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext)
 {
     private readonly List<string> _lines = [];
 
@@ -414,45 +415,5 @@ internal sealed class UpdatableExpressionProcessor(string destPrefix, PropertyMa
     private static bool IsNullExpression(ExpressionSyntax expression)
     {
         return expression?.ToString().Trim() == "null";
-    }
-}
-
-internal static class EmitHelpers
-{
-    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel, CollectionPropertiesPolicy collectionPropertiesPolicy)
-    {
-        var propertyInfoCollector = new PropertyTypeInfoCollector(semanticModel, destPrefix);
-
-        if (collectionPropertiesPolicy == CollectionPropertiesPolicy.Skip)
-        {
-            propertyInfoCollector.Visit(inlinedBody);
-        }
-
-        var typeContext = propertyInfoCollector.TypeContext;
-
-        var processor = new UpdatableExpressionProcessor(destPrefix, typeContext);
-        List<string> processedLines;
-
-        switch (inlinedBody)
-        {
-            case ObjectCreationExpressionSyntax oce:
-                if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
-                    return false;
-
-                processedLines = processor.ProcessObjectCreation(oce);
-                break;
-
-            case ConditionalExpressionSyntax conditional:
-                // Handle conditional expressions like: condition ? new Type { ... } : null
-                // or: condition ? null : new Type { ... }
-                processedLines = processor.ProcessRootConditionalExpression(conditional, destPrefix);
-                break;
-
-            default:
-                return false;
-        }
-
-        lines.AddRange(processedLines);
-        return lines.Count > 0;
     }
 }

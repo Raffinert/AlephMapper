@@ -7,6 +7,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using AlephMapper.Helpers;
+using AlephMapper.Models;
+using AlephMapper.SyntaxRewriters;
 
 namespace AlephMapper;
 
@@ -57,51 +60,27 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
 
                 var nameSpace = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
-                var sb = new StringBuilder();
                 
                 var membersSb = new StringBuilder();
                 
-                // Collect all unique using directives from all methods in this class
                 var allUsingDirectives = new HashSet<string>();
-                
-                foreach (var mm in methods)
-                {
-                    if (mm.IsExpressive || mm.IsUpdatable)
-                    {
-                        foreach (var usingDirective in mm.UsingDirectives)
-                        {
-                            allUsingDirectives.Add(usingDirective);
-                        }
-                    }
-                }
-
-                // Add using directives to the generated file, filtering out the current namespace
-                foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
-                {
-                    if (usingDirective != nameSpace && !string.IsNullOrEmpty(usingDirective))
-                    {
-                        sb.AppendLine($"using {usingDirective};");
-                    }
-                }
-                
-                sb.AppendLine();
 
                 foreach (var mm in methods)
                 {
-                    var srcName = string.IsNullOrEmpty(mm.ParamName) ? "source" : mm.ParamName;
+                    var srcName = mm.ParamName;
                     var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                     var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
 
-
                     // Expression method
                     if (mm.IsExpressive)
                     {
                         var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false);
-                        var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
-                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+                        var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
+                        allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
+                        var nullRewriter = new NullConditionalRewriter(mm.NullStrategy);
+                        var nullRewrittenBody = (ExpressionSyntax)nullRewriter.Visit(inlinedBody)!;
 
                         // Skip generating expression method if there are circular references
                         if (expressionInliner.CircularReferences.Any())
@@ -122,9 +101,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             spc.ReportDiagnostic(diagnostic);
                             continue; // Skip expression generation
                         }
-
-                        // Build inlined body for expressions
-                        var nullHandledExpression = (ExpressionSyntax)new NullConditionalRewriter(mm.NullStrategy).Visit(collectionRewrittenExpression)!.WithoutTrivia();
 
                         var expressionMethodName = mm.Name + "Expression";
 
@@ -147,7 +123,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine("  /// </para>");
                         membersSb.AppendLine("  /// </remarks>");
                         membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        membersSb.AppendLine("      " + srcName + " => " + nullHandledExpression.ToFullString() + ";");
+                        membersSb.AppendLine("      " + srcName + " => " + nullRewrittenBody.ToFullString() + ";");
                         membersSb.AppendLine();
                     }
 
@@ -155,9 +131,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     if (mm.IsUpdatable)
                     {
                         var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true);
-                        var inlinedBody = (ExpressionSyntax)new CommentRemover().Visit(expressionInliner.Visit(mm.BodySyntax.Expression));
-                        var collectionRewriter = new CollectionExpressionRewriter(mm.SemanticModel);
-                        var collectionRewrittenExpression = (ExpressionSyntax)collectionRewriter.Visit(inlinedBody)!.WithoutTrivia();
+                        var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
+                        allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
 
                         // Skip generating Updatable method if there are circular references
                         if (expressionInliner.CircularReferences.Any())
@@ -205,12 +180,13 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var lines = new List<string>();
 
-                        var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, collectionRewrittenExpression);
+                        var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, inlinedBody);
 
                         if (mm.SemanticModel.TryGetSpeculativeSemanticModel(
                                 position: mm.BodySyntax.SpanStart, // an anchor inside the original tree
                                 replacedMethod,        // the rewritten subtree (member/statement/expression)
-                                out var specModel) && EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel, mm.CollectionProperties))
+                                out var specModel) && 
+                            EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel, mm))
                         {
                             var updateMethodName = mm.Name;
 
@@ -222,35 +198,28 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             membersSb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
                             membersSb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
                             membersSb.AppendLine("  {");
-
-                            // Build null check conditions
-                            var nullCheckConditions = new List<string>();
-
-                            // Only check source for null if it can be null
-                            if (SymbolHelpers.CanBeNull(mm.ParamType))
-                            {
-                                nullCheckConditions.Add($"{srcName} == null");
-                            }
-
-                            // Only check destination for null if it can be null
-                            if (SymbolHelpers.CanBeNull(mm.ReturnType))
-                            {
-                                nullCheckConditions.Add("dest == null");
-                            }
-
-                            // Generate null check only if there are conditions to check
-                            if (nullCheckConditions.Count > 0)
-                            {
-                                membersSb.AppendLine("    if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
-                            }
-
                             foreach (var l in lines) membersSb.AppendLine("    " + l);
-                            membersSb.AppendLine("    return dest;");
                             membersSb.AppendLine("  }");
                             membersSb.AppendLine();
                         }
                     }
                 }
+
+                var sb = new StringBuilder();
+
+                // Always include essential system namespaces that are commonly used in generated code
+                allUsingDirectives.UnionWith(["System", "System.Linq", "System.Linq.Expressions", "System.CodeDom.Compiler"]);
+
+                // Add using directives to the generated file, filtering out the current namespace
+                foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
+                {
+                    if (usingDirective != nameSpace && !string.IsNullOrEmpty(usingDirective))
+                    {
+                        sb.AppendLine($"using {usingDirective};");
+                    }
+                }
+
+                sb.AppendLine();
 
                 if (!string.IsNullOrEmpty(nameSpace))
                 {
@@ -402,10 +371,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
         // Add using directives from compilation unit
         foreach (var usingDirective in compilationUnit.Usings)
         {
-            if (usingDirective.Name != null)
-            {
-                usings.Add(usingDirective.Name.ToString());
-            }
+            usings.Add(usingDirective.Name.ToString());
         }
 
         // Add using directives from any namespace declarations
@@ -413,18 +379,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
         {
             foreach (var usingDirective in namespaceDeclSyntax.Usings)
             {
-                if (usingDirective.Name != null)
-                {
-                    usings.Add(usingDirective.Name.ToString());
-                }
+                usings.Add(usingDirective.Name.ToString());
             }
         }
-
-        // Always include essential system namespaces that are commonly used in generated code
-        usings.Add("System");
-        usings.Add("System.Linq");
-        usings.Add("System.Linq.Expressions");
-        usings.Add("System.CodeDom.Compiler");
 
         return usings.OrderBy(x => x).ToList();
     }

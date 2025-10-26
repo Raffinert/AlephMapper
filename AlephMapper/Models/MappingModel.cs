@@ -2,7 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 
-namespace AlephMapper;
+namespace AlephMapper.Models;
 
 internal sealed class MappingModel(
     INamedTypeSymbol containingType,
@@ -17,7 +17,7 @@ internal sealed class MappingModel(
     bool isUpdatable,
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
-    CollectionPropertiesPolicy collectionProperties,
+    CollectionPropertiesPolicy collectionPolicy,
     IReadOnlyList<string> usingDirectives)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
@@ -34,10 +34,10 @@ internal sealed class MappingModel(
     public readonly bool IsClassPartial = classIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
-    public readonly CollectionPropertiesPolicy CollectionProperties = collectionProperties;
+    public readonly CollectionPropertiesPolicy CollectionPolicy = collectionPolicy;
     public readonly IReadOnlyList<string> UsingDirectives = usingDirectives;
 
-    public override bool Equals(object? obj)
+    public override bool Equals(object obj)
     {
         if (obj is MappingModel other)
         {
