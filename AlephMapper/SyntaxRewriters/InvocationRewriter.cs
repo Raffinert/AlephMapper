@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using AlephMapper.Helpers;
 using AlephMapper.Models;
@@ -65,6 +66,20 @@ internal sealed partial class InliningResolver(
             if (node.Expression is MemberAccessExpressionSyntax memberAccess)
             {
                 firstArg = memberAccess.Expression;
+            }
+            else if (node.Expression is MemberBindingExpressionSyntax memberBinding)
+            {
+                // For conditional access like obj?.ExtMethod(), we need to find the ConditionalAccessExpressionSyntax parent
+                // and extract its Expression (the 'obj' part before the '?.')
+                var conditionalAccess = memberBinding.Parent?.Parent as ConditionalAccessExpressionSyntax;
+                if (conditionalAccess != null)
+                {
+                    firstArg = conditionalAccess.Expression;
+                }
+                else
+                {
+                    return base.VisitInvocationExpression(node);
+                }
             }
             else
             {
