@@ -22,14 +22,14 @@ public class ExtensionTestPerson
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty; 
-    public ExtensionTestAddress Address { get; set; } = new();
+    public ExtensionTestAddress? Address { get; set; }
 }
 
 public class ExtensionTestPersonDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    public ExtensionTestAddressDto Address { get; set; } = new();
+    public ExtensionTestAddressDto? Address { get; set; }
 }
 
 // Extension method mapper
@@ -54,6 +54,18 @@ public static partial class ExtensionTestPersonMapper
         Id = person.Id,
         Name = person.Name,
         Address = person.Address.ToDto() // This should be inlined
+    };
+}
+
+// Main mapper that uses conditional access extension method
+public static partial class ConditionalExtensionTestPersonMapper
+{
+    [Expressive]
+    public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
+    {
+        Id = person.Id,
+        Name = person.Name,
+        Address = person.Address?.ToDto() // This should be inlined (MemberBindingExpressionSyntax)
     };
 }
 
@@ -95,6 +107,29 @@ public class ExtensionMethodInliningTests
     }
 
     [Test]
+    public async Task ConditionalAccessExtensionMethodShouldBeInlined()
+    {
+        // Act
+        var expression = ConditionalExtensionTestPersonMapper.ToDtoExpression();
+        var readable = expression.ToReadableString();
+
+        // Assert - The conditional access extension method call should be inlined
+        await Assert.That(readable).Contains("new ExtensionTestAddressDto");
+        await Assert.That(readable).Contains("person.Address.Street");
+        await Assert.That(readable).Contains("person.Address.City");
+        await Assert.That(readable).Contains("person.Address.PostalCode");
+        
+        // Should not contain the extension method call
+        await Assert.That(readable).DoesNotContain("?.ToDto()");
+        
+        // Should contain conditional access to the person.Address
+        await Assert.That(readable).Contains("person.Address");
+        
+        Console.WriteLine("Generated Expression (Conditional Access):");
+        Console.WriteLine(readable);
+    }
+
+    [Test]
     public async Task InMemoryMappingShouldWork()
     {
         // Arrange
@@ -120,5 +155,50 @@ public class ExtensionMethodInliningTests
         await Assert.That(dto.Address.City).IsEqualTo("New York");
         await Assert.That(dto.Address.PostalCode).IsEqualTo("10001");
         await Assert.That(dto.Address.FormattedAddress).IsEqualTo("123 Main St, New York 10001");
+    }
+
+    [Test]
+    public async Task ConditionalAccessInMemoryMappingShouldWork()
+    {
+        // Arrange - Test with non-null address
+        var personWithAddress = new ExtensionTestPerson
+        {
+            Id = 1,
+            Name = "John Doe",
+            Address = new ExtensionTestAddress
+            {
+                Street = "123 Main St",
+                City = "New York",
+                PostalCode = "10001"
+            }
+        };
+
+        // Act
+        var dtoWithAddress = ConditionalExtensionTestPersonMapper.ToDto(personWithAddress);
+
+        // Assert
+        await Assert.That(dtoWithAddress.Id).IsEqualTo(1);
+        await Assert.That(dtoWithAddress.Name).IsEqualTo("John Doe");
+        await Assert.That(dtoWithAddress.Address).IsNotNull();
+        await Assert.That(dtoWithAddress.Address.Street).IsEqualTo("123 Main St");
+        await Assert.That(dtoWithAddress.Address.City).IsEqualTo("New York");
+        await Assert.That(dtoWithAddress.Address.PostalCode).IsEqualTo("10001");
+        await Assert.That(dtoWithAddress.Address.FormattedAddress).IsEqualTo("123 Main St, New York 10001");
+
+        // Arrange - Test with null address
+        var personWithoutAddress = new ExtensionTestPerson
+        {
+            Id = 2,
+            Name = "Jane Doe",
+            Address = null
+        };
+
+        // Act
+        var dtoWithoutAddress = ConditionalExtensionTestPersonMapper.ToDto(personWithoutAddress);
+
+        // Assert
+        await Assert.That(dtoWithoutAddress.Id).IsEqualTo(2);
+        await Assert.That(dtoWithoutAddress.Name).IsEqualTo("Jane Doe");
+        await Assert.That(dtoWithoutAddress.Address).IsNull();
     }
 }
