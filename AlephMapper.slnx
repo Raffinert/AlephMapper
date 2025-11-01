@@ -3,5 +3,6 @@
   <Project Path="AlephMapper.SimpleTests/AlephMapper.SimpleTests.csproj" Id="e1a28e8f-b3e8-4afe-88d8-947ec6f1d1e9" />
   <Project Path="AlephMapper.Tests/AlephMapper.Tests.csproj" />
   <Project Path="AlephMapper/AlephMapper.csproj" />
+  <Project Path="CurrentFailedTests/CurrentFailedTests.csproj" />
   <Project Path="SampleApp/SampleApp.csproj" />
 </Solution>

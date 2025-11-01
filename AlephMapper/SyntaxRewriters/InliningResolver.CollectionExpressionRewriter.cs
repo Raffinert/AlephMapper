@@ -20,12 +20,13 @@ internal sealed partial class InliningResolver
         var right = node.Right;
 
         // Check if the right side is a collection expression (represented as [] in older Roslyn)
-        if (!IsCollectionExpression(right)) return base.VisitBinaryExpression(node);
+        var rewritten = VisitNullRewriterBinaryExpression(node);
+
+        if (!IsCollectionExpression(right) || rewritten is not BinaryExpressionSyntax bes) return rewritten;
+        
         var rewrittenRight = RewriteCollectionExpression(right, node.Left);
 
-        return node
-            .WithLeft((ExpressionSyntax)Visit(node.Left))
-            .WithRight(rewrittenRight);
+        return bes.WithRight(rewrittenRight);
     }
 
     public override SyntaxNode? VisitAssignmentExpression(AssignmentExpressionSyntax node)

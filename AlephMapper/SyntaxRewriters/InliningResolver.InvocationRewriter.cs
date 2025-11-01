@@ -13,7 +13,8 @@ namespace AlephMapper.SyntaxRewriters;
 internal sealed partial class InliningResolver(
     SemanticModel model,
     IDictionary<IMethodSymbol, MappingModel> catalog,
-    bool forUpdateMethod)
+    bool forUpdateMethod,
+    NullConditionalRewrite rewriteSupport)
     : CSharpSyntaxRewriter
 {
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
@@ -74,7 +75,7 @@ internal sealed partial class InliningResolver(
                 var conditionalAccess = memberBinding.Parent?.Parent as ConditionalAccessExpressionSyntax;
                 if (conditionalAccess != null)
                 {
-                    firstArg = conditionalAccess.Expression;
+                    firstArg = conditionalAccess.Expression; //(ExpressionSyntax)VisitConditionalAccessExpression(conditionalAccess);
                 }
                 else
                 {
@@ -128,7 +129,7 @@ internal sealed partial class InliningResolver(
                         {
                             _inlinedMethods[normalizedMethod] = callee;
                             var inlinedBody =
-                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod)
+                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod, rewriteSupport)
                                 {
                                     _callStack = _callStack,
                                     _circularReferences = _circularReferences,
@@ -175,7 +176,7 @@ internal sealed partial class InliningResolver(
         try
         {
             _inlinedMethods[directCallMethod] = callee2;
-            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod)
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport)
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,
