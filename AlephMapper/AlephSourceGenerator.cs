@@ -76,11 +76,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     // Expression method
                     if (mm.IsExpressive)
                     {
-                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false);
+                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false, mm.NullStrategy);
                         var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
                         allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
-                        var nullRewriter = new NullConditionalRewriter(mm.NullStrategy);
-                        var nullRewrittenBody = (ExpressionSyntax)nullRewriter.Visit(inlinedBody)!;
 
                         // Skip generating expression method if there are circular references
                         if (expressionInliner.CircularReferences.Any())
@@ -123,14 +121,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine("  /// </para>");
                         membersSb.AppendLine("  /// </remarks>");
                         membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        membersSb.AppendLine("      " + srcName + " => " + nullRewrittenBody.ToFullString() + ";");
+                        membersSb.AppendLine("      " + srcName + " => " + inlinedBody.ToFullString() + ";");
                         membersSb.AppendLine();
                     }
 
                     // Update method - check for circular references like expressive methods do
                     if (mm.IsUpdatable)
                     {
-                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true);
+                        var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true, NullConditionalRewrite.None);
                         var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
                         allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
 
