@@ -24,6 +24,7 @@ public class ExtensionTestPerson
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty; 
     public List<ExtensionTestAddress>? Addresses { get; set; }
+    public ExtensionTestAddress? HomeAddress { get; set; }
 }
 
 public class ExtensionTestPersonDto
@@ -31,6 +32,8 @@ public class ExtensionTestPersonDto
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public List<ExtensionTestAddressDto>? Addresses { get; set; }
+
+    public ExtensionTestAddressDto? HomeAddress { get; set; }
 }
 
 public static partial class ExtensionTestAddressMapper
@@ -51,15 +54,17 @@ public static partial class ConditionalExtensionTestPersonMapper
     [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
-        Name = person?.Name,
-        Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList()
+        //Name = person?.Name,
+        //Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList(),
+        HomeAddress = person?.HomeAddress?.ToDto()
     };
 
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static ExtensionTestPersonDto ToDto1(ExtensionTestPerson person) => new()
     {
-        Name = person.Name,
-        Addresses = person.Addresses?.Select(a => a.ToDto()).ToList()
+        //Name = person.Name,
+        //Addresses = person.Addresses?.Select(a => a.ToDto()).ToList(),
+        HomeAddress = person?.HomeAddress?.ToDto()
     };
 }
 

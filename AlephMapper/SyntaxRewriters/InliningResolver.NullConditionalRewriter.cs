@@ -4,6 +4,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AlephMapper.SyntaxRewriters;
@@ -25,14 +27,16 @@ internal partial class InliningResolver
         var targetExpression = (ExpressionSyntax)Visit(node.Expression);
 
         _conditionalAccessExpressionsStack.Push(targetExpression);
-
+        
         var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
-        var rewrittenFirstChar = FirstChar(rewrittenWhenNotNull);
+        var rewrittenString = rewrittenWhenNotNull.ToString();
 
         //todo: tech debt. Now it patches for wrongly substituted expression that misses first part
-        if (!SyntaxFacts.IsIdentifierStartCharacter(rewrittenFirstChar))
+        if (!SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[0]) && !SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[1])
+            || rewrittenString[0] == '.' || (rewrittenString[0] == '(' && !SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[1])))
         {
-            rewrittenWhenNotNull = ParseExpression($"{targetExpression}{rewrittenWhenNotNull}");
+            Debugger.Launch();
+            rewrittenWhenNotNull = ParseExpression($"{targetExpression}{rewrittenString}");
         }
 
         if (rewriteSupport is NullConditionalRewrite.Ignore)
@@ -74,12 +78,12 @@ internal partial class InliningResolver
 
     }
 
-    private static char FirstChar(ExpressionSyntax expr)
+    private static char[] First2Chars(ExpressionSyntax expr)
     {
-        if (expr.Span.IsEmpty) return 'a';
+        if (expr.Span.IsEmpty) return ['a', 'a'];
 
         var text = expr.SyntaxTree.GetText();
-        return text[expr.SpanStart];
+        return [text[expr.SpanStart], text[expr.SpanStart+1]];
     }
 
     public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
