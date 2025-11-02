@@ -19,71 +19,76 @@ internal partial class InliningResolver
 
     public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
     {
-        if (rewriteSupport == NullConditionalRewrite.None)
+        try
         {
+            if (rewriteSupport == NullConditionalRewrite.None)
+            {
+                _conditionalAccessExpressionsStack.Push(node.Expression);
+                return base.VisitConditionalAccessExpression(node)!;
+            }
+
+            var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+
+            _conditionalAccessExpressionsStack.Push(targetExpression);
+
+            var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
+            
+            ////todo: tech debt. Now it patches for wrongly substituted expression that misses first part
+            if (FirstChar(rewrittenWhenNotNull) == '.')
+            {
+                rewrittenWhenNotNull = ParseExpression($"{targetExpression}{rewrittenWhenNotNull}");
+            }
+
+            if (rewriteSupport is NullConditionalRewrite.Ignore)
+            {
+                // Ignore the conditional access and simply visit the WhenNotNull expression
+                return rewrittenWhenNotNull;
+            }
+
+            if (rewriteSupport is NullConditionalRewrite.Rewrite)
+            {
+                var typeInfo = model.GetTypeInfo(node);
+
+                // Do not translate until we can resolve the target type
+                if (typeInfo.ConvertedType is not null)
+                {
+
+                    return ParenthesizedExpression(
+                        ConditionalExpression(
+                            BinaryExpression(
+                                SyntaxKind.NotEqualsExpression,
+                                targetExpression.WithoutTrivia().WithTrailingTrivia(Space),
+                                LiteralExpression(SyntaxKind.NullLiteralExpression)
+                                    .WithLeadingTrivia(Space)
+                            ),
+                            ParenthesizedExpression(
+                                    rewrittenWhenNotNull.WithoutTrivia()
+                                ).WithLeadingTrivia(Space)
+                                .WithTrailingTrivia(Space),
+                            CastExpression(
+                                    ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat
+                                        .MinimallyQualifiedFormat)),
+                                    LiteralExpression(SyntaxKind.NullLiteralExpression))
+                                .WithLeadingTrivia(Space)
+                        )
+                    );
+                }
+            }
+
             return base.VisitConditionalAccessExpression(node);
         }
-
-        var targetExpression = (ExpressionSyntax)Visit(node.Expression);
-
-        _conditionalAccessExpressionsStack.Push(targetExpression);
-        
-        var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
-        var rewrittenString = rewrittenWhenNotNull.ToString();
-
-        //todo: tech debt. Now it patches for wrongly substituted expression that misses first part
-        if (!SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[0]) && !SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[1])
-            || rewrittenString[0] == '.' || (rewrittenString[0] == '(' && !SyntaxFacts.IsIdentifierStartCharacter(rewrittenString[1])))
+        finally
         {
-            Debugger.Launch();
-            rewrittenWhenNotNull = ParseExpression($"{targetExpression}{rewrittenString}");
+            _conditionalAccessExpressionsStack.Pop();
         }
-
-        if (rewriteSupport is NullConditionalRewrite.Ignore)
-        {
-            // Ignore the conditional access and simply visit the WhenNotNull expression
-            return rewrittenWhenNotNull;
-        }
-
-        if (rewriteSupport is NullConditionalRewrite.Rewrite)
-        {
-            var typeInfo = model.GetTypeInfo(node);
-
-            // Do not translate until we can resolve the target type
-            if (typeInfo.ConvertedType is not null)
-            {
-
-                return ParenthesizedExpression(
-                    ConditionalExpression(
-                        BinaryExpression(
-                            SyntaxKind.NotEqualsExpression,
-                            targetExpression.WithoutTrivia().WithTrailingTrivia(Space),
-                            LiteralExpression(SyntaxKind.NullLiteralExpression)
-                                .WithLeadingTrivia(Space)
-                        ),
-                        ParenthesizedExpression(
-                                rewrittenWhenNotNull.WithoutTrivia()
-                            ).WithLeadingTrivia(Space)
-                            .WithTrailingTrivia(Space),
-                        CastExpression(
-                                ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)),
-                                LiteralExpression(SyntaxKind.NullLiteralExpression))
-                            .WithLeadingTrivia(Space)
-                    )
-                );
-            }
-        }
-
-        return base.VisitConditionalAccessExpression(node);
-
     }
 
-    private static char[] First2Chars(ExpressionSyntax expr)
+    private static char FirstChar(ExpressionSyntax expr)
     {
-        if (expr.Span.IsEmpty) return ['a', 'a'];
+        if (expr.Span.IsEmpty) return 'a';
 
         var text = expr.SyntaxTree.GetText();
-        return [text[expr.SpanStart], text[expr.SpanStart+1]];
+        return text[expr.SpanStart];
     }
 
     public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
@@ -93,7 +98,7 @@ internal partial class InliningResolver
             return base.VisitMemberBindingExpression(node);
         }
 
-        var targetExpression = _conditionalAccessExpressionsStack.Pop();
+        var targetExpression = _conditionalAccessExpressionsStack.Peek();
 
         return rewriteSupport switch
         {
@@ -110,7 +115,7 @@ internal partial class InliningResolver
             return base.VisitElementBindingExpression(node);
         }
 
-        var targetExpression = _conditionalAccessExpressionsStack.Pop();
+        var targetExpression = _conditionalAccessExpressionsStack.Peek();
 
         return rewriteSupport switch
         {
@@ -139,7 +144,7 @@ internal partial class InliningResolver
                 return left.WithTriviaFrom(node);
             }
 
-            return base.VisitBinaryExpression(node); ;
+            return base.VisitBinaryExpression(node);
         }
 
         // For non-null coalesce binary expressions, use default behavior

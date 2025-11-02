@@ -51,20 +51,20 @@ public static partial class ExtensionTestAddressMapper
 // Main mapper that uses conditional access extension method
 public static partial class ConditionalExtensionTestPersonMapper
 {
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
-        //Name = person?.Name,
-        //Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList(),
+        Name = person?.Name,
+        Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList(),
         HomeAddress = person?.HomeAddress?.ToDto()
     };
 
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static ExtensionTestPersonDto ToDto1(ExtensionTestPerson person) => new()
     {
-        //Name = person.Name,
-        //Addresses = person.Addresses?.Select(a => a.ToDto()).ToList(),
-        HomeAddress = person?.HomeAddress?.ToDto()
+        Name = person?.Name,
+        Addresses = person?.Addresses?.Select(a => a.ToDto()).ToList(),
+        HomeAddress = person?.HomeAddress.ToDto()
     };
 }
 

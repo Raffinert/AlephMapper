@@ -62,26 +62,27 @@ internal sealed partial class InliningResolver(
         // Handle extension methods without arguments differently - they show up as static methods with the first parameter being 'this'
         // For extension methods, we need to treat the receiver (left side of the dot) as the first argument
         ExpressionSyntax firstArg;
+        bool conditionalAccessExpression = false;
+
         if (invokedMethod.IsExtensionMethod && args.Count == 0)
         {
-            // For extension methods like obj.ExtMethod(), the receiver 'obj' is our first argument
-            if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            if (node.Parent is ConditionalAccessExpressionSyntax)
             {
-                firstArg = memberAccess.Expression;
-            }
-            else if (node.Expression is MemberBindingExpressionSyntax memberBinding)
-            {
-                // For conditional access like obj?.ExtMethod(), we need to find the ConditionalAccessExpressionSyntax parent
-                // and extract its Expression (the 'obj' part before the '?.')
-                var conditionalAccess = memberBinding.Parent?.Parent as ConditionalAccessExpressionSyntax;
-                if (conditionalAccess != null)
+                if (node.Expression is MemberAccessExpressionSyntax memberAccess)
                 {
-                    firstArg = conditionalAccess.Expression; //(ExpressionSyntax)VisitConditionalAccessExpression(conditionalAccess);
+                    conditionalAccessExpression = true;
+                    firstArg = (ExpressionSyntax)Visit(memberAccess.Expression);
                 }
                 else
                 {
-                    return base.VisitInvocationExpression(node);
+                    conditionalAccessExpression = true;
+                    var visited = _conditionalAccessExpressionsStack.Peek();
+                    firstArg = visited;
                 }
+            }
+            else if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                firstArg = memberAccess.Expression;
             }
             else
             {
@@ -99,7 +100,7 @@ internal sealed partial class InliningResolver(
         }
 
         // Handle method-group arguments first (Select(MapToX))
-        if (firstArg is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax
+        if (!conditionalAccessExpression && firstArg is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax
             or AliasQualifiedNameSyntax)
         {
             var methodGroup = ResolveMethodGroupSymbol(firstArg);
