@@ -209,11 +209,11 @@ public class NullConditionalRewriteTests
         // Verify the GeneratedCode attribute values
         var rewriteGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)rewriteMapperAttributes[0];
         await Assert.That(rewriteGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(rewriteGenAttr.Version).IsEqualTo("0.3.1");
+        await Assert.That(rewriteGenAttr.Version).IsEqualTo("0.3.2");
 
         var ignoreGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)ignoreMapperAttributes[0];
         await Assert.That(ignoreGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(ignoreGenAttr.Version).IsEqualTo("0.3.1");
+        await Assert.That(ignoreGenAttr.Version).IsEqualTo("0.3.2");
 
         // Verify methods exist and are accessible
         var getAddressMethod = rewriteMapperType.GetMethod("GetAddressExpression");
