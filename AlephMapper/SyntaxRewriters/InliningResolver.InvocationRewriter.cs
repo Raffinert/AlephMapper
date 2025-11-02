@@ -76,7 +76,10 @@ internal sealed partial class InliningResolver(
                 else
                 {
                     conditionalAccessExpression = true;
-                    var visited = _conditionalAccessExpressionsStack.Peek();
+                    var visited = rewriteSupport != NullConditionalRewrite.None 
+                        ? _conditionalAccessExpressionsStack.Peek()
+                        : ParseExpression(string.Join("?", _conditionalAccessExpressionsStack.Select(x =>$"{x}").Reverse()));
+
                     firstArg = visited;
                 }
             }
@@ -188,6 +191,11 @@ internal sealed partial class InliningResolver(
             var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, firstArg)
                 .Visit(inlinedBody2)
                 .WithoutTrivia();
+
+            if (conditionalAccessExpression)
+            {
+                substituted = substituted.WithAdditionalAnnotations(new SyntaxAnnotation("AlephMapper.InlinedConditional"));
+            }
 
             return substituted;
         }
