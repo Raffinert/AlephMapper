@@ -76,6 +76,10 @@ internal sealed partial class InliningResolver(
                 else
                 {
                     conditionalAccessExpression = true;
+                    
+                    // TODO: TECH DEBT - This is the problematic ParseExpression usage 
+                    // It constructs syntax by string manipulation which is fragile and hard to maintain
+                    // A proper fix would use AST construction methods instead of string manipulation + ParseExpression
                     var visited = rewriteSupport != NullConditionalRewrite.None 
                         ? _conditionalAccessExpressionsStack.Peek()
                         : ParseExpression(string.Join("?", _conditionalAccessExpressionsStack.Select(x =>$"{x}").Reverse()));
