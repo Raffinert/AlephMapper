@@ -43,13 +43,9 @@ internal partial class InliningResolver
             var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
             
             // The root cause is that when MemberBindingExpression gets processed and then inlined/substituted,
-            // it can create expressions that start with dots. Instead of parsing, let's reconstruct properly.
-            if (FirstChar(rewrittenWhenNotNull) == '.')
-            {
-                // This should not happen if we process MemberBindingExpression correctly
-                // But as a fallback, let's create a proper member access expression using AST methods
-                rewrittenWhenNotNull = CreateMemberAccessFromDotPrefixedExpression(targetExpression, rewrittenWhenNotNull);
-            }
+            // it can create expressions that start with dots. Reconstruct properly via AST transformation
+            // only when the WhenNotNull part actually represents a dot- or element-binding form.
+            rewrittenWhenNotNull = CreateMemberAccessFromDotPrefixedExpression(targetExpression, rewrittenWhenNotNull);
 
             if (rewriteSupport is NullConditionalRewrite.Ignore)
             {
@@ -99,56 +95,60 @@ internal partial class InliningResolver
     /// Creates a proper member access expression from a target and a dot-prefixed expression.
     /// This replaces the ParseExpression tech debt with proper AST construction.
     /// </summary>
-    private static ExpressionSyntax CreateMemberAccessFromDotPrefixedExpression(ExpressionSyntax targetExpression, ExpressionSyntax dotPrefixedExpression)
+    private static ExpressionSyntax CreateMemberAccessFromDotPrefixedExpression(
+        ExpressionSyntax targetExpression,
+        ExpressionSyntax whenNotNullExpression)
     {
-        // Get the text of the dot-prefixed expression and remove the leading dot
-        var expressionText = dotPrefixedExpression.ToString();
-        if (expressionText.StartsWith("."))
+        // Recursively rewrite any MemberBinding/ElementBinding rooted chain into a proper
+        // member/element access expression starting from targetExpression.
+
+        ExpressionSyntax Transform(ExpressionSyntax expr, ExpressionSyntax currentTarget)
         {
-            var memberPart = expressionText.Substring(1);
-            
-            // Try to parse the member part as an expression to get proper syntax nodes
-            try
+            switch (expr)
             {
-                var memberExpression = ParseExpression(memberPart);
-                
-                // If it's a simple identifier, create a simple member access
-                if (memberExpression is IdentifierNameSyntax identifier)
+                case MemberBindingExpressionSyntax mb:
+                    return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, currentTarget, mb.Name);
+
+                case ElementBindingExpressionSyntax eb:
+                    return ElementAccessExpression(currentTarget, eb.ArgumentList);
+
+                case InvocationExpressionSyntax inv:
                 {
-                    return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, identifier);
+                    var newCallee = Transform(inv.Expression, currentTarget);
+                    return InvocationExpression(newCallee, inv.ArgumentList);
                 }
-                
-                // If it's a method call, we need to reconstruct it properly
-                if (memberExpression is InvocationExpressionSyntax invocation)
+
+                case MemberAccessExpressionSyntax ma:
                 {
-                    // Build the full member access chain
-                    var memberAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, (SimpleNameSyntax)invocation.Expression);
-                    return InvocationExpression(memberAccess, invocation.ArgumentList);
+                    var left = Transform(ma.Expression, currentTarget);
+                    // Normalize to simple member access
+                    return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, left, ma.Name);
                 }
-                
-                // For other complex expressions, we need to build them step by step
-                // This is still better than concatenating strings with the target
-                return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, (SimpleNameSyntax)memberExpression);
+
+                case ElementAccessExpressionSyntax ea:
+                {
+                    var left = Transform(ea.Expression, currentTarget);
+                    return ElementAccessExpression(left, ea.ArgumentList);
+                }
             }
-            catch
-            {
-                // Fallback to the original ParseExpression approach if the above fails
-                // This maintains compatibility while we work on the proper fix
-                return ParseExpression($"{targetExpression}{dotPrefixedExpression}");
-            }
+
+            // For other nodes, return as-is
+            return expr;
         }
-        
-        // If it doesn't start with a dot, return as-is
-        return dotPrefixedExpression;
+
+        return Transform(whenNotNullExpression, targetExpression);
     }
 
-    private static char FirstChar(ExpressionSyntax expr)
+    private static bool IsDotOrElementBinding(ExpressionSyntax expr)
     {
-        if (expr.Span.IsEmpty) return 'a';
-
-        var text = expr.SyntaxTree.GetText();
-        return text[expr.SpanStart];
+        return expr is MemberBindingExpressionSyntax
+               || expr is ElementBindingExpressionSyntax
+               || expr is InvocationExpressionSyntax inv && inv.Expression is MemberBindingExpressionSyntax
+               || expr is ElementAccessExpressionSyntax ea && ea.Expression is MemberBindingExpressionSyntax
+               || expr is MemberAccessExpressionSyntax ma && (ma.Expression is MemberBindingExpressionSyntax);
     }
+
+    // Leftover helper removed as reconstruction no longer relies on raw text
 
     public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
     {

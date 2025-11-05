@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using AlephMapper.CodeGenerators;
@@ -19,7 +19,7 @@ internal static class EmitHelpers
 
         var typeContext = propertyInfoCollector.TypeContext;
 
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext);
+        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, mm.ParamName);
         List<string> processedLines;
 
         var srcName = mm.ParamName;
