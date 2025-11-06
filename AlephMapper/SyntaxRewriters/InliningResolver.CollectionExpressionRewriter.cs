@@ -15,17 +15,32 @@ internal sealed partial class InliningResolver
 {
     public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
     {
-        // Look for null coalescing expressions with collection expressions on the right
-        if (!node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken)) return base.VisitBinaryExpression(node);
-        var right = node.Right;
+        // Only handle null-coalescing specially; otherwise defer to default behavior
+        if (!node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken))
+        {
+            return base.VisitBinaryExpression(node);
+        }
 
-        // Check if the right side is a collection expression (represented as [] in older Roslyn)
-        var rewritten = VisitNullRewriterBinaryExpression(node);
+        var rightOriginal = node.Right;
 
-        if (!IsCollectionExpression(right) || rewritten is not BinaryExpressionSyntax bes) return rewritten;
-        
-        var rewrittenRight = RewriteCollectionExpression(right, node.Left);
+        // Visit both sides to apply any null-conditional rewrites while preserving '??'
+        var leftVisited = (ExpressionSyntax)Visit(node.Left);
+        var rightVisited = (ExpressionSyntax)Visit(node.Right);
 
+        var coalesce = BinaryExpression(
+                SyntaxKind.CoalesceExpression,
+                leftVisited.WithoutTrivia(),
+                Token(SyntaxKind.QuestionQuestionToken).WithTrailingTrivia(Space).WithLeadingTrivia(Space),
+                rightVisited.WithoutTrivia())
+            .WithTriviaFrom(node);
+
+        // If the right side is a collection expression, rewrite it accordingly
+        if (!IsCollectionExpression(rightOriginal) || coalesce is not BinaryExpressionSyntax bes)
+        {
+            return coalesce;
+        }
+
+        var rewrittenRight = RewriteCollectionExpression(rightOriginal, node.Left);
         return bes.WithRight(rewrittenRight);
     }
 
