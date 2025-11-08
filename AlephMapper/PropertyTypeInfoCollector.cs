@@ -10,17 +10,8 @@ namespace AlephMapper;
 /// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath) : CSharpSyntaxWalker
 {
-    private readonly SemanticModel semanticModel;
-    private readonly string rootPath;
-    private readonly ITypeSymbol currentTargetType;
-
-    public PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath)
-    {
-        this.currentTargetType = currentTargetType;
-        this.rootPath = rootPath;
-    }
     public PropertyMappingContext TypeContext { get; private set; } = new();
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
@@ -59,16 +50,6 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
                 if (prop != null)
                 {
                     resolvedPropertyType = prop.Type;
-                }
-            }
-
-            // Fallback to RHS type if symbol lookup failed
-            if (resolvedPropertyType == null)
-            {
-                var rightTypeInfo = semanticModel.GetTypeInfo(assignment.Right);
-                if (rightTypeInfo.Type != null)
-                {
-                    resolvedPropertyType = rightTypeInfo.Type;
                 }
             }
 

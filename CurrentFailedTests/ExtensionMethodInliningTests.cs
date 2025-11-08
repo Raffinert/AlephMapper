@@ -81,24 +81,24 @@ public class ExtensionMethodInliningTests
     public async Task ConditionalAccessExtensionMethodShouldBeInlined()
     {
         // Act
-        // var expression = ConditionalExtensionTestPersonMapper.ToDtoExpression();
-        // var readable = expression.ToReadableString();
-        var expression1 = ConditionalExtensionTestPersonMapper.ToDto1Expression();
-        var readable1 = expression1.ToReadableString();
+        var expression = ConditionalExtensionTestPersonMapper.ToDtoExpression();
+        var readable = expression.ToReadableString();
+        //var expression1 = ConditionalExtensionTestPersonMapper.ToDto1Expression();
+        //var readable1 = expression1.ToReadableString();
 
         // Assert - The conditional access extension method call should be inlined
-        await Assert.That(readable1).Contains("new ExtensionTestAddressDto");
-        await Assert.That(readable1).Contains("address.Street");
-        await Assert.That(readable1).Contains("address.City");
-        await Assert.That(readable1).Contains("address.PostalCode");
+        await Assert.That(readable).Contains("new ExtensionTestAddressDto");
+        await Assert.That(readable).Contains("address.Street");
+        await Assert.That(readable).Contains("address.City");
+        await Assert.That(readable).Contains("address.PostalCode");
 
         // Should not contain the extension method call
-        await Assert.That(readable1).DoesNotContain("?.ToDto()");
+        await Assert.That(readable).DoesNotContain("?.ToDto()");
 
         // Should contain conditional access logic (null check) - this test may need adjustment
         // await Assert.That(readable).Contains("person.Address != null");
 
         Console.WriteLine("Generated Expression (Conditional Access):");
-        Console.WriteLine(readable1);
+        Console.WriteLine(readable);
     }
 }
