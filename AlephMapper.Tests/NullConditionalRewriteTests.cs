@@ -1,4 +1,6 @@
-﻿namespace AlephMapper.Tests;
+﻿using System.CodeDom.Compiler;
+
+namespace AlephMapper.Tests;
 
 // Test mapper with Ignore policy (now default, but being explicit)
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
@@ -200,20 +202,20 @@ public class NullConditionalRewriteTests
         var ignoreMapperType = typeof(IgnoreMapper);
 
         // Assert - Check for GeneratedCode attribute on the class
-        var rewriteMapperAttributes = rewriteMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
-        var ignoreMapperAttributes = ignoreMapperType.GetCustomAttributes(typeof(System.CodeDom.Compiler.GeneratedCodeAttribute), false);
+        var rewriteMapperAttributes = rewriteMapperType.GetCustomAttributes(typeof(GeneratedCodeAttribute), false);
+        var ignoreMapperAttributes = ignoreMapperType.GetCustomAttributes(typeof(GeneratedCodeAttribute), false);
 
         await Assert.That(rewriteMapperAttributes).IsNotEmpty();
         await Assert.That(ignoreMapperAttributes).IsNotEmpty();
 
         // Verify the GeneratedCode attribute values
-        var rewriteGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)rewriteMapperAttributes[0];
+        var rewriteGenAttr = (GeneratedCodeAttribute)rewriteMapperAttributes[0];
         await Assert.That(rewriteGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(rewriteGenAttr.Version).IsEqualTo("0.3.2");
+        await Assert.That(rewriteGenAttr.Version).IsEqualTo("0.3.3");
 
-        var ignoreGenAttr = (System.CodeDom.Compiler.GeneratedCodeAttribute)ignoreMapperAttributes[0];
+        var ignoreGenAttr = (GeneratedCodeAttribute)ignoreMapperAttributes[0];
         await Assert.That(ignoreGenAttr.Tool).IsEqualTo("AlephMapper");
-        await Assert.That(ignoreGenAttr.Version).IsEqualTo("0.3.2");
+        await Assert.That(ignoreGenAttr.Version).IsEqualTo("0.3.3");
 
         // Verify methods exist and are accessible
         var getAddressMethod = rewriteMapperType.GetMethod("GetAddressExpression");

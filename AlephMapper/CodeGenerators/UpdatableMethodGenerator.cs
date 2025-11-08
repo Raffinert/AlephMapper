@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper.CodeGenerators;
 
-internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext)
+internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext, string sourceParamName)
 {
     private readonly List<string> _lines = [];
 
@@ -59,12 +59,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                 if (IsValueTypePropertyAssignment(fullDestPath))
                 {
                     // For value types, we can't do property-by-property assignment
-                    _lines.Add($"// Warning: Cannot assign to property of value type: {fullDestPath} = {expression};");
+                    _lines.Add($"// Warning: Cannot assign to property of value type: {fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                     _lines.Add($"// Consider restructuring to avoid nested value type property assignments");
                 }
                 else
                 {
-                    _lines.Add($"{fullDestPath} = {expression};");
+                    _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 }
                 break;
         }
@@ -129,7 +129,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
         else
         {
-            _lines.Add($"    {fullDestPath} = {whenTrue.WithoutTrivia()};");
+            _lines.Add($"    {fullDestPath} = {NormalizeConditionalMemberAccess(whenTrue)};");
         }
 
         _lines.Add("}");
@@ -147,7 +147,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
         else
         {
-            _lines.Add($"    {fullDestPath} = {whenFalse.WithoutTrivia()};");
+            _lines.Add($"    {fullDestPath} = {NormalizeConditionalMemberAccess(whenFalse)};");
         }
 
         _lines.Add("}");
@@ -204,7 +204,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
             default:
                 // Simple property assignment
-                lines.Add($"{indent}{fullDestPath} = {expression.WithoutTrivia()};");
+                lines.Add($"{indent}{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 break;
         }
     }
@@ -241,7 +241,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
         else
         {
-            lines.Add($"{indent}    {fullDestPath} = {whenTrue.WithoutTrivia()};");
+            lines.Add($"{indent}    {fullDestPath} = {NormalizeConditionalMemberAccess(whenTrue)};");
         }
 
         lines.Add($"{indent}}}");
@@ -259,7 +259,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
         else
         {
-            lines.Add($"{indent}    {fullDestPath} = {whenFalse.WithoutTrivia()};");
+            lines.Add($"{indent}    {fullDestPath} = {NormalizeConditionalMemberAccess(whenFalse)};");
         }
 
         lines.Add($"{indent}}}");
@@ -415,5 +415,74 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private static bool IsNullExpression(ExpressionSyntax expression)
     {
         return expression?.ToString().Trim() == "null";
+    }
+
+    private string NormalizeConditionalMemberAccess(ExpressionSyntax expression)
+    {
+        // Convert shapes like (conditional)?.WhenNotNull.Tail into a textual form that preserves the
+        // conditional access correctly when used on the right-hand side of assignments.
+
+        string Recurse(ExpressionSyntax expr)
+        {
+            switch (expr)
+            {
+                case MemberAccessExpressionSyntax ma:
+                    var left = Recurse(ma.Expression);
+                    var right = ma.Name.ToString();
+
+                    // If left is a conditional access root expressed as "X?{dotChain}", avoid duplicating dots
+                    if (left.Contains("?") && left.EndsWith(")") == false && left.Contains("."))
+                    {
+                        return left + "." + right;
+                    }
+                    return left + "." + right;
+
+                case ConditionalAccessExpressionSyntax cae:
+                    var target = cae.Expression.WithoutTrivia().ToString();
+                    var tail = cae.WhenNotNull.WithoutTrivia().ToString(); // typically starts with '.' or '['
+                    return target + "?" + tail;
+
+                case MemberBindingExpressionSyntax mbs:
+                    // Dot-prefixed fragment without its conditional root; attach to the source parameter
+                    return sourceParamName + "?" + mbs.WithoutTrivia().ToString();
+
+                case ElementBindingExpressionSyntax ebs:
+                    return sourceParamName + "?" + ebs.WithoutTrivia().ToString();
+
+
+                case InterpolatedStringExpressionSyntax ise:
+                    return FormatInterpolated(ise, Recurse);
+
+                default:
+                    return expr.WithoutTrivia().ToString();
+            }
+        }
+
+        return Recurse(expression);
+    }
+
+    private static string FormatInterpolated(InterpolatedStringExpressionSyntax ise, System.Func<ExpressionSyntax, string> normalize)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("$");
+        sb.Append('"');
+        foreach (var part in ise.Contents)
+        {
+            switch (part)
+            {
+                case InterpolatedStringTextSyntax text:
+                    var txt = text.TextToken.Text ?? string.Empty;
+                    txt = txt.Replace("\"", "\\\"");
+                    sb.Append(txt);
+                    break;
+                case InterpolationSyntax interp:
+                    sb.Append("{");
+                    sb.Append(normalize(interp.Expression));
+                    sb.Append("}");
+                    break;
+            }
+        }
+        sb.Append('"');
+        return sb.ToString();
     }
 }

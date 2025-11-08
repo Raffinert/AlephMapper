@@ -2,16 +2,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AlephMapper.SyntaxRewriters;
 
 /// <summary>
-/// Rewrites null conditional operators based on the specified policy, need to be applied to expression only.
+/// Rewrites null-conditional operators based on the specified policy. Apply to expressions only.
 /// </summary>
 internal partial class InliningResolver
 {
@@ -24,60 +22,43 @@ internal partial class InliningResolver
             if (rewriteSupport == NullConditionalRewrite.None)
             {
                 _conditionalAccessExpressionsStack.Push(node.Expression);
-                var rewrittenConditional = (ExpressionSyntax)base.VisitConditionalAccessExpression(node)!;
-                var annotated = rewrittenConditional.GetAnnotatedNodes("AlephMapper.InlinedConditional").ToArray();
-
-                if (annotated.FirstOrDefault() != null)
-                {
-                    return annotated[0];
-                }
-
-                return rewrittenConditional;
+                var rewritten = (ExpressionSyntax)base.VisitConditionalAccessExpression(node)!;
+                var annotated = rewritten.GetAnnotatedNodes("AlephMapper.InlinedConditional").ToArray();
+                if (annotated.FirstOrDefault() is { } ann) return ann;
+                return rewritten;
             }
 
             var targetExpression = (ExpressionSyntax)Visit(node.Expression);
-
             _conditionalAccessExpressionsStack.Push(targetExpression);
 
             var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
-            
-            ////todo: tech debt. Now it patches for wrongly substituted expression that misses first part
-            if (FirstChar(rewrittenWhenNotNull) == '.')
-            {
-                rewrittenWhenNotNull = ParseExpression($"{targetExpression}{rewrittenWhenNotNull}");
-            }
+            rewrittenWhenNotNull = CreateMemberAccessFromDotPrefixedExpression(targetExpression, rewrittenWhenNotNull);
 
             if (rewriteSupport is NullConditionalRewrite.Ignore)
             {
-                // Ignore the conditional access and simply visit the WhenNotNull expression
+                // Ignore the conditional access and simply return the accessed expression
                 return rewrittenWhenNotNull;
             }
 
             if (rewriteSupport is NullConditionalRewrite.Rewrite)
             {
                 var typeInfo = model.GetTypeInfo(node);
-
-                // Do not translate until we can resolve the target type
                 if (typeInfo.ConvertedType is not null)
                 {
-
                     return ParenthesizedExpression(
                         ConditionalExpression(
                             BinaryExpression(
                                 SyntaxKind.NotEqualsExpression,
                                 targetExpression.WithoutTrivia().WithTrailingTrivia(Space),
-                                LiteralExpression(SyntaxKind.NullLiteralExpression)
-                                    .WithLeadingTrivia(Space)
+                                LiteralExpression(SyntaxKind.NullLiteralExpression).WithLeadingTrivia(Space)
                             ),
-                            ParenthesizedExpression(
-                                    rewrittenWhenNotNull.WithoutTrivia()
-                                ).WithLeadingTrivia(Space)
+                            ParenthesizedExpression(rewrittenWhenNotNull.WithoutTrivia())
+                                .WithLeadingTrivia(Space)
                                 .WithTrailingTrivia(Space),
                             CastExpression(
-                                    ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat
-                                        .MinimallyQualifiedFormat)),
-                                    LiteralExpression(SyntaxKind.NullLiteralExpression))
-                                .WithLeadingTrivia(Space)
+                                ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)),
+                                LiteralExpression(SyntaxKind.NullLiteralExpression)
+                            ).WithLeadingTrivia(Space)
                         )
                     );
                 }
@@ -91,12 +72,47 @@ internal partial class InliningResolver
         }
     }
 
-    private static char FirstChar(ExpressionSyntax expr)
+    /// <summary>
+    /// Reconstructs member/element/Invocation access off a ConditionalAccess target into normal access.
+    /// </summary>
+    private static ExpressionSyntax CreateMemberAccessFromDotPrefixedExpression(
+        ExpressionSyntax targetExpression,
+        ExpressionSyntax whenNotNullExpression)
     {
-        if (expr.Span.IsEmpty) return 'a';
+        ExpressionSyntax Transform(ExpressionSyntax expr, ExpressionSyntax currentTarget)
+        {
+            switch (expr)
+            {
+                case MemberBindingExpressionSyntax mb:
+                    return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, currentTarget, mb.Name);
 
-        var text = expr.SyntaxTree.GetText();
-        return text[expr.SpanStart];
+                case ElementBindingExpressionSyntax eb:
+                    return ElementAccessExpression(currentTarget, eb.ArgumentList);
+
+                case InvocationExpressionSyntax inv:
+                    {
+                        var newCallee = Transform(inv.Expression, currentTarget);
+                        return InvocationExpression(newCallee, inv.ArgumentList);
+                    }
+
+                case MemberAccessExpressionSyntax ma:
+                    {
+                        var left = Transform(ma.Expression, currentTarget);
+                        return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, left, ma.Name);
+                    }
+
+                case ElementAccessExpressionSyntax ea:
+                    {
+                        var left = Transform(ea.Expression, currentTarget);
+                        return ElementAccessExpression(left, ea.ArgumentList);
+                    }
+
+                default:
+                    return expr;
+            }
+        }
+
+        return Transform(whenNotNullExpression, targetExpression);
     }
 
     public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
@@ -107,13 +123,8 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
-
-        return rewriteSupport switch
-        {
-            NullConditionalRewrite.Ignore => MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
-            NullConditionalRewrite.Rewrite => MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
-            _ => throw new ArgumentOutOfRangeException(nameof(rewriteSupport), rewriteSupport, null)
-        };
+        var memberAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name);
+        return memberAccess.WithTriviaFrom(node);
     }
 
     public override SyntaxNode? VisitElementBindingExpression(ElementBindingExpressionSyntax node)
@@ -124,40 +135,9 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
-
-        return rewriteSupport switch
-        {
-            NullConditionalRewrite.Ignore => ElementAccessExpression(targetExpression, node.ArgumentList),
-            NullConditionalRewrite.Rewrite => ElementAccessExpression(targetExpression, node.ArgumentList),
-            _ => throw new ArgumentOutOfRangeException(nameof(rewriteSupport), rewriteSupport, null)
-        };
+        return ElementAccessExpression(targetExpression, node.ArgumentList);
     }
 
-    private SyntaxNode? VisitNullRewriterBinaryExpression(BinaryExpressionSyntax node)
-    {
-        if (rewriteSupport == NullConditionalRewrite.None) return base.VisitBinaryExpression(node);
-
-        // Only handle null coalesce operators
-        if (node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken) && rewriteSupport == NullConditionalRewrite.Ignore)
-        {
-            // Visit the left side first to process any conditional access operators
-            var left = (ExpressionSyntax)Visit(node.Left);
-
-            var typeInfo = model.GetTypeInfo(node.Left);
-
-            // Check if the left side is a nullable value type access that no longer needs null coalesce
-            if (typeInfo.ConvertedType != null && typeInfo.ConvertedType.IsValueType)
-            {
-                // Remove the null coalesce operator and just return the left side
-                return left.WithTriviaFrom(node);
-            }
-
-            return base.VisitBinaryExpression(node);
-        }
-
-        // For non-null coalesce binary expressions, use default behavior
-        return base.VisitBinaryExpression(node);
-    }
-
+    // Binary expressions are handled in the CollectionExpressionRewriter partial to avoid duplication.
 }
 #nullable restore

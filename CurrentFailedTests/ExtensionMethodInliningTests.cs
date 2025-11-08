@@ -1,4 +1,4 @@
-using AgileObjects.ReadableExpressions;
+﻿using AgileObjects.ReadableExpressions;
 using AlephMapper;
 
 namespace CurrentFailedTests;
@@ -22,9 +22,11 @@ public class ExtensionTestAddressDto
 public class ExtensionTestPerson
 {
     public int Id { get; set; }
-    public string Name { get; set; } = string.Empty; 
+    public string Name { get; set; } = string.Empty;
     public List<ExtensionTestAddress>? Addresses { get; set; }
     public ExtensionTestAddress? HomeAddress { get; set; }
+
+    public int? MyProperty { get; set; }
 }
 
 public class ExtensionTestPersonDto
@@ -34,11 +36,13 @@ public class ExtensionTestPersonDto
     public List<ExtensionTestAddressDto>? Addresses { get; set; }
 
     public ExtensionTestAddressDto? HomeAddress { get; set; }
+
+    public int MyProperty { get; set; }
 }
 
 public static partial class ExtensionTestAddressMapper
 {
-    //[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static ExtensionTestAddressDto ToDto(this ExtensionTestAddress address) => new()
     {
         Street = address.Street,
@@ -57,7 +61,8 @@ public static partial class ConditionalExtensionTestPersonMapper
     {
         Name = person?.Name,
         Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList(),
-        HomeAddress = person?.HomeAddress?.ToDto()
+        HomeAddress = person?.HomeAddress?.ToDto(),
+        MyProperty = person?.MyProperty ?? 0
     };
 
     [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
@@ -65,7 +70,8 @@ public static partial class ConditionalExtensionTestPersonMapper
     {
         Name = person?.Name,
         Addresses = person?.Addresses?.Select(a => a.ToDto()).ToList(),
-        HomeAddress = person?.HomeAddress.ToDto()
+        HomeAddress = person?.HomeAddress.ToDto(),
+        MyProperty = person?.MyProperty ?? 0
     };
 }
 
@@ -77,19 +83,21 @@ public class ExtensionMethodInliningTests
         // Act
         var expression = ConditionalExtensionTestPersonMapper.ToDtoExpression();
         var readable = expression.ToReadableString();
+        //var expression1 = ConditionalExtensionTestPersonMapper.ToDto1Expression();
+        //var readable1 = expression1.ToReadableString();
 
         // Assert - The conditional access extension method call should be inlined
         await Assert.That(readable).Contains("new ExtensionTestAddressDto");
         await Assert.That(readable).Contains("address.Street");
         await Assert.That(readable).Contains("address.City");
         await Assert.That(readable).Contains("address.PostalCode");
-        
+
         // Should not contain the extension method call
         await Assert.That(readable).DoesNotContain("?.ToDto()");
-        
+
         // Should contain conditional access logic (null check) - this test may need adjustment
         // await Assert.That(readable).Contains("person.Address != null");
-        
+
         Console.WriteLine("Generated Expression (Conditional Access):");
         Console.WriteLine(readable);
     }

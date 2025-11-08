@@ -1,16 +1,17 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using AlephMapper.CodeGenerators;
+using AlephMapper.Models;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using AlephMapper.CodeGenerators;
-using AlephMapper.Models;
 
 namespace AlephMapper.Helpers;
 
 internal static class EmitHelpers
 {
-    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, SemanticModel semanticModel, MappingModel mm)
+    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, MappingModel mm)
     {
-        var propertyInfoCollector = new PropertyTypeInfoCollector(semanticModel, destPrefix);
+        // Seed type collection with the destination (return) type to reliably resolve
+        // object-initializer property types without depending on fragile LHS binding
+        var propertyInfoCollector = new PropertyTypeInfoCollector(mm.ReturnType, destPrefix);
 
         if (mm.CollectionPolicy == CollectionPropertiesPolicy.Skip)
         {
@@ -19,7 +20,7 @@ internal static class EmitHelpers
 
         var typeContext = propertyInfoCollector.TypeContext;
 
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext);
+        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, mm.ParamName);
         List<string> processedLines;
 
         var srcName = mm.ParamName;

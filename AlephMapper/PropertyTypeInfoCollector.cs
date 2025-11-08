@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Linq;
 
 namespace AlephMapper;
 
@@ -9,13 +10,12 @@ namespace AlephMapper;
 /// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string rootPath) : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath) : CSharpSyntaxWalker
 {
     public PropertyMappingContext TypeContext { get; private set; } = new();
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
-
         if (node.Initializer?.Expressions == null)
         {
             return;
@@ -39,25 +39,43 @@ internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string roo
                 ? propertyName
                 : $"{rootPath}.{propertyName}";
 
-            // Get type information for the property being assigned
+            // Resolve property type from the known target type to avoid fragile LHS binding in speculative models
+            ITypeSymbol? resolvedPropertyType = null;
 
-            var leftTypeInfo = semanticModel.GetTypeInfo(assignment.Left);
-            if (leftTypeInfo.Type != null)
+            if (currentTargetType is INamedTypeSymbol named)
             {
-                TypeContext.AddPropertyType(fullPropertyPath, leftTypeInfo.Type);
-            }
-            else
-            {
-                var rightTypeInfo = semanticModel.GetTypeInfo(assignment.Right);
-                if (rightTypeInfo.Type != null)
+                var prop = named.GetMembers()
+                                .OfType<IPropertySymbol>()
+                                .FirstOrDefault(p => p.Name == propertyName);
+                if (prop != null)
                 {
-                    TypeContext.AddPropertyType(fullPropertyPath, rightTypeInfo.Type);
+                    resolvedPropertyType = prop.Type;
                 }
             }
 
+            if (resolvedPropertyType != null)
+            {
+                TypeContext.AddPropertyType(fullPropertyPath, resolvedPropertyType);
+            }
+
             // Recursively process nested object creations
-            var nestedCollector = new PropertyTypeInfoCollector(semanticModel, fullPropertyPath) { TypeContext = TypeContext };
-            nestedCollector.Visit(assignment.Right);
+            ITypeSymbol? nestedTargetType = null;
+            if (currentTargetType is INamedTypeSymbol named2)
+            {
+                var prop2 = named2.GetMembers()
+                                   .OfType<IPropertySymbol>()
+                                   .FirstOrDefault(p => p.Name == propertyName);
+                nestedTargetType = prop2?.Type;
+            }
+
+            if (nestedTargetType != null)
+            {
+                var nestedCollector = new PropertyTypeInfoCollector(nestedTargetType, fullPropertyPath)
+                {
+                    TypeContext = TypeContext
+                };
+                nestedCollector.Visit(assignment.Right);
+            }
         }
         catch
         {
@@ -69,7 +87,7 @@ internal class PropertyTypeInfoCollector(SemanticModel semanticModel, string roo
     {
         try
         {
-            var trueCollector = new PropertyTypeInfoCollector(semanticModel, rootPath) { TypeContext = TypeContext };
+            var trueCollector = new PropertyTypeInfoCollector(currentTargetType, rootPath) { TypeContext = TypeContext };
             trueCollector.Visit(node.WhenTrue);
             trueCollector.Visit(node.WhenFalse);
         }

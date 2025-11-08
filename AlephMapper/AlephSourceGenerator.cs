@@ -1,4 +1,7 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using AlephMapper.Helpers;
+using AlephMapper.Models;
+using AlephMapper.SyntaxRewriters;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -7,9 +10,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using AlephMapper.Helpers;
-using AlephMapper.Models;
-using AlephMapper.SyntaxRewriters;
 
 namespace AlephMapper;
 
@@ -60,9 +60,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
 
                 var nameSpace = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
-                
+
                 var membersSb = new StringBuilder();
-                
+
                 var allUsingDirectives = new HashSet<string>();
 
                 foreach (var mm in methods)
@@ -180,11 +180,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, inlinedBody);
 
-                        if (mm.SemanticModel.TryGetSpeculativeSemanticModel(
-                                position: mm.BodySyntax.SpanStart, // an anchor inside the original tree
-                                replacedMethod,        // the rewritten subtree (member/statement/expression)
-                                out var specModel) && 
-                            EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, specModel, mm))
+                        if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, mm))
                         {
                             var updateMethodName = mm.Name;
 

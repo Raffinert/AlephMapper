@@ -66,7 +66,7 @@ internal sealed partial class InliningResolver(
 
         if (invokedMethod.IsExtensionMethod && args.Count == 0)
         {
-            if (node.Parent is ConditionalAccessExpressionSyntax)
+            if (node.Parent is ConditionalAccessExpressionSyntax caExpr)
             {
                 if (node.Expression is MemberAccessExpressionSyntax memberAccess)
                 {
@@ -76,11 +76,12 @@ internal sealed partial class InliningResolver(
                 else
                 {
                     conditionalAccessExpression = true;
-                    var visited = rewriteSupport != NullConditionalRewrite.None 
+                    // Properly construct the receiver expression without using ParseExpression.
+                    // If we are rewriting null-conditionals, the stack top contains the current target.
+                    // Otherwise, use the original conditional-access receiver expression to preserve chaining.
+                    firstArg = rewriteSupport != NullConditionalRewrite.None
                         ? _conditionalAccessExpressionsStack.Peek()
-                        : ParseExpression(string.Join("?", _conditionalAccessExpressionsStack.Select(x =>$"{x}").Reverse()));
-
-                    firstArg = visited;
+                        : (ExpressionSyntax)Visit(caExpr.Expression);
                 }
             }
             else if (node.Expression is MemberAccessExpressionSyntax memberAccess)
