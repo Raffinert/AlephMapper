@@ -3,17 +3,19 @@
   <PropertyGroup>
     <Authors>Yevhen Cherkes</Authors>
     <Copyright>Copyright $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
-    <Description>Source generator for creating projectable companions</Description>
+    <Description>Your manual mapping companion.</Description>
     <DevelopmentDependency>true</DevelopmentDependency>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsRoslynComponent>true</IsRoslynComponent>
     <LangVersion>latest</LangVersion>
     <PackageId>AlephMapper</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.3.4</PackageVersion>
+    <PackageVersion>0.3.5</PackageVersion>
+    <PackageTags>Manual Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
     <TargetFramework>netstandard2.0</TargetFramework>
