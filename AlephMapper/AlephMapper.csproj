@@ -1,22 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
+    <Authors>Yevhen Cherkes</Authors>
+    <Copyright>Copyright $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
+    <Description>Source generator for creating projectable companions</Description>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <LangVersion>latest</LangVersion>
     <PackageId>AlephMapper</PackageId>
-    <PackageVersion>0.3.3</PackageVersion>
-    <Authors>Yevhen Cherkes</Authors>
-    <Description>Source generator for creating projectable companions</Description>
-    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Copyright>Copyright $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
-    <Title>AlephMapper</Title>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageVersion>0.3.4</PackageVersion>
     <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Title>Aleph Mapper</Title>
   </PropertyGroup>
 
   <ItemGroup>
