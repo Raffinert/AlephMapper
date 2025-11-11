@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace AlephMapper;
@@ -12,6 +13,8 @@ namespace AlephMapper;
 /// </summary>
 internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath) : CSharpSyntaxWalker
 {
+    private HashSet<ITypeSymbol> _visitedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
     public PropertyMappingContext TypeContext { get; private set; } = new();
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
@@ -34,6 +37,12 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
     {
         try
         {
+            // Ensure the root type for this collector is considered visited
+            if (currentTargetType != null)
+            {
+                _visitedTypes.Add(currentTargetType);
+            }
+
             var propertyName = assignment.Left.ToString();
             var fullPropertyPath = string.IsNullOrEmpty(rootPath)
                 ? propertyName
@@ -70,11 +79,16 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
 
             if (nestedTargetType != null)
             {
-                var nestedCollector = new PropertyTypeInfoCollector(nestedTargetType, fullPropertyPath)
+                // Prevent infinite recursion in circular property type graphs
+                if (!_visitedTypes.Contains(nestedTargetType))
                 {
-                    TypeContext = TypeContext
-                };
-                nestedCollector.Visit(assignment.Right);
+                    var nestedCollector = new PropertyTypeInfoCollector(nestedTargetType, fullPropertyPath)
+                    {
+                        TypeContext = TypeContext,
+                        _visitedTypes = _visitedTypes
+                    };
+                    nestedCollector.Visit(assignment.Right);
+                }
             }
         }
         catch
@@ -87,7 +101,12 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
     {
         try
         {
-            var trueCollector = new PropertyTypeInfoCollector(currentTargetType, rootPath) { TypeContext = TypeContext };
+            if (currentTargetType != null)
+            {
+                _visitedTypes.Add(currentTargetType);
+            }
+            
+            var trueCollector = new PropertyTypeInfoCollector(currentTargetType, rootPath) { TypeContext = TypeContext, _visitedTypes = _visitedTypes };
             trueCollector.Visit(node.WhenTrue);
             trueCollector.Visit(node.WhenFalse);
         }
