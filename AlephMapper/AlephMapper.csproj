@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.3.5</PackageVersion>
+    <PackageVersion>0.3.6</PackageVersion>
     <PackageTags>Manual Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
