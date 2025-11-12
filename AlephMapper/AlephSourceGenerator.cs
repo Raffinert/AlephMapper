@@ -59,8 +59,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                var nameSpace = mapperType.ContainingNamespace != null && !mapperType.ContainingNamespace.IsGlobalNamespace ? mapperType.ContainingNamespace.ToDisplayString() : "";
-
                 var membersSb = new StringBuilder();
 
                 var allUsingDirectives = new HashSet<string>();
@@ -204,10 +202,12 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 // Always include essential system namespaces that are commonly used in generated code
                 allUsingDirectives.UnionWith(["System", "System.Linq", "System.Linq.Expressions", "System.CodeDom.Compiler"]);
 
+                var containingNamespace = mapperType.ContainingNamespace is { IsGlobalNamespace: false } ? mapperType.ContainingNamespace.ToDisplayString() : "";
+
                 // Add using directives to the generated file, filtering out the current namespace
                 foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
                 {
-                    if (usingDirective != nameSpace && !string.IsNullOrEmpty(usingDirective))
+                    if (usingDirective != containingNamespace && !string.IsNullOrEmpty(usingDirective))
                     {
                         sb.AppendLine($"using {usingDirective};");
                     }
@@ -215,10 +215,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 sb.AppendLine();
 
-                if (!string.IsNullOrEmpty(nameSpace))
+                if (!string.IsNullOrEmpty(containingNamespace))
                 {
                     sb.AppendLine();
-                    sb.AppendLine("namespace " + nameSpace + ";");
+                    sb.AppendLine("namespace " + containingNamespace + ";");
                     sb.AppendLine();
                 }
 
@@ -228,9 +228,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 sb.AppendLine("}"); // class
 
-                var fileName = (string.IsNullOrEmpty(nameSpace)
+                var fileName = (string.IsNullOrEmpty(containingNamespace)
                     ? ""
-                    : nameSpace.Replace('.', '_') + "_")
+                    : containingNamespace.Replace('.', '_') + "_")
                         + mapperType.Name + "_GeneratedMappings.g.cs";
 
                 //var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
