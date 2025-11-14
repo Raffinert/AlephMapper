@@ -21,9 +21,12 @@ internal class PropertyMappingTypeInfo
                               named.ConstructedFrom?.ToDisplayString() == "System.Nullable<T>";
         IsReferenceType = type.IsReferenceType;
         CanBeNull = IsReferenceType || IsNullableValueType;
+        IsString = type.SpecialType == SpecialType.System_String;
         IsCollectionType = CollectionHelper.IsCollectionType(type);
         TypeDisplayName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
     }
+
+    public bool IsString { get; set; }
 
     public string PropertyPath { get; }
     public ITypeSymbol Type { get; }
@@ -57,7 +60,10 @@ internal class PropertyMappingContext
     public bool CanPropertyBeNull(string propertyPath)
     {
         var typeInfo = GetPropertyType(propertyPath);
-        return typeInfo?.CanBeNull ?? true; // Default to true for safety if type is unknown
+
+        if (typeInfo == null) return false;
+
+        return typeInfo.CanBeNull;
     }
 
     public bool IsValueType(string propertyPath)

@@ -15,6 +15,8 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     {
         _lines.Clear();
 
+        if(objectCreation.Type.IsNotNull)
+
         if (objectCreation?.Initializer?.Expressions == null) return [];
         foreach (var expr in objectCreation.Initializer.Expressions)
         {
@@ -65,6 +67,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                 }
                 else
                 {
+                    var propertyType = typeContext.GetPropertyType(fullDestPath);
+                    if (propertyType is { CanBeNull: true, IsString: false })
+                    {
+                        _lines.Add($"if ({fullDestPath} == null)");
+                        _lines.Add($"    {fullDestPath} = new {propertyType.Type}();");
+                    }
                     _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 }
                 break;

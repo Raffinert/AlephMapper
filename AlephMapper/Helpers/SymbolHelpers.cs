@@ -79,7 +79,7 @@ internal static class SymbolHelpers
     /// <returns>True if the type can be null, false otherwise</returns>
     public static bool CanBeNull(ITypeSymbol type)
     {
-        if (type == null) return true; // Conservative default
+        if (type == null) return false; // Conservative default
 
         // Reference types can be null
         if (type.IsReferenceType) return true;
