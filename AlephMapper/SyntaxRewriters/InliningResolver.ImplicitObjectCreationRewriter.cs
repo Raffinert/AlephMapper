@@ -9,21 +9,25 @@ internal sealed partial class InliningResolver
 {
     public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax implicitNew)
     {
-        if (implicitNew.ArgumentList.Arguments.Count > 0)
-        {
-            return base.VisitImplicitObjectCreationExpression(implicitNew);
-        }
-
-        string type = model.GetTypeInfo(implicitNew).Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        var type = model.GetTypeInfo(implicitNew).Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
         if (type == null)
         {
             return base.VisitImplicitObjectCreationExpression(implicitNew);
         }
 
-        return ObjectCreationExpression(IdentifierName(type))
-            .WithInitializer((InitializerExpressionSyntax)VisitInitializerExpression(implicitNew.Initializer!))
-            .WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList))
-            .WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
+        var objectCreation = ObjectCreationExpression(IdentifierName(type).WithTrailingTrivia(ElasticCarriageReturn));
+
+        if (implicitNew.Initializer != null)
+        {
+            objectCreation = objectCreation.WithInitializer((InitializerExpressionSyntax)VisitInitializerExpression(implicitNew.Initializer));
+        }
+
+        if (implicitNew.ArgumentList.Arguments.Count > 0)
+        {
+            objectCreation = objectCreation.WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList));
+        }
+
+        return objectCreation.WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
     }
 }

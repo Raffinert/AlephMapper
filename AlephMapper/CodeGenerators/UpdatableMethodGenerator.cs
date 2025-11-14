@@ -1,9 +1,9 @@
+﻿using AlephMapper.Models;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using AlephMapper.Models;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper.CodeGenerators;
 
@@ -14,8 +14,6 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
     {
         _lines.Clear();
-
-        if(objectCreation.Type.IsNotNull)
 
         if (objectCreation?.Initializer?.Expressions == null) return [];
         foreach (var expr in objectCreation.Initializer.Expressions)
@@ -97,7 +95,6 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
         var isTrueNull = IsNullExpression(whenTrue);
         var isFalseNull = IsNullExpression(whenFalse);
-
 
         if (!isTrueNull && isFalseNull)
         {
