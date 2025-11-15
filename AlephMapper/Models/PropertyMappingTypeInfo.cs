@@ -57,13 +57,18 @@ internal class PropertyMappingContext
         return typeInfo;
     }
 
-    public bool CanPropertyBeNull(string propertyPath)
+    public bool ShouldPropertyBePreCreated(string propertyPath)
     {
         var typeInfo = GetPropertyType(propertyPath);
 
+        return ShouldPropertyBePreCreated(typeInfo);
+    }
+
+    public bool ShouldPropertyBePreCreated(PropertyMappingTypeInfo typeInfo)
+    {
         if (typeInfo == null) return false;
 
-        return typeInfo.CanBeNull;
+        return typeInfo.CanBeNull && !typeInfo.IsString;
     }
 
     public bool IsValueType(string propertyPath)

@@ -51,12 +51,6 @@ internal static class EmitHelpers
             lines.Add($"if ({srcName} == null) return dest;");
         }
 
-        if (SymbolHelpers.CanBeNull(mm.ReturnType))
-        {
-            lines.Add("if (dest == null)");
-            lines.Add($"    dest = new {mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}();");
-        }
-
         lines.AddRange(processedLines);
 
         lines.Add("return dest;");

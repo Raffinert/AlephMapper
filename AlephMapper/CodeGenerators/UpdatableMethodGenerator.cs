@@ -16,6 +16,15 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         _lines.Clear();
 
         if (objectCreation?.Initializer?.Expressions == null) return [];
+
+        var typeInfo = typeContext.GetPropertyType(destPrefix);
+        var preCreate = typeContext.ShouldPropertyBePreCreated(destPrefix);
+        if (preCreate)
+        {
+            _lines.Add($"if ({destPrefix} == null)");
+            _lines.Add($"    {destPrefix} = new {typeInfo.Type}();");
+        }
+
         foreach (var expr in objectCreation.Initializer.Expressions)
         {
             if (expr is AssignmentExpressionSyntax assignment)
@@ -162,7 +171,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessObjectCreationWithIndent(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, string indent)
     {
         // Ensure target object exists - only add null check if target can be null
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             _lines.Add($"{indent}if ({fullDestPath} == null)");
             _lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -270,7 +279,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessNestedObjectCreationInBranch(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
     {
         // Ensure nested target object exists - only add null check if target can be null
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
             lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -307,7 +316,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
             lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -353,7 +362,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             _lines.Add($"if ({fullDestPath} == null)");
             _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");

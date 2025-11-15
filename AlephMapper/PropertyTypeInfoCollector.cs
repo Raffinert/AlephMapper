@@ -11,9 +11,22 @@ namespace AlephMapper;
 /// Collects property type information from object creation expressions for Updatable method generation.
 /// This visitor walks through the syntax tree and gathers type information for each property path.
 /// </summary>
-internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath) : CSharpSyntaxWalker
+internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
 {
     private HashSet<ITypeSymbol> _visitedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+    private readonly ITypeSymbol _currentTargetType;
+    private readonly string _rootPath;
+
+    /// <summary>
+    /// Collects property type information from object creation expressions for Updatable method generation.
+    /// This visitor walks through the syntax tree and gathers type information for each property path.
+    /// </summary>
+    public PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string rootPath)
+    {
+        _currentTargetType = currentTargetType;
+        _rootPath = rootPath;
+        TypeContext.AddPropertyType(rootPath, currentTargetType);
+    }
 
     public PropertyMappingContext TypeContext { get; private set; } = new();
 
@@ -38,20 +51,20 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
         try
         {
             // Ensure the root type for this collector is considered visited
-            if (currentTargetType != null)
+            if (_currentTargetType != null)
             {
-                _visitedTypes.Add(currentTargetType);
+                _visitedTypes.Add(_currentTargetType);
             }
 
             var propertyName = assignment.Left.ToString();
-            var fullPropertyPath = string.IsNullOrEmpty(rootPath)
+            var fullPropertyPath = string.IsNullOrEmpty(_rootPath)
                 ? propertyName
-                : $"{rootPath}.{propertyName}";
+                : $"{_rootPath}.{propertyName}";
 
             // Resolve property type from the known target type to avoid fragile LHS binding in speculative models
             ITypeSymbol? resolvedPropertyType = null;
 
-            if (currentTargetType is INamedTypeSymbol named)
+            if (_currentTargetType is INamedTypeSymbol named)
             {
                 var prop = named.GetMembers()
                                 .OfType<IPropertySymbol>()
@@ -69,7 +82,7 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
 
             // Recursively process nested object creations
             ITypeSymbol? nestedTargetType = null;
-            if (currentTargetType is INamedTypeSymbol named2)
+            if (_currentTargetType is INamedTypeSymbol named2)
             {
                 var prop2 = named2.GetMembers()
                                    .OfType<IPropertySymbol>()
@@ -101,12 +114,12 @@ internal class PropertyTypeInfoCollector(ITypeSymbol currentTargetType, string r
     {
         try
         {
-            if (currentTargetType != null)
+            if (_currentTargetType != null)
             {
-                _visitedTypes.Add(currentTargetType);
+                _visitedTypes.Add(_currentTargetType);
             }
             
-            var trueCollector = new PropertyTypeInfoCollector(currentTargetType, rootPath) { TypeContext = TypeContext, _visitedTypes = _visitedTypes };
+            var trueCollector = new PropertyTypeInfoCollector(_currentTargetType, _rootPath) { TypeContext = TypeContext, _visitedTypes = _visitedTypes };
             trueCollector.Visit(node.WhenTrue);
             trueCollector.Visit(node.WhenFalse);
         }

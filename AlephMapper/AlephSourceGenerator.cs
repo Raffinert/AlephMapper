@@ -192,7 +192,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             membersSb.AppendLine("  {");
                             foreach (var l in lines) membersSb.AppendLine("    " + l);
                             membersSb.AppendLine("  }");
-                            membersSb.AppendLine();
                         }
                     }
                 }
@@ -223,8 +222,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
 
                 sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
-                sb.AppendLine("partial class " + mapperType.Name + " {");
-                sb.AppendLine(membersSb.ToString());
+                sb.AppendLine("partial class " + mapperType.Name);
+                sb.AppendLine("{");
+                sb.Append(membersSb);
 
                 sb.AppendLine("}"); // class
 
