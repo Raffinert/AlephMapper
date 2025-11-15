@@ -68,7 +68,7 @@ internal class PropertyMappingContext
     {
         if (typeInfo == null) return false;
 
-        return typeInfo.CanBeNull && !typeInfo.IsString;
+        return !typeInfo.IsString && typeInfo.IsReferenceType;
     }
 
     public bool IsValueType(string propertyPath)
