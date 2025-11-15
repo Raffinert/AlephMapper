@@ -22,10 +22,10 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
         if (objectCreation?.Initializer?.Expressions == null) return [];
 
-        if (typeContext.ShouldPropertyBePreCreated(destPrefix))
+        if (typeContext.ShouldPropertyBePreCreated(destPrefix, out var typeInfo))
         {
             _lines.Add($"if ({destPrefix} == null)");
-            _lines.Add($"    {destPrefix} = new {objectCreation.Type}();");
+            _lines.Add($"    {destPrefix} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
         }
 
         foreach (var expr in objectCreation.Initializer.Expressions)
@@ -173,17 +173,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessObjectCreationWithIndent(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, string indent)
     {
         // Ensure target object exists - only add null check if target can be null
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             _lines.Add($"{indent}if ({fullDestPath} == null)");
-            _lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+            _lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
         }
-        else
-        {
-            // For value types, just assign directly
-            _lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
-        }
-
+        
         // Process nested properties
         var nestedAssignments = objectCreation.Initializer?.Expressions.OfType<AssignmentExpressionSyntax>() ?? [];
 
@@ -281,17 +276,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessNestedObjectCreationInBranch(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
     {
         // Ensure nested target object exists - only add null check if target can be null
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+            lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
         }
-        else
-        {
-            // For value types, just assign directly
-            lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
-        }
-
+        
         // Process nested properties
         if (objectCreation.Initializer?.Expressions != null)
         {
@@ -318,16 +308,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
+            lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
         }
-        else
-        {
-            // For value types, just assign directly
-            lines.Add($"{indent}{fullDestPath} = new {objectCreation.Type}();");
-        }
+        
 
         if (objectCreation.Initializer?.Expressions != null)
         {
@@ -364,15 +350,10 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             _lines.Add($"if ({fullDestPath} == null)");
-            _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
-        }
-        else
-        {
-            // For value types, just assign directly
-            _lines.Add($"{fullDestPath} = new {objectCreation.Type}();");
+            _lines.Add($"    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
         }
 
         if (objectCreation.Initializer?.Expressions != null)
