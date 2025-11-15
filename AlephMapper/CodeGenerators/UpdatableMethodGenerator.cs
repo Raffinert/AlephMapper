@@ -11,18 +11,21 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 {
     private readonly List<string> _lines = [];
 
+    private static readonly SymbolDisplayFormat MinimallyQualifiedFormatWithoutNullability =
+        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.MinimallyQualifiedFormat.MiscellaneousOptions
+            & ~SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
     {
         _lines.Clear();
 
         if (objectCreation?.Initializer?.Expressions == null) return [];
 
-        var typeInfo = typeContext.GetPropertyType(destPrefix);
-        var preCreate = typeContext.ShouldPropertyBePreCreated(destPrefix);
-        if (preCreate)
+        if (typeContext.ShouldPropertyBePreCreated(destPrefix))
         {
             _lines.Add($"if ({destPrefix} == null)");
-            _lines.Add($"    {destPrefix} = new {typeInfo.Type}();");
+            _lines.Add($"    {destPrefix} = new {objectCreation.Type}();");
         }
 
         foreach (var expr in objectCreation.Initializer.Expressions)
@@ -74,11 +77,10 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                 }
                 else
                 {
-                    var propertyType = typeContext.GetPropertyType(fullDestPath);
-                    if (propertyType is { CanBeNull: true, IsString: false })
+                    if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
                     {
                         _lines.Add($"if ({fullDestPath} == null)");
-                        _lines.Add($"    {fullDestPath} = new {propertyType.Type}();");
+                        _lines.Add($"    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
                     }
                     _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 }

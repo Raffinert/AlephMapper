@@ -64,7 +64,14 @@ internal class PropertyMappingContext
         return ShouldPropertyBePreCreated(typeInfo);
     }
 
-    public bool ShouldPropertyBePreCreated(PropertyMappingTypeInfo typeInfo)
+    public bool ShouldPropertyBePreCreated(string propertyPath, out PropertyMappingTypeInfo typeInfo)
+    {
+        typeInfo = GetPropertyType(propertyPath);
+
+        return ShouldPropertyBePreCreated(typeInfo);
+    }
+
+    private static bool ShouldPropertyBePreCreated(PropertyMappingTypeInfo typeInfo)
     {
         if (typeInfo == null) return false;
 
