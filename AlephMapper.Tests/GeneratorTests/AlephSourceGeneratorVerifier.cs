@@ -32,7 +32,7 @@ internal static class AlephSourceGeneratorVerifier
 
         public TestBuilder ExpectAttributesSource()
         {
-            return ExpectGeneratedSource("AlephMapper.Attributes.g.cs", AttributesSource);
+            return ExpectGeneratedSource(Path.GetFileName(None.GeneratorTests_Files_AlephMapper_Attributes_g_cs.GetNoneFilePath()), None.GeneratorTests_Files_AlephMapper_Attributes_g_cs.ReadAllText());
         }
 
         public Task RunAsync() => test.RunAsync();
@@ -58,79 +58,4 @@ internal static class AlephSourceGeneratorVerifier
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\n", Environment.NewLine, StringComparison.Ordinal);
     }
-
-    private const string AttributesSource =
-"""
-using System;
-
-namespace AlephMapper;
-
-/// <summary>
-/// Configures how null-conditional operators are handled
-/// </summary>
-public enum NullConditionalRewrite
-{
-    /// <summary>
-    /// Don't rewrite null conditional operators (Default behavior).
-    /// Usage of null conditional operators is thereby not allowed
-    /// </summary>
-    None,
-
-    /// <summary>
-    /// Ignore null-conditional operators in the generated expression tree
-    /// </summary>
-    /// <remarks>
-    /// <c>(A?.B)</c> is rewritten as expression: <c>(A.B)</c>
-    /// </remarks>
-    Ignore,
-
-    /// <summary>
-    /// Translates null-conditional operators into explicit null checks
-    /// </summary>
-    /// <remarks>
-    /// <c>(A?.B)</c> is rewritten as expression: <c>(A != null ? A.B : null)</c>
-    /// </remarks>
-    Rewrite
-}
-
-/// <summary>
-/// Marks a class to generate expressive companion methods.
-/// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class ExpressiveAttribute : Attribute
-{
-    /// <summary>
-    /// Get or set how null-conditional operators are handled
-    /// </summary>
-    public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
-}
-
-/// <summary>
-/// Marks a class to generate update companion methods.
-/// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class UpdatableAttribute : Attribute
-{
-    /// <summary>
-    /// Gets or sets the policy for handling collection updates during mapping operations
-    /// </summary>
-    public CollectionPropertiesPolicy CollectionProperties { get; set; } = CollectionPropertiesPolicy.Skip;
-}
-
-/// <summary>
-/// Defines the policy for handling collection updates during mapping operations
-/// </summary>
-public enum CollectionPropertiesPolicy
-{
-    /// <summary>
-    /// Skip collection updates - collections will not be modified during mapping
-    /// </summary>
-    Skip,
-
-    /// <summary>
-    /// Update collections - collections will be updated during mapping operations
-    /// </summary>
-    Update
-}
-""";
 }

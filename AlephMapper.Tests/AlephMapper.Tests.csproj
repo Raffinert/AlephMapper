@@ -11,6 +11,36 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="GeneratorTests\Files\AlephMapper.Attributes.g.cs" />
+    <Compile Remove="GeneratorTests\Files\AnySources\Source.cs" />
+    <Compile Remove="GeneratorTests\Files\Expressive\Expected\Tests_SampleMapper_GeneratedMappings.g.cs" />
+    <Compile Remove="GeneratorTests\Files\Expressive\Source.cs" />
+    <Compile Remove="GeneratorTests\Files\Updatable\Expected\Tests_SampleMapper_GeneratedMappings.g.cs" />
+    <Compile Remove="GeneratorTests\Files\Updatable\Source.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="GeneratorTests\Files\AlephMapper.Attributes.g.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GeneratorTests\Files\AnySources\Source.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GeneratorTests\Files\Expressive\Expected\Tests_SampleMapper_GeneratedMappings.g.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GeneratorTests\Files\Expressive\Source.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GeneratorTests\Files\Updatable\Expected\Tests_SampleMapper_GeneratedMappings.g.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GeneratorTests\Files\Updatable\Source.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AgileObjects.ReadableExpressions" Version="4.1.3" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="4.5.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
@@ -18,6 +48,10 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.5.0" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="17.14.2" />
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="1.8.4" />
+    <PackageReference Include="Raffinert.NoneItemAccessGenerator" Version="1.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="TUnit" Version="0.61.39" />
     <PackageReference Include="TUnit.Assertions" Version="0.61.39" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.9" />
