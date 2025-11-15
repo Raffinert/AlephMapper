@@ -1,11 +1,9 @@
-using AlephMapper;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.CodeAnalysis.Text;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace AlephMapper.Tests.GeneratorTests;
 
@@ -24,11 +22,9 @@ internal static class AlephSourceGeneratorVerifier
 
     internal sealed class TestBuilder(AlephSourceGeneratorTest test)
     {
-        private readonly AlephSourceGeneratorTest _test = test;
-
         public TestBuilder ExpectGeneratedSource(string hintName, string source)
         {
-            _test.TestState.GeneratedSources.Add(
+            test.TestState.GeneratedSources.Add(
                 (typeof(AlephSourceGenerator), hintName, SourceText.From(NormalizeLineEndings(source), Encoding.UTF8)));
 
             return this;
@@ -39,7 +35,7 @@ internal static class AlephSourceGeneratorVerifier
             return ExpectGeneratedSource("AlephMapper.Attributes.g.cs", AttributesSource);
         }
 
-        public Task RunAsync() => _test.RunAsync();
+        public Task RunAsync() => test.RunAsync();
     }
 
     internal sealed class AlephSourceGeneratorTest : CSharpSourceGeneratorTest<AlephSourceGenerator, DefaultVerifier>
