@@ -1,8 +1,9 @@
-using System.Collections.Generic;
-using System.Linq;
-using AlephMapper.Models;
+﻿using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace AlephMapper.CodeGenerators;
 
@@ -15,6 +16,15 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         _lines.Clear();
 
         if (objectCreation?.Initializer?.Expressions == null) return [];
+
+        var typeInfo = typeContext.GetPropertyType(destPrefix);
+        var preCreate = typeContext.ShouldPropertyBePreCreated(destPrefix);
+        if (preCreate)
+        {
+            _lines.Add($"if ({destPrefix} == null)");
+            _lines.Add($"    {destPrefix} = new {typeInfo.Type}();");
+        }
+
         foreach (var expr in objectCreation.Initializer.Expressions)
         {
             if (expr is AssignmentExpressionSyntax assignment)
@@ -64,6 +74,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                 }
                 else
                 {
+                    var propertyType = typeContext.GetPropertyType(fullDestPath);
+                    if (propertyType is { CanBeNull: true, IsString: false })
+                    {
+                        _lines.Add($"if ({fullDestPath} == null)");
+                        _lines.Add($"    {fullDestPath} = new {propertyType.Type}();");
+                    }
                     _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 }
                 break;
@@ -88,7 +104,6 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
         var isTrueNull = IsNullExpression(whenTrue);
         var isFalseNull = IsNullExpression(whenFalse);
-
 
         if (!isTrueNull && isFalseNull)
         {
@@ -156,7 +171,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessObjectCreationWithIndent(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, string indent)
     {
         // Ensure target object exists - only add null check if target can be null
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             _lines.Add($"{indent}if ({fullDestPath} == null)");
             _lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -168,18 +183,14 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Process nested properties
-        if (objectCreation.Initializer?.Expressions != null)
-        {
-            foreach (var expr in objectCreation.Initializer.Expressions)
-            {
-                if (expr is AssignmentExpressionSyntax nestedAssignment)
-                {
-                    var nestedPropertyName = nestedAssignment.Left.ToString();
-                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
+        var nestedAssignments = objectCreation.Initializer?.Expressions.OfType<AssignmentExpressionSyntax>() ?? [];
 
-                    ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, _lines, indent);
-                }
-            }
+        foreach (var nestedAssignment in nestedAssignments)
+        {
+            var nestedPropertyName = nestedAssignment.Left.ToString();
+            var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
+
+            ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, _lines, indent);
         }
     }
 
@@ -196,16 +207,16 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         {
             case ConditionalExpressionSyntax conditional:
                 ProcessNestedConditional(conditional, fullDestPath, lines, indent);
-                break;
+                return;
 
             case ObjectCreationExpressionSyntax objectCreation:
                 ProcessNestedObjectCreation(objectCreation, fullDestPath, lines, indent);
-                break;
+                return;
 
             default:
                 // Simple property assignment
                 lines.Add($"{indent}{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
-                break;
+                return;
         }
     }
 
@@ -268,7 +279,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     private void ProcessNestedObjectCreationInBranch(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
     {
         // Ensure nested target object exists - only add null check if target can be null
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
             lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -305,7 +316,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
             lines.Add($"{indent}    {fullDestPath} = new {objectCreation.Type}();");
@@ -351,7 +362,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         }
 
         // Direct object creation - ensure target exists and update properties
-        if (typeContext.CanPropertyBeNull(fullDestPath))
+        if (typeContext.ShouldPropertyBePreCreated(fullDestPath))
         {
             _lines.Add($"if ({fullDestPath} == null)");
             _lines.Add($"    {fullDestPath} = new {objectCreation.Type}();");
@@ -430,11 +441,6 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                     var left = Recurse(ma.Expression);
                     var right = ma.Name.ToString();
 
-                    // If left is a conditional access root expressed as "X?{dotChain}", avoid duplicating dots
-                    if (left.Contains("?") && left.EndsWith(")") == false && left.Contains("."))
-                    {
-                        return left + "." + right;
-                    }
                     return left + "." + right;
 
                 case ConditionalAccessExpressionSyntax cae:
@@ -444,10 +450,10 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
                 case MemberBindingExpressionSyntax mbs:
                     // Dot-prefixed fragment without its conditional root; attach to the source parameter
-                    return sourceParamName + "?" + mbs.WithoutTrivia().ToString();
+                    return sourceParamName + "?" + mbs.WithoutTrivia();
 
                 case ElementBindingExpressionSyntax ebs:
-                    return sourceParamName + "?" + ebs.WithoutTrivia().ToString();
+                    return sourceParamName + "?" + ebs.WithoutTrivia();
 
 
                 case InterpolatedStringExpressionSyntax ise:
@@ -461,7 +467,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         return Recurse(expression);
     }
 
-    private static string FormatInterpolated(InterpolatedStringExpressionSyntax ise, System.Func<ExpressionSyntax, string> normalize)
+    private static string FormatInterpolated(InterpolatedStringExpressionSyntax ise, Func<ExpressionSyntax, string> normalize)
     {
         var sb = new System.Text.StringBuilder();
         sb.Append("$");
@@ -471,13 +477,13 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
             switch (part)
             {
                 case InterpolatedStringTextSyntax text:
-                    var txt = text.TextToken.Text ?? string.Empty;
+                    var txt = text.TextToken.Text;
                     txt = txt.Replace("\"", "\\\"");
                     sb.Append(txt);
                     break;
-                case InterpolationSyntax interp:
+                case InterpolationSyntax interpolation:
                     sb.Append("{");
-                    sb.Append(normalize(interp.Expression));
+                    sb.Append(normalize(interpolation.Expression));
                     sb.Append("}");
                     break;
             }

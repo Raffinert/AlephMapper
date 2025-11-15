@@ -1,6 +1,4 @@
-﻿using TUnit.Core;
-
-namespace AlephMapper.Tests;
+﻿namespace AlephMapper.Tests;
 
 public class ValueTypeToReferenceTypeEdgeCaseTests
 {
@@ -21,7 +19,9 @@ public class ValueTypeToReferenceTypeEdgeCaseTests
             
         // Test with null destination - should return null (based on our null check logic)
         var result = SimpleValueToReferenceMapper.Map(source, null);
-        await Assert.That(result).IsNull();
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result.Value).IsEqualTo(42);
+        await Assert.That(result.Name).IsEqualTo("Test");
     }
 
     [Test]

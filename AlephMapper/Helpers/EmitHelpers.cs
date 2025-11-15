@@ -2,6 +2,7 @@
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
+using SymbolDisplayFormat = Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
 namespace AlephMapper.Helpers;
 
@@ -45,22 +46,9 @@ internal static class EmitHelpers
                 return false;
         }
 
-        var nullCheckConditions = new List<string>();
-
         if (SymbolHelpers.CanBeNull(mm.ParamType))
         {
-            nullCheckConditions.Add($"{srcName} == null");
-        }
-
-        if (SymbolHelpers.CanBeNull(mm.ReturnType))
-        {
-            nullCheckConditions.Add("dest == null");
-        }
-
-        // Generate null check only if there are conditions to check
-        if (nullCheckConditions.Count > 0)
-        {
-            lines.Add("if (" + string.Join(" || ", nullCheckConditions) + ") return dest;");
+            lines.Add($"if ({srcName} == null) return dest;");
         }
 
         lines.AddRange(processedLines);
