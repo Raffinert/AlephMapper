@@ -149,6 +149,7 @@ internal sealed partial class InliningResolver(
                                     .WithoutTrivia();
 
                             var lambda = SimpleLambdaExpression(lambdaParam, substitutedBody);
+                            lambda = lambda.WithArrowToken(lambda.ArrowToken.WithLeadingTrivia(Space).WithTrailingTrivia(Space));
                             var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
                             return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
                         }

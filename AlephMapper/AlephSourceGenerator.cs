@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -119,7 +120,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine("  /// </para>");
                         membersSb.AppendLine("  /// </remarks>");
                         membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        membersSb.AppendLine("      " + srcName + " => " + inlinedBody.ToFullString() + ";");
+                        var ocePrettyPrinted = ObjectCreationFormatter.Format(inlinedBody, 2);
+                        membersSb.AppendLine("      " + srcName + " =>");
+                        membersSb.AppendLine(ocePrettyPrinted + ";");
                         membersSb.AppendLine();
                     }
 
