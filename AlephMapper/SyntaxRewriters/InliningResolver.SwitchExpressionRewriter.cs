@@ -26,7 +26,9 @@ internal sealed partial class InliningResolver
 
         foreach (var arm in arms)
         {
-            var armExpression = (ExpressionSyntax)Visit(arm.Expression.WithoutTrivia());
+            var armExpression = VisitClean(arm.Expression);
+            var governingExpressionNode = node.GoverningExpression.WithoutTrivia();
+            var governingExpression = VisitClean(governingExpressionNode);
 
             // Handle fallback value
             if (currentExpression == null)
@@ -41,9 +43,12 @@ internal sealed partial class InliningResolver
             // Handle each arm, only if it's a constant expression
             if (arm.Pattern is ConstantPatternSyntax constant)
             {
-                ExpressionSyntax expression = BinaryExpression(SyntaxKind.EqualsExpression,
-                    (ExpressionSyntax)Visit(node.GoverningExpression.WithoutTrivia()),
-                    constant.Expression);
+                var constantExpression = VisitClean(constant.Expression);
+                ExpressionSyntax expression = PadBinaryOperator(
+                    BinaryExpression(
+                        SyntaxKind.EqualsExpression,
+                        governingExpression,
+                        constantExpression));
 
                 // Add when clause as a AND expression
                 if (arm.WhenClause != null)
@@ -51,8 +56,8 @@ internal sealed partial class InliningResolver
                     expression = BinaryExpression(
                         SyntaxKind.LogicalAndExpression,
                         expression,
-                        (ExpressionSyntax)Visit(arm.WhenClause.Condition.WithoutTrivia())
-                    );//.WithTrailingTrivia(CarriageReturnLineFeed);
+                        VisitClean(arm.WhenClause.Condition)
+                    );
                 }
 
                 currentExpression = ConditionalExpression(
@@ -68,17 +73,16 @@ internal sealed partial class InliningResolver
             {
                 var getTypeExpression = MemberAccessExpression(
                     SyntaxKind.SimpleMemberAccessExpression,
-                    (ExpressionSyntax)Visit(node.GoverningExpression.WithoutTrivia()),
-                    IdentifierName("GetType")
-                );
+                    governingExpression,
+                    IdentifierName("GetType"));
 
                 var getTypeCall = InvocationExpression(getTypeExpression);
                 var typeofExpression = TypeOfExpression(declaration.Type);
-                var equalsExpression = BinaryExpression(
-                    SyntaxKind.EqualsExpression,
-                    getTypeCall,
-                    typeofExpression
-                );
+                var equalsExpression = PadBinaryOperator(
+                    BinaryExpression(
+                        SyntaxKind.EqualsExpression,
+                        getTypeCall,
+                        typeofExpression));
 
                 ExpressionSyntax condition = equalsExpression;
                 if (arm.WhenClause != null)
@@ -86,12 +90,14 @@ internal sealed partial class InliningResolver
                     condition = BinaryExpression(
                         SyntaxKind.LogicalAndExpression,
                         equalsExpression,
-                        (ExpressionSyntax)Visit(arm.WhenClause.Condition.WithoutTrivia())
+                        VisitClean(arm.WhenClause.Condition)
                     );
                 }
 
-                var modifiedArmExpression = ReplaceVariableWithCast(armExpression, declaration,
-                    node.GoverningExpression.WithoutTrivia());
+                var modifiedArmExpression = ReplaceVariableWithCast(
+                    armExpression,
+                    declaration,
+                    governingExpressionNode);
                 currentExpression = ConditionalExpression(
                     condition,
                     modifiedArmExpression,
@@ -129,6 +135,23 @@ internal sealed partial class InliningResolver
         }
 
         return expression;
+    }
+
+    private ExpressionSyntax VisitClean(ExpressionSyntax expression)
+    {
+        var stripped = expression.WithoutTrivia();
+        var rewritten = (ExpressionSyntax?)Visit(stripped);
+        return (rewritten ?? stripped).WithoutTrivia();
+    }
+
+    private static BinaryExpressionSyntax PadBinaryOperator(BinaryExpressionSyntax expression)
+    {
+        var token = expression.OperatorToken;
+        return expression.WithOperatorToken(
+            Token(
+                TriviaList(Space),
+                token.Kind(),
+                TriviaList(Space)));
     }
 }
 

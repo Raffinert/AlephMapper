@@ -74,23 +74,13 @@ public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
         var text = token.ToFullString();
         if (text.Length == 0)
             return;
-        
-        //text = text.Replace("\r\n", new string(' ', _indent * 4))
-        //    .Replace("\n", new string(' ', _indent * 4))
-        //    .Replace("\r", new string(' ', _indent * 4));
-        //_atLineStart = token.LeadingTrivia.Any(tr =>
-        //    tr == SyntaxFactory.CarriageReturn || tr == SyntaxFactory.LineFeed ||
-        //    tr == SyntaxFactory.CarriageReturnLineFeed);
 
         _sb.Append(text);
 
         _atLineStart = token.TrailingTrivia.Any(tr =>
-            tr == SyntaxFactory.CarriageReturn || 
+            tr == SyntaxFactory.CarriageReturn ||
             tr == SyntaxFactory.LineFeed ||
             tr == SyntaxFactory.CarriageReturnLineFeed);
-
-        //var last = text.Last();
-        //_atLineStart = last == '\n' || last == '\r';
     }
 
     // -------- default: walk children & keep original formatting --------
@@ -110,6 +100,28 @@ public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
                 Visit(child.AsNode()!); // may hit our ObjectCreation override
             }
         }
+    }
+
+    public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
+    {
+        Visit(node.Condition.WithoutTrailingTrivia());
+        WriteLine();
+        Indent();
+        WriteRaw("? ");
+        Visit(node.WhenTrue.WithoutLeadingTrivia());
+        WriteLine();
+        WriteRaw(": ");
+        Visit(node.WhenFalse.WithoutLeadingTrivia());
+        Unindent();
+    }
+
+    public override void VisitBinaryExpression(BinaryExpressionSyntax node)
+    {
+        Visit(node.Left.WithoutTrailingTrivia());
+        WriteRaw(" ");
+        WriteRaw(node.OperatorToken.Text);
+        WriteRaw(" ");
+        Visit(node.Right.WithoutLeadingTrivia());
     }
 
     // -------- the only special case: object creation --------
