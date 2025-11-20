@@ -74,17 +74,22 @@ public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
         var text = token.ToFullString();
         if (text.Length == 0)
             return;
-
+        
+        //text = text.Replace("\r\n", new string(' ', _indent * 4))
+        //    .Replace("\n", new string(' ', _indent * 4))
+        //    .Replace("\r", new string(' ', _indent * 4));
         //_atLineStart = token.LeadingTrivia.Any(tr =>
         //    tr == SyntaxFactory.CarriageReturn || tr == SyntaxFactory.LineFeed ||
         //    tr == SyntaxFactory.CarriageReturnLineFeed);
 
         _sb.Append(text);
 
-        //var last = text.Last();
         _atLineStart = token.TrailingTrivia.Any(tr =>
-            tr == SyntaxFactory.CarriageReturn || tr == SyntaxFactory.LineFeed ||
+            tr == SyntaxFactory.CarriageReturn || 
+            tr == SyntaxFactory.LineFeed ||
             tr == SyntaxFactory.CarriageReturnLineFeed);
+
+        //var last = text.Last();
         //_atLineStart = last == '\n' || last == '\r';
     }
 

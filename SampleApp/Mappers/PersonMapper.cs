@@ -7,7 +7,7 @@ namespace SampleApp.Mappers;
 public static partial class PersonMapper
 {
     // Main entity to DTO mapping with expression-bodied syntax
-    //[Expressive]
+    [Expressive]
     [Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
     public static PersonDto ToDto(Person entity) => entity == null ? null : new()
     {

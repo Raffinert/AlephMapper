@@ -52,7 +52,7 @@ internal sealed partial class InliningResolver
                         SyntaxKind.LogicalAndExpression,
                         expression,
                         (ExpressionSyntax)Visit(arm.WhenClause.Condition.WithoutTrivia())
-                    ).WithTrailingTrivia(ElasticCarriageReturnLineFeed);
+                    );//.WithTrailingTrivia(CarriageReturnLineFeed);
                 }
 
                 currentExpression = ConditionalExpression(
