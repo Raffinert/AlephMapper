@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -100,10 +101,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var expressionMethodName = mm.Name + "Expression";
 
-                        membersSb.AppendLine("  /// <summary>");
-                        membersSb.AppendLine($"  /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
-                        membersSb.AppendLine("  /// </summary>");
-                        membersSb.AppendLine("  /// <remarks>");
+                        membersSb.AppendLine("    /// <summary>");
+                        membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
+                        membersSb.AppendLine("    /// </summary>");
+                        membersSb.AppendLine("    /// <remarks>");
 
                         // Add null strategy information
                         string nullStrategyDescription = mm.NullStrategy switch
@@ -114,12 +115,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             _ => "Default null handling strategy is applied."
                         };
 
-                        membersSb.AppendLine("  /// <para>");
-                        membersSb.AppendLine($"  /// Null handling strategy: {nullStrategyDescription}");
-                        membersSb.AppendLine("  /// </para>");
-                        membersSb.AppendLine("  /// </remarks>");
-                        membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        membersSb.AppendLine("      " + srcName + " => " + inlinedBody.ToFullString() + ";");
+                        membersSb.AppendLine("    /// <para>");
+                        membersSb.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
+                        membersSb.AppendLine("    /// </para>");
+                        membersSb.AppendLine("    /// </remarks>");
+                        membersSb.AppendLine("    public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                        var ocePrettyPrinted = ObjectCreationFormatter.Format(inlinedBody, 2);
+                        membersSb.Append("        " + srcName + " => ");
+                        membersSb.AppendLine(ocePrettyPrinted + ";");
                         membersSb.AppendLine();
                     }
 
@@ -182,16 +185,16 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         {
                             var updateMethodName = mm.Name;
 
-                            membersSb.AppendLine("  /// <summary>");
-                            membersSb.AppendLine($"  /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
-                            membersSb.AppendLine("  /// </summary>");
-                            membersSb.AppendLine($"  /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
-                            membersSb.AppendLine("  /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
-                            membersSb.AppendLine("  /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
-                            membersSb.AppendLine("  public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
-                            membersSb.AppendLine("  {");
-                            foreach (var l in lines) membersSb.AppendLine("    " + l);
-                            membersSb.AppendLine("  }");
+                            membersSb.AppendLine("    /// <summary>");
+                            membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
+                            membersSb.AppendLine("    /// </summary>");
+                            membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
+                            membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
+                            membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
+                            membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                            membersSb.AppendLine("    {");
+                            foreach (var l in lines) membersSb.AppendLine("        " + l);
+                            membersSb.AppendLine("    }");
                         }
                     }
                 }
