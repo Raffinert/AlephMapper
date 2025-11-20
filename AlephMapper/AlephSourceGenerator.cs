@@ -121,7 +121,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine("  /// </remarks>");
                         membersSb.AppendLine("  public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
                         var ocePrettyPrinted = ObjectCreationFormatter.Format(inlinedBody, 2);
-                        membersSb.AppendLine("      " + srcName + " =>");
+                        membersSb.Append("      " + srcName + " => ");
                         membersSb.AppendLine(ocePrettyPrinted + ";");
                         membersSb.AppendLine();
                     }

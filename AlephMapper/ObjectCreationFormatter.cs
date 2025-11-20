@@ -10,7 +10,7 @@ public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
 {
     private readonly StringBuilder _sb = new();
     private int _indent;
-    private bool _atLineStart = true;
+    private bool _atLineStart = false;
 
     private ObjectCreationFormatter(int baseIndent)
     {
@@ -75,10 +75,17 @@ public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
         if (text.Length == 0)
             return;
 
+        //_atLineStart = token.LeadingTrivia.Any(tr =>
+        //    tr == SyntaxFactory.CarriageReturn || tr == SyntaxFactory.LineFeed ||
+        //    tr == SyntaxFactory.CarriageReturnLineFeed);
+
         _sb.Append(text);
 
-        var last = text.Last();
-        _atLineStart = last == '\n' || last == '\r';
+        //var last = text.Last();
+        _atLineStart = token.TrailingTrivia.Any(tr =>
+            tr == SyntaxFactory.CarriageReturn || tr == SyntaxFactory.LineFeed ||
+            tr == SyntaxFactory.CarriageReturnLineFeed);
+        //_atLineStart = last == '\n' || last == '\r';
     }
 
     // -------- default: walk children & keep original formatting --------
