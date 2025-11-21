@@ -47,9 +47,12 @@ public static class PhoneMapper
 
     // Phone number formatting with expression-bodied syntax
     public static string FormatPhoneNumber(string phoneNumber) =>
-        string.IsNullOrWhiteSpace(phoneNumber) ? string.Empty :
-        phoneNumber.Length == 10 ? $"({phoneNumber.Take(3)}) {phoneNumber.Skip(3).Take(3)}-{phoneNumber.Skip(6)}" :
-        phoneNumber;
+        phoneNumber == null
+        || phoneNumber == ""
+            ? string.Empty
+            : phoneNumber.Length == 10
+                ? $"({phoneNumber.Take(3)}) {phoneNumber.Skip(3).Take(3)}-{phoneNumber.Skip(6)}"
+                : phoneNumber;
 
     // Phone number cleaning with expression-bodied syntax
     public static string CleanPhoneNumber(string phoneNumber) =>
