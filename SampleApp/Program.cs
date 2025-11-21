@@ -60,7 +60,7 @@ Console.WriteLine("1. Basic Entity to DTO Mapping:");
 var ae = AddressMapper.ToDtoExpression();
 var personDto = PersonMapper.ToDto(person);
 PersonMapper.ToDto(person, personDto);
-//var expression = PersonMapper.ToDtoExpression();
+var expression = PersonMapper.ToDtoExpression();
 //PersonMapper.ToDto(person, personDto);
 Console.WriteLine($"   Person: {personDto.FirstName} {personDto.LastName}");
 Console.WriteLine($"   Email: {personDto.Email}");

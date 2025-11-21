@@ -64,6 +64,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                 var allUsingDirectives = new HashSet<string>();
 
+                bool isFirst = true;
+
                 foreach (var mm in methods)
                 {
                     var srcName = mm.ParamName;
@@ -101,6 +103,11 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
                         var expressionMethodName = mm.Name + "Expression";
 
+                        if(!isFirst)
+                        {
+                            membersSb.AppendLine();
+                        }
+                        isFirst = false;
                         membersSb.AppendLine("    /// <summary>");
                         membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
                         membersSb.AppendLine("    /// </summary>");
@@ -120,10 +127,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine("    /// </para>");
                         membersSb.AppendLine("    /// </remarks>");
                         membersSb.AppendLine("    public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                        var ocePrettyPrinted = ObjectCreationFormatter.Format(inlinedBody, 2);
+                        var ocePrettyPrinted = PrettyPrinter.Print(inlinedBody, 2);
                         membersSb.Append("        " + srcName + " => ");
-                        membersSb.AppendLine(ocePrettyPrinted + ";");
-                        membersSb.AppendLine();
+                        membersSb.AppendLine(ocePrettyPrinted + ";");                        
                     }
 
                     // Update method - check for circular references like expressive methods do
@@ -185,6 +191,12 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         {
                             var updateMethodName = mm.Name;
 
+                            if(!isFirst)
+                            {
+                                membersSb.AppendLine();
+                            }
+                            isFirst = false;
+
                             membersSb.AppendLine("    /// <summary>");
                             membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
                             membersSb.AppendLine("    /// </summary>");
@@ -236,7 +248,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     : containingNamespace.Replace('.', '_') + "_")
                         + mapperType.Name + "_GeneratedMappings.g.cs";
 
-                //var formattedCode = CodeFormatter.FormatGeneratedCode(sb.ToString());
                 spc.AddSource(fileName, sb.ToString());
             }
         });

@@ -6,20 +6,20 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AlephMapper;
 
-public sealed class ObjectCreationFormatter : CSharpSyntaxVisitor
+public sealed class PrettyPrinter : CSharpSyntaxVisitor
 {
     private readonly StringBuilder _sb = new();
     private int _indent;
     private bool _atLineStart = false;
 
-    private ObjectCreationFormatter(int baseIndent)
+    private PrettyPrinter(int baseIndent)
     {
         _indent = baseIndent;
     }
 
-    public static string Format(SyntaxNode node, int baseIndent = 0)
+    public static string Print(SyntaxNode node, int baseIndent = 0)
     {
-        var f = new ObjectCreationFormatter(baseIndent);
+        var f = new PrettyPrinter(baseIndent);
         f.Visit(node);
         return f._sb.ToString();
     }
