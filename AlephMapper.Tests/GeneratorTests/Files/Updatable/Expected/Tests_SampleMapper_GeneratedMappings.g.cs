@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.4.2")]
+[GeneratedCode("AlephMapper", "0.4.3")]
 partial class SampleMapper
 {
     /// <summary>

@@ -38,6 +38,17 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
 
     private void WriteLine()
     {
+        // Avoid stacking multiple blank lines when we're already at the start of a line
+        if (_sb.Length > 0)
+        {
+            var last = _sb[_sb.Length - 1];
+            if (last == '\n' || last == '\r')
+            {
+                _atLineStart = true;
+                return;
+            }
+        }
+
         _sb.AppendLine();
         _atLineStart = true;
     }
