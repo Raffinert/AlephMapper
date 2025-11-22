@@ -1,4 +1,5 @@
 ﻿#nullable enable
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -43,8 +44,13 @@ internal partial class InliningResolver
             if (rewriteSupport is NullConditionalRewrite.Rewrite)
             {
                 var typeInfo = model.GetTypeInfo(node);
-                if (typeInfo.ConvertedType is not null)
+                var convertedType = typeInfo.ConvertedType ?? typeInfo.Type;
+                var nullableContext = model.GetNullableContext(node.SpanStart);
+
+                if (convertedType is not null)
                 {
+                    var castTypeName = TypeDisplay.ForSymbol(convertedType, convertedType.NullableAnnotation, nullableContext);
+
                     return ParenthesizedExpression(
                         ConditionalExpression(
                             BinaryExpression(
@@ -56,7 +62,7 @@ internal partial class InliningResolver
                                 .WithLeadingTrivia(Space)
                                 .WithTrailingTrivia(Space),
                             CastExpression(
-                                ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)),
+                                ParseTypeName(castTypeName),
                                 LiteralExpression(SyntaxKind.NullLiteralExpression)
                             ).WithLeadingTrivia(Space)
                         )

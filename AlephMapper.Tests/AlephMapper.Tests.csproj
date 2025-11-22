@@ -11,32 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="GeneratorTests\Files\AlephMapper.Attributes.g.cs" />
-    <Compile Remove="GeneratorTests\Files\AnySources\Source.cs" />
-    <Compile Remove="GeneratorTests\Files\Expressive\Expected\Tests_SampleMapper_GeneratedMappings.g.cs" />
-    <Compile Remove="GeneratorTests\Files\Expressive\Source.cs" />
-    <Compile Remove="GeneratorTests\Files\Updatable\Expected\Tests_SampleMapper_GeneratedMappings.g.cs" />
-    <Compile Remove="GeneratorTests\Files\Updatable\Source.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="GeneratorTests\Files\AlephMapper.Attributes.g.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="GeneratorTests\Files\AnySources\Source.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="GeneratorTests\Files\Expressive\Expected\Tests_SampleMapper_GeneratedMappings.g.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="GeneratorTests\Files\Expressive\Source.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="GeneratorTests\Files\Updatable\Expected\Tests_SampleMapper_GeneratedMappings.g.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="GeneratorTests\Files\Updatable\Source.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <Compile Remove="GeneratorTests\Files\**\*.cs" />
+    <None Include="GeneratorTests\Files\**\*.cs" >
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

@@ -35,6 +35,23 @@ internal static class AlephSourceGeneratorVerifier
             return ExpectGeneratedSource(Path.GetFileName(None.GeneratorTests_Files_AlephMapper_Attributes_g_cs.GetNoneFilePath()), None.GeneratorTests_Files_AlephMapper_Attributes_g_cs.ReadAllText());
         }
 
+        public TestBuilder WithNullableContext(NullableContextOptions context)
+        {
+            test.SolutionTransforms.Add((solution, projectId) =>
+            {
+                var project = solution.GetProject(projectId);
+                if (project?.CompilationOptions is CSharpCompilationOptions csharpCompilationOptions)
+                {
+                    project = project.WithCompilationOptions(csharpCompilationOptions.WithNullableContextOptions(context));
+                    solution = project.Solution;
+                }
+
+                return solution;
+            });
+
+            return this;
+        }
+
         public Task RunAsync() => test.RunAsync();
     }
 
