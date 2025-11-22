@@ -69,8 +69,9 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 foreach (var mm in methods)
                 {
                     var srcName = mm.ParamName;
-                    var srcFqn = mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                    var destFqn = mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                    var nullableContextPosition = mm.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
+                    var srcFqn = TypeDisplay.ForSymbol(mm.ParamType, mm.MethodSymbol.Parameters[0].NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                    var destFqn = TypeDisplay.ForSymbol(mm.ReturnType, mm.MethodSymbol.ReturnNullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
 
                     if (!mm.IsExpressive && !mm.IsUpdatable) continue;
 
@@ -109,7 +110,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         }
                         isFirst = false;
                         membersSb.AppendLine("    /// <summary>");
-                        membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({mm.ParamType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)})\"/>.");
+                        membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({srcFqn})\"/>.");
                         membersSb.AppendLine("    /// </summary>");
                         membersSb.AppendLine("    /// <remarks>");
 
@@ -198,7 +199,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             isFirst = false;
 
                             membersSb.AppendLine("    /// <summary>");
-                            membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{mm.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}\"/> with values from the source object.");
+                            membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{destFqn}\"/> with values from the source object.");
                             membersSb.AppendLine("    /// </summary>");
                             membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
                             membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
