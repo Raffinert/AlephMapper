@@ -1,4 +1,4 @@
-﻿﻿[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
+[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
 
 ## Terms of use<sup>[?](https://github.com/Tyrrrz/.github/blob/master/docs/why-so-political.md)</sup>
 
@@ -9,20 +9,21 @@ By using this project or its source code, for any purpose and in any shape or fo
 - You **support Ukraine's territorial integrity, including its claims over temporarily occupied territories of Crimea and Donbas**
 - You **reject false narratives perpetuated by Russian state propaganda**
 
-To learn more about the war and how you can help, [click here](https://stand-with-ukraine.pp.ua). Glory to Ukraine! 🇺🇦
+To learn more about the war and how you can help, [click here](https://stand-with-ukraine.pp.ua). Glory to Ukraine!
 
 # AlephMapper
 
 [![NuGet](https://img.shields.io/nuget/v/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AlephMapper is a **Source Generator** that automatically creates projectable and/or updatable companion methods from your mapping logic. It enables you to write mapping methods once and use them both for in-memory objects and as expression trees for database queries (Entity Framework Core projections).
+AlephMapper is a **Source Generator** that automatically creates projectable and/or updatable companion methods from your mapping logic. It is built to keep your mappings **DRY**: you author a single method, and AlephMapper reuses that logic everywhere—runtime, expression trees for EF Core projections, and optional in-place updates.
 
 ## 🚀 Features
 
-- **Expression Tree Generation** - Automatically converts method bodies to expression trees
-- **Null-Conditional Operator Support** - Configurable handling of `?.` operators
-- **Updatable Methods** - Generate update methods that modify existing instances
+- **Single-source mappings** - One mapping method feeds runtime, expression-tree, and update variants
+- **Expression tree generation** - Automatically converts method bodies to `Expression<Func<...>>`
+- **Null-conditional operator support** - Configurable handling of `?.` operators
+- **Updatable methods** - Generate in-place update overloads that mutate existing instances
 
 ## 📦 Installation
 
@@ -32,7 +33,9 @@ dotnet add package AlephMapper
 
 ## 🏃‍♂️ Quick Start
 
-### 1. Mark your mapping class or method with `[Expressive]. Please ensure that your class is static and partial.`
+### 1. Mark your mapping class or method with `[Expressive]`
+
+> Ensure the containing class is `static partial`.
 
 ```csharp
 public static partial class PersonMapper
@@ -47,18 +50,18 @@ public static partial class PersonMapper
         Department = employee.Department?.Name ?? "Unknown"
     };
 
-    public static string GetFullName(Employee employee) => 
+    public static string GetFullName(Employee employee) =>
         $"{employee.FirstName} {employee.LastName}";
 
-    public static int CalculateAge(DateTime birthDate) => 
+    public static int CalculateAge(DateTime birthDate) =>
         DateTime.Now.Year - birthDate.Year;
 }
 ```
 
-### 2. AlephMapper will generate the following method for you:
+### 2. AlephMapper generates an expression-friendly companion method
 
 ```csharp
-partial class PersonMapper 
+partial class PersonMapper
 {
     public static Expression<Func<Employee, PersonDto>> MapToPersonExpression() => employee => new PersonDto
     {
@@ -71,10 +74,9 @@ partial class PersonMapper
 }
 ```
 
-### 3. Use generated expression methods in Entity Framework queries
+### 3. Use generated expressions in EF Core queries
 
 ```csharp
-// The source generator creates PersonMapper.MapToPersonExpression() automatically
 var personDtos = await dbContext.Employees
     .Select(PersonMapper.MapToPersonExpression())
     .ToListAsync();
@@ -90,7 +92,7 @@ var fullName = PersonMapper.GetFullName(employee);
 
 ## 🔧 Advanced Features
 
-### Null-Conditional Operator Handling
+### Null-conditional operator handling
 
 AlephMapper provides flexible handling of null-conditional operators (`?.`):
 
@@ -109,12 +111,12 @@ public static partial class SafeMapper
 }
 ```
 
-**Rewrite Options:**
+**Rewrite options:**
 - `None` - Don't allow null-conditional operators (throws compile error)
 - `Ignore` - Remove null-conditional operators (may cause NullReferenceException)
 - `Rewrite` - Convert to explicit null checks: `person.BirthInfo?.Age` becomes `person.BirthInfo != null ? person.BirthInfo.Age : null`
 
-### Updatable Methods
+### Updatable methods
 
 From a single mapping, AlephMapper can emit an **update-in-place** overload that writes into an existing instance (instead of creating a new one). This is especially suitable for **EF Core entity updates with change tracking**: you keep the **same tracked instance**, so EF can detect modified properties and produce the correct `UPDATE`.
 
@@ -138,21 +140,21 @@ await db.SaveChangesAsync();                           // EF sees changes on the
 
 For each method marked with `[Expressive]`:
 
-1. **`MapToPersonDto(Employee employee)`** → generates **`MapToPersonDtoExpression()`** returning `Expression<Func<Employee, PersonDto>>`
-2. **Method calls are inlined** - Calls to other methods are automatically inlined into the expression tree
-3. **Null-conditional operators are handled** according to your specified rewrite policy
+1. `MapToPersonDto(Employee employee)` -> generates `MapToPersonDtoExpression()` returning `Expression<Func<Employee, PersonDto>>`
+2. Method calls are inlined - Calls to other methods are automatically inlined into the expression tree
+3. Null-conditional operators are handled according to your specified rewrite policy
 
 For each method marked with `[Updatable]`:
 
-1. **`MapToPersonDto(Employee employee)`** → generates **`MapToPersonDto(Employee employee, PersonDto target)`** returning `PersonDto`
-2. **Method calls are inlined** - Calls to other methods in the same class are automatically inlined into the method
+1. `MapToPersonDto(Employee employee)` -> generates `MapToPersonDto(Employee employee, PersonDto target)` returning `PersonDto`
+2. Method calls are inlined - Calls to other methods in the same class are automatically inlined into the method
 
-## ⚠️ Limitations
+## Limitations
 
 Methods must be:
-- [**expression-bodied**](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/statements-expressions-operators/expression-bodied-members),
-- **static**
-- be member of a **partial static class**.
+- [expression-bodied](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/statements-expressions-operators/expression-bodied-members)
+- static
+- members of a partial static class
 
 ## 🔄 Migration from Other Mappers
 
@@ -192,8 +194,8 @@ public static partial class PersonMapper
     {
         FullName = GetFullName(employee) // This gets inlined in the expression
     };
-    
-    public static string GetFullName(Employee employee) => 
+
+    public static string GetFullName(Employee employee) =>
         employee.FirstName + " " + employee.LastName;
 }
 ```
