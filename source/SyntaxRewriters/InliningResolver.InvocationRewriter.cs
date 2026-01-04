@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -58,57 +57,16 @@ internal sealed partial class InliningResolver(
         }
 
         var args = node.ArgumentList.Arguments;
-        // Handle extension methods without arguments differently - they show up as static methods with the first parameter being 'this'
-        // For extension methods, we need to treat the receiver (left side of the dot) as the first argument
-        ExpressionSyntax firstArg;
-        bool conditionalAccessExpression = false;
-
-        if (invokedMethod.IsExtensionMethod && args.Count == 0)
-        {
-            if (node.Parent is ConditionalAccessExpressionSyntax caExpr)
-            {
-                if (node.Expression is MemberAccessExpressionSyntax memberAccess)
-                {
-                    conditionalAccessExpression = true;
-                    firstArg = (ExpressionSyntax)Visit(memberAccess.Expression);
-                }
-                else
-                {
-                    conditionalAccessExpression = true;
-                    // Properly construct the receiver expression without using ParseExpression.
-                    // If we are rewriting null-conditionals, the stack top contains the current target.
-                    // Otherwise, use the original conditional-access receiver expression to preserve chaining.
-                    firstArg = rewriteSupport != NullConditionalRewrite.None
-                        ? _conditionalAccessExpressionsStack.Peek()
-                        : (ExpressionSyntax)Visit(caExpr.Expression);
-                }
-            }
-            else if (node.Expression is MemberAccessExpressionSyntax memberAccess)
-            {
-                firstArg = memberAccess.Expression;
-            }
-            else
-            {
-                return base.VisitInvocationExpression(node);
-            }
-        }
-        else
-        {
-            if (args.Count != 1)
-            {
-                return base.VisitInvocationExpression(node);
-            }
-
-            firstArg = args[0].Expression;
-        }
+        var firstArgExpression = args.Count > 0 ? args[0].Expression : null;
+        var isConditionalAccess = node.Parent is ConditionalAccessExpressionSyntax;
 
         // Handle method-group arguments first (Select(MapToX))
-        if (!conditionalAccessExpression && firstArg is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax
+        if (!isConditionalAccess && firstArgExpression is IdentifierNameSyntax or MemberAccessExpressionSyntax or GenericNameSyntax or QualifiedNameSyntax
             or AliasQualifiedNameSyntax)
         {
-            var methodGroup = ResolveMethodGroupSymbol(firstArg);
+            var methodGroup = ResolveMethodGroupSymbol(firstArgExpression);
 
-            if (methodGroup is { Parameters.Length: 1 })
+            if (methodGroup is { Parameters.Length: > 0 })
             {
                 var normalizedMethod = SymbolHelpers.Normalize(methodGroup);
 
@@ -123,10 +81,11 @@ internal sealed partial class InliningResolver(
                     }
 
                     var delInvoke = TryGetDelegateInvoke(invokedMethod, 0);
-                    if (delInvoke is { Parameters.Length: 1 })
+                    if (delInvoke is { Parameters.Length: > 0 } && delInvoke.Parameters.Length == callee.MethodSymbol.Parameters.Length)
                     {
-                        var paramName = string.IsNullOrEmpty(callee.ParamName) ? "x" : callee.ParamName;
-                        var lambdaParam = Parameter(Identifier(paramName));
+                        var lambdaParams = callee.Parameters
+                            .Select(p => Parameter(Identifier(p.Name)))
+                            .ToArray();
 
                         // Add method to call stack before inlining
                         _callStack.Add(normalizedMethod);
@@ -141,13 +100,26 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods
                                 }.Visit(callee.BodySyntax.Expression);
 
+                            var substitutions = callee.Parameters.ToDictionary(
+                                p => p.Name,
+                                p => (ExpressionSyntax)IdentifierName(p.Name));
+
                             var substitutedBody =
-                                (ExpressionSyntax)new ParameterSubstitutionRewriter(callee.ParamName,
-                                        IdentifierName(paramName))
+                                (ExpressionSyntax)new ParameterSubstitutionRewriter(substitutions)
                                     .Visit(inlinedBody)!
                                     .WithoutTrivia();
 
-                            var lambda = SimpleLambdaExpression(lambdaParam, substitutedBody);
+                            LambdaExpressionSyntax lambda;
+                            if (lambdaParams.Length == 1)
+                            {
+                                lambda = SimpleLambdaExpression(lambdaParams[0], substitutedBody);
+                            }
+                            else
+                            {
+                                lambda = ParenthesizedLambdaExpression(substitutedBody)
+                                    .WithParameterList(ParameterList(SeparatedList(lambdaParams)));
+                            }
+
                             lambda = lambda.WithArrowToken(lambda.ArrowToken.WithLeadingTrivia(Space).WithTrailingTrivia(Space));
                             var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
                             return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
@@ -165,6 +137,11 @@ internal sealed partial class InliningResolver(
         // Direct-call inlining (MapToDto(s) -> inline)
         var directCallMethod = SymbolHelpers.Normalize(invokedMethod);
         if (!catalog.TryGetValue(directCallMethod, out var callee2))
+        {
+            return base.VisitInvocationExpression(node)?.WithoutTrivia();
+        }
+
+        if (!TryBuildParameterSubstitutions(node, invokedMethod, args, out var substitutionsMap, out var conditionalAccessExpression))
         {
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
@@ -189,7 +166,7 @@ internal sealed partial class InliningResolver(
                 _inlinedMethods = _inlinedMethods
             }.Visit(callee2.BodySyntax.Expression);
 
-            var substituted = new ParameterSubstitutionRewriter(callee2.ParamName, firstArg)
+            var substituted = new ParameterSubstitutionRewriter(substitutionsMap)
                 .Visit(inlinedBody2)
                 .WithoutTrivia();
 
@@ -205,6 +182,88 @@ internal sealed partial class InliningResolver(
             // Remove method from call stack after inlining
             _callStack.Remove(directCallMethod);
         }
+    }
+
+    private bool TryBuildParameterSubstitutions(
+        InvocationExpressionSyntax node,
+        IMethodSymbol invokedMethod,
+        SeparatedSyntaxList<ArgumentSyntax> args,
+        out Dictionary<string, ExpressionSyntax> substitutions,
+        out bool conditionalAccessExpression)
+    {
+        substitutions = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
+        conditionalAccessExpression = false;
+
+        var parameters = invokedMethod.Parameters;
+        if (parameters.Length == 0)
+        {
+            return false;
+        }
+
+        var nextParamIndex = 0;
+
+        if (invokedMethod.IsExtensionMethod)
+        {
+            ExpressionSyntax receiver;
+            if (node.Parent is ConditionalAccessExpressionSyntax caExpr)
+            {
+                conditionalAccessExpression = true;
+                if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+                {
+                    receiver = (ExpressionSyntax?)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
+                }
+                else
+                {
+                    receiver = rewriteSupport != NullConditionalRewrite.None
+                        ? _conditionalAccessExpressionsStack.Peek()
+                        : (ExpressionSyntax?)(Visit(caExpr.Expression) ?? caExpr.Expression);
+                }
+            }
+            else if (node.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                receiver = (ExpressionSyntax?)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
+            }
+            else
+            {
+                return false;
+            }
+
+            substitutions[parameters[0].Name] = receiver;
+            nextParamIndex = 1;
+        }
+
+        foreach (var arg in args)
+        {
+            IParameterSymbol targetParam;
+            if (arg.NameColon != null)
+            {
+                targetParam = parameters.FirstOrDefault(p => p.Name == arg.NameColon.Name.Identifier.Text);
+                if (targetParam == null)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (nextParamIndex >= parameters.Length)
+                {
+                    return false;
+                }
+
+                targetParam = parameters[nextParamIndex++];
+            }
+
+            var rewrittenArg = (ExpressionSyntax?)(Visit(arg.Expression) ?? arg.Expression);
+            substitutions[targetParam.Name] = rewrittenArg;
+        }
+
+        // Ensure all parameters are covered (no optional/default handling for now)
+        if (substitutions.Count != parameters.Length)
+        {
+            return false;
+        }
+
+        return true;
     }
 }
 

@@ -4,10 +4,9 @@ using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
-
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.1")]
+[GeneratedCode("AlephMapper", "0.5.2")]
 partial class NestedExt_AddressMapper
 {
     /// <summary>

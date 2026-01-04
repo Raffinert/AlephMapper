@@ -1,5 +1,6 @@
 ﻿#nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -130,7 +131,10 @@ internal sealed partial class InliningResolver
                 )
             );
 
-            var rewriter = new ParameterSubstitutionRewriter(variableName, castExpression);
+            var rewriter = new ParameterSubstitutionRewriter(new Dictionary<string, ExpressionSyntax>
+            {
+                [variableName] = castExpression
+            });
             return (ExpressionSyntax)rewriter.Visit(expression);
         }
 
