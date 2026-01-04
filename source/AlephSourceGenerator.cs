@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -36,200 +37,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             {
                 if (models.Length == 0) return;
 
-                var modelsByMethod = new Dictionary<IMethodSymbol, MappingModel>(SymbolHelpers.MethodComparer.Instance);
-                foreach (var mm in models)
-                {
-                    modelsByMethod[SymbolHelpers.Normalize(mm.MethodSymbol)] = mm;
-                }
-
-                var modelsByClass = new Dictionary<INamedTypeSymbol, List<MappingModel>>(SymbolEqualityComparer.Default);
-                foreach (var mm in models)
-                {
-                    if (!modelsByClass.TryGetValue(mm.ContainingType, out var list))
-                    {
-                        list = [];
-                        modelsByClass.Add(mm.ContainingType, list);
-                    }
-                    list.Add(mm);
-                }
-
-                foreach (var kvp in modelsByClass)
-                {
-                    var mapperType = kvp.Key;
-                    var methods = kvp.Value;
-
-                    if (!methods.Any(m => (m.IsExpressive || m.IsUpdatable) && m.IsClassPartial))
-                    {
-                        continue;
-                    }
-
-                    var membersSb = new StringBuilder();
-
-                    var allUsingDirectives = new HashSet<string>();
-
-                    bool isFirst = true;
-
-                    foreach (var mm in methods)
-                    {
-                        var srcName = mm.ParamName;
-                        var nullableContextPosition = mm.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
-                        var srcFqn = TypeDisplay.ForSymbol(mm.ParamType, mm.MethodSymbol.Parameters[0].NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
-                        var destFqn = TypeDisplay.ForSymbol(mm.ReturnType, mm.MethodSymbol.ReturnNullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
-
-                        if (!mm.IsExpressive && !mm.IsUpdatable) continue;
-
-                        // Expression method
-                        if (mm.IsExpressive)
-                        {
-                            var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false, mm.NullStrategy);
-                            var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
-                            allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
-
-                            // Skip generating expression method if there are circular references
-                            if (expressionInliner.CircularReferences.Any())
-                            {
-                                var diagnostic = Diagnostic.Create(
-                                    DiagnosticDescriptors.ExpressiveCircularReferences,
-                                    mm.MethodSymbol.Locations.FirstOrDefault(),
-                                    mm.MethodSymbol.Name);
-
-                                spc.ReportDiagnostic(diagnostic);
-                                continue; // Skip expression generation
-                            }
-
-                            var expressionMethodName = mm.Name + "Expression";
-
-                            if (!isFirst)
-                            {
-                                membersSb.AppendLine();
-                            }
-                            isFirst = false;
-                            membersSb.AppendLine("    /// <summary>");
-                            membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({srcFqn})\"/>.");
-                            membersSb.AppendLine("    /// </summary>");
-                            membersSb.AppendLine("    /// <remarks>");
-
-                            // Add null strategy information
-                            string nullStrategyDescription = mm.NullStrategy switch
-                            {
-                                NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
-                                NullConditionalRewrite.Ignore => "Null-conditional operators are ignored and treated as regular member access.",
-                                NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
-                                _ => "Default null handling strategy is applied."
-                            };
-
-                            membersSb.AppendLine("    /// <para>");
-                            membersSb.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
-                            membersSb.AppendLine("    /// </para>");
-                            membersSb.AppendLine("    /// </remarks>");
-                            membersSb.AppendLine("    public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
-                            var ocePrettyPrinted = PrettyPrinter.Print(inlinedBody, 2);
-                            membersSb.Append("        " + srcName + " => ");
-                            membersSb.AppendLine(ocePrettyPrinted + ";");
-                        }
-
-                        // Update method - check for circular references like expressive methods do
-                        if (mm.IsUpdatable)
-                        {
-                            var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true, NullConditionalRewrite.None);
-                            var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
-                            allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
-
-                            // Skip generating Updatable method if there are circular references
-                            if (expressionInliner.CircularReferences.Any())
-                            {
-                                var diagnostic = Diagnostic.Create(
-                                    DiagnosticDescriptors.UpdatableCircularReferences,
-                                    mm.MethodSymbol.Locations.FirstOrDefault(),
-                                    mm.MethodSymbol.Name);
-
-                                spc.ReportDiagnostic(diagnostic);
-                                continue; // Skip Updatable method generation
-                            }
-
-                            // Check if return type is a value type - if so, skip generation and emit warning
-                            if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
-                            {
-                                // Emit a diagnostic warning for value type Updatable methods
-                                var diagnostic = Diagnostic.Create(
-                                    DiagnosticDescriptors.UpdatableValueTypeReturn,
-                                    mm.MethodSymbol.Locations.FirstOrDefault(),
-                                    mm.MethodSymbol.Name,
-                                    mm.ReturnType.ToDisplayString());
-
-                                spc.ReportDiagnostic(diagnostic);
-
-                                // Skip generating the Updatable method
-                                continue;
-                            }
-
-                            var lines = new List<string>();
-
-                            var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, inlinedBody);
-
-                            if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, mm))
-                            {
-                                var updateMethodName = mm.Name;
-
-                                if (!isFirst)
-                                {
-                                    membersSb.AppendLine();
-                                }
-                                isFirst = false;
-
-                                membersSb.AppendLine("    /// <summary>");
-                                membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{destFqn}\"/> with values from the source object.");
-                                membersSb.AppendLine("    /// </summary>");
-                                membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
-                                membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
-                                membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
-                                membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
-                                membersSb.AppendLine("    {");
-                                foreach (var l in lines) membersSb.AppendLine("        " + l);
-                                membersSb.AppendLine("    }");
-                            }
-                        }
-                    }
-
-                    var sb = new StringBuilder();
-
-                    // Always include essential system namespaces that are commonly used in generated code
-                    allUsingDirectives.UnionWith(["System", "System.Linq", "System.Linq.Expressions", "System.CodeDom.Compiler"]);
-
-                    var containingNamespace = mapperType.ContainingNamespace is { IsGlobalNamespace: false } ? mapperType.ContainingNamespace.ToDisplayString() : "";
-
-                    // Add using directives to the generated file, filtering out the current namespace
-                    foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
-                    {
-                        if (usingDirective != containingNamespace && !string.IsNullOrEmpty(usingDirective))
-                        {
-                            sb.AppendLine($"using {usingDirective};");
-                        }
-                    }
-
-                    sb.AppendLine();
-
-                    if (!string.IsNullOrEmpty(containingNamespace))
-                    {
-                        sb.AppendLine();
-                        sb.AppendLine("namespace " + containingNamespace + ";");
-                        sb.AppendLine();
-                    }
-
-                    sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
-                    sb.AppendLine("partial class " + mapperType.Name);
-                    sb.AppendLine("{");
-                    sb.Append(membersSb);
-
-                    sb.AppendLine("}"); // class
-
-                    var fileName = (string.IsNullOrEmpty(containingNamespace)
-                        ? ""
-                        : containingNamespace.Replace('.', '_') + "_")
-                            + mapperType.Name + "_GeneratedMappings.g.cs";
-
-                    spc.AddSource(fileName, sb.ToString());
-                }
+                GenerateSourceCode(models, spc);
             }
             catch (Exception e)
             {
@@ -239,6 +47,204 @@ public class AlephSourceGenerator : IIncrementalGenerator
 #endif
             }
         });
+    }
+
+    private static void GenerateSourceCode(ImmutableArray<MappingModel> models, SourceProductionContext spc)
+    {
+        var modelsByMethod = new Dictionary<IMethodSymbol, MappingModel>(SymbolHelpers.MethodComparer.Instance);
+        foreach (var mm in models)
+        {
+            modelsByMethod[SymbolHelpers.Normalize(mm.MethodSymbol)] = mm;
+        }
+
+        var modelsByClass = new Dictionary<INamedTypeSymbol, List<MappingModel>>(SymbolEqualityComparer.Default);
+        foreach (var mm in models)
+        {
+            if (!modelsByClass.TryGetValue(mm.ContainingType, out var list))
+            {
+                list = [];
+                modelsByClass.Add(mm.ContainingType, list);
+            }
+            list.Add(mm);
+        }
+
+        foreach (var kvp in modelsByClass)
+        {
+            var mapperType = kvp.Key;
+            var methods = kvp.Value;
+
+            if (!methods.Any(m => (m.IsExpressive || m.IsUpdatable) && m.IsClassPartial))
+            {
+                continue;
+            }
+
+            var membersSb = new StringBuilder();
+
+            var allUsingDirectives = new HashSet<string>();
+
+            bool isFirst = true;
+
+            foreach (var mm in methods)
+            {
+                var srcName = mm.ParamName;
+                var nullableContextPosition = mm.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
+                var srcFqn = TypeDisplay.ForSymbol(mm.ParamType, mm.MethodSymbol.Parameters[0].NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                var destFqn = TypeDisplay.ForSymbol(mm.ReturnType, mm.MethodSymbol.ReturnNullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+
+                if (!mm.IsExpressive && !mm.IsUpdatable) continue;
+
+                // Expression method
+                if (mm.IsExpressive)
+                {
+                    var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false, mm.NullStrategy);
+                    var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
+                    allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
+
+                    // Skip generating expression method if there are circular references
+                    if (expressionInliner.CircularReferences.Any())
+                    {
+                        var diagnostic = Diagnostic.Create(
+                            DiagnosticDescriptors.ExpressiveCircularReferences,
+                            mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name);
+
+                        spc.ReportDiagnostic(diagnostic);
+                        continue; // Skip expression generation
+                    }
+
+                    var expressionMethodName = mm.Name + "Expression";
+
+                    if (!isFirst)
+                    {
+                        membersSb.AppendLine();
+                    }
+                    isFirst = false;
+                    membersSb.AppendLine("    /// <summary>");
+                    membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({srcFqn})\"/>.");
+                    membersSb.AppendLine("    /// </summary>");
+                    membersSb.AppendLine("    /// <remarks>");
+
+                    // Add null strategy information
+                    string nullStrategyDescription = mm.NullStrategy switch
+                    {
+                        NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
+                        NullConditionalRewrite.Ignore => "Null-conditional operators are ignored and treated as regular member access.",
+                        NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
+                        _ => "Default null handling strategy is applied."
+                    };
+
+                    membersSb.AppendLine("    /// <para>");
+                    membersSb.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
+                    membersSb.AppendLine("    /// </para>");
+                    membersSb.AppendLine("    /// </remarks>");
+                    membersSb.AppendLine("    public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                    var ocePrettyPrinted = PrettyPrinter.Print(inlinedBody, 2);
+                    membersSb.Append("        " + srcName + " => ");
+                    membersSb.AppendLine(ocePrettyPrinted + ";");
+                }
+
+                // Update method - check for circular references like expressive methods do
+                if (mm.IsUpdatable)
+                {
+                    var expressionInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, true, NullConditionalRewrite.None);
+                    var inlinedBody = expressionInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
+                    allUsingDirectives.UnionWith(expressionInliner.UsingDirectives.Concat(mm.UsingDirectives));
+
+                    // Skip generating Updatable method if there are circular references
+                    if (expressionInliner.CircularReferences.Any())
+                    {
+                        var diagnostic = Diagnostic.Create(
+                            DiagnosticDescriptors.UpdatableCircularReferences,
+                            mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name);
+
+                        spc.ReportDiagnostic(diagnostic);
+                        continue; // Skip Updatable method generation
+                    }
+
+                    // Check if return type is a value type - if so, skip generation and emit warning
+                    if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
+                    {
+                        // Emit a diagnostic warning for value type Updatable methods
+                        var diagnostic = Diagnostic.Create(
+                            DiagnosticDescriptors.UpdatableValueTypeReturn,
+                            mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name,
+                            mm.ReturnType.ToDisplayString());
+
+                        spc.ReportDiagnostic(diagnostic);
+
+                        // Skip generating the Updatable method
+                        continue;
+                    }
+
+                    var lines = new List<string>();
+
+                    var replacedMethod = mm.BodySyntax.ReplaceNode(mm.BodySyntax.Expression, inlinedBody);
+
+                    if (EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, mm))
+                    {
+                        var updateMethodName = mm.Name;
+
+                        if (!isFirst)
+                        {
+                            membersSb.AppendLine();
+                        }
+                        isFirst = false;
+
+                        membersSb.AppendLine("    /// <summary>");
+                        membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{destFqn}\"/> with values from the source object.");
+                        membersSb.AppendLine("    /// </summary>");
+                        membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
+                        membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
+                        membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
+                        membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                        membersSb.AppendLine("    {");
+                        foreach (var l in lines) membersSb.AppendLine("        " + l);
+                        membersSb.AppendLine("    }");
+                    }
+                }
+            }
+
+            var sb = new StringBuilder();
+
+            // Always include essential system namespaces that are commonly used in generated code
+            allUsingDirectives.UnionWith(["System", "System.Linq", "System.Linq.Expressions", "System.CodeDom.Compiler"]);
+
+            var containingNamespace = mapperType.ContainingNamespace is { IsGlobalNamespace: false } ? mapperType.ContainingNamespace.ToDisplayString() : "";
+
+            // Add using directives to the generated file, filtering out the current namespace
+            foreach (var usingDirective in allUsingDirectives.OrderBy(x => x))
+            {
+                if (usingDirective != containingNamespace && !string.IsNullOrEmpty(usingDirective))
+                {
+                    sb.AppendLine($"using {usingDirective};");
+                }
+            }
+
+            sb.AppendLine();
+
+            if (!string.IsNullOrEmpty(containingNamespace))
+            {
+                sb.AppendLine();
+                sb.AppendLine("namespace " + containingNamespace + ";");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
+            sb.AppendLine("partial class " + mapperType.Name);
+            sb.AppendLine("{");
+            sb.Append(membersSb);
+
+            sb.AppendLine("}"); // class
+
+            var fileName = (string.IsNullOrEmpty(containingNamespace)
+                               ? ""
+                               : containingNamespace.Replace('.', '_') + "_")
+                           + mapperType.Name + "_GeneratedMappings.g.cs";
+
+            spc.AddSource(fileName, sb.ToString());
+        }
     }
 
     private static string GetExpressiveAttributeSource()

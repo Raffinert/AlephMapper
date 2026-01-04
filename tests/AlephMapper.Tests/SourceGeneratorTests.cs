@@ -108,7 +108,9 @@ public class SourceGeneratorTests
 
             foreach (var generated in actualSources)
             {
-                await File.WriteAllTextAsync(Path.Combine(expectedRoot, generated.Key), generated.Value);
+                var filePath = Path.Combine(expectedRoot, generated.Key);
+                var absolutePath = Path.Combine(Path.GetFullPath(@"..\..\..\"), filePath);
+                await File.WriteAllTextAsync(absolutePath, generated.Value);
             }
 
             expectedFileContents = new Dictionary<string, string>(actualSources, StringComparer.Ordinal);
