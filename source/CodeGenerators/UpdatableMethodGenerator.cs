@@ -7,9 +7,10 @@ using System.Linq;
 
 namespace AlephMapper.CodeGenerators;
 
-internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext, string sourceParamName)
+internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext, IReadOnlyList<string> sourceParamNames)
 {
     private readonly List<string> _lines = [];
+    private readonly string _primarySourceParamName = sourceParamNames.FirstOrDefault() ?? "source";
 
     private static readonly SymbolDisplayFormat MinimallyQualifiedFormatWithoutNullability =
         SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
@@ -433,10 +434,10 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
 
                 case MemberBindingExpressionSyntax mbs:
                     // Dot-prefixed fragment without its conditional root; attach to the source parameter
-                    return sourceParamName + "?" + mbs.WithoutTrivia();
+                    return _primarySourceParamName + "?" + mbs.WithoutTrivia();
 
                 case ElementBindingExpressionSyntax ebs:
-                    return sourceParamName + "?" + ebs.WithoutTrivia();
+                    return _primarySourceParamName + "?" + ebs.WithoutTrivia();
 
 
                 case InterpolatedStringExpressionSyntax ise:

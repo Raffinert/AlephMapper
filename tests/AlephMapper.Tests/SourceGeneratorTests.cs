@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Metadata;
 
 namespace AlephMapper.Tests;
 
@@ -83,7 +84,7 @@ public class SourceGeneratorTests
             compilationOptions);
 
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
-        
+
         var result = driver.GetRunResult().Results.Single();
 
         var actualSources = result.GeneratedSources.ToDictionary(
@@ -100,7 +101,7 @@ public class SourceGeneratorTests
                 },
                 file => NormalizeLineEndings(File.ReadAllText(file)),
                 StringComparer.Ordinal);
-
+        
         if (string.Equals(Environment.GetEnvironmentVariable("UPDATE_BASELINE"), "1", StringComparison.Ordinal))
         {
             var expectedRoot = Path.GetDirectoryName(expectedFiles.First())
@@ -108,7 +109,9 @@ public class SourceGeneratorTests
 
             foreach (var generated in actualSources)
             {
-                await File.WriteAllTextAsync(Path.Combine(expectedRoot, generated.Key), generated.Value);
+                var filePath = Path.Combine(expectedRoot, generated.Key);
+                var absolutePath = Path.Combine(Path.GetFullPath(@"..\..\..\"), filePath);
+                await File.WriteAllTextAsync(absolutePath, generated.Value);
             }
 
             expectedFileContents = new Dictionary<string, string>(actualSources, StringComparer.Ordinal);

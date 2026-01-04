@@ -4,10 +4,9 @@ using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
-
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.1")]
+[GeneratedCode("AlephMapper", "0.5.2")]
 partial class NestedExt_PersonMapper_Rewrite
 {
     /// <summary>
@@ -24,11 +23,7 @@ partial class NestedExt_PersonMapper_Rewrite
             HomeAddress = (p != null
                 ? ((p.Friend != null
                     ? ((p.Friend.HomeAddress != null
-                        ? (new NestedExt_AddressDto
-                        {
-                            Street = p.Friend.HomeAddress.Street,
-                            City = p.Friend.HomeAddress.City
-                        }) 
+                        ? (p.Friend.HomeAddress.ToDto()) 
                         : (NestedExt_AddressDto)null)) 
                     : (NestedExt_AddressDto)null)) 
                 : (NestedExt_AddressDto)null)

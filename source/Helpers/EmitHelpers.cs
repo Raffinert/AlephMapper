@@ -2,7 +2,7 @@
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using SymbolDisplayFormat = Microsoft.CodeAnalysis.SymbolDisplayFormat;
+using System.Linq;
 
 namespace AlephMapper.Helpers;
 
@@ -21,10 +21,10 @@ internal static class EmitHelpers
 
         var typeContext = propertyInfoCollector.TypeContext;
 
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, mm.ParamName);
+        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, mm.Parameters.Select(p => p.Name).ToArray());
         List<string> processedLines;
 
-        var srcName = mm.ParamName;
+        var srcName = mm.Parameters[0].Name;
 
         // Build null check conditions
         switch (inlinedBody)

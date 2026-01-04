@@ -1,13 +1,12 @@
-﻿using AlephMapper;
+using AlephMapper;
 using System;
 using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
-
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.5.1")]
+[GeneratedCode("AlephMapper", "0.5.2")]
 partial class SampleMapper
 {
     /// <summary>
