@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis;
 
 namespace AlephMapper.Diagnostics;
 
+// Borrowed from: https://github.com/themidnightgospel/Imposter
+
 internal static class CrashDiagnosticsReporter
 {
     private const int MaxCrashDiagnosticLength = 2_000;

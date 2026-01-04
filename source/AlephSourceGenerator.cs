@@ -88,16 +88,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             // Skip generating expression method if there are circular references
                             if (expressionInliner.CircularReferences.Any())
                             {
-                                var descriptor = new DiagnosticDescriptor(
-                                    "AM0002",
-                                    "Expressive method generation skipped due to circular references",
-                                    "Expression method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable expression generation.",
-                                    "AlephMapper",
-                                    DiagnosticSeverity.Warning,
-                                    isEnabledByDefault: true);
-
                                 var diagnostic = Diagnostic.Create(
-                                    descriptor,
+                                    DiagnosticDescriptors.ExpressiveCircularReferences,
                                     mm.MethodSymbol.Locations.FirstOrDefault(),
                                     mm.MethodSymbol.Name);
 
@@ -146,16 +138,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             // Skip generating Updatable method if there are circular references
                             if (expressionInliner.CircularReferences.Any())
                             {
-                                var descriptor = new DiagnosticDescriptor(
-                                    "AM0003",
-                                    "Updatable method generation skipped due to circular references",
-                                    "Updatable method generation skipped for '{0}' due to circular references. Fix the circular dependencies to enable Updatable method generation.",
-                                    "AlephMapper",
-                                    DiagnosticSeverity.Warning,
-                                    isEnabledByDefault: true);
-
                                 var diagnostic = Diagnostic.Create(
-                                    descriptor,
+                                    DiagnosticDescriptors.UpdatableCircularReferences,
                                     mm.MethodSymbol.Locations.FirstOrDefault(),
                                     mm.MethodSymbol.Name);
 
@@ -167,16 +151,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                             if (mm.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mm.ReturnType))
                             {
                                 // Emit a diagnostic warning for value type Updatable methods
-                                var descriptor = new DiagnosticDescriptor(
-                                    "AM0001",
-                                    "Updatable method with value type return type",
-                                    "Updatable method '{0}' returns value type '{1}'. Value types are passed by value, so update semantics don't work as expected. Consider using a regular mapping method instead.",
-                                    "AlephMapper",
-                                    DiagnosticSeverity.Warning,
-                                    isEnabledByDefault: true);
-
                                 var diagnostic = Diagnostic.Create(
-                                    descriptor,
+                                    DiagnosticDescriptors.UpdatableValueTypeReturn,
                                     mm.MethodSymbol.Locations.FirstOrDefault(),
                                     mm.MethodSymbol.Name,
                                     mm.ReturnType.ToDisplayString());
