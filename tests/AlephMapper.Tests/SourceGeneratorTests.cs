@@ -2,7 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection.Metadata;
 
 namespace AlephMapper.Tests;
 
