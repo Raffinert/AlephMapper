@@ -2,5 +2,5 @@
 
 internal static class VersionInfo
 {
-    public static string Version { get; } = "0.5.0";
+    public static string Version { get; } = "0.5.1";
 }

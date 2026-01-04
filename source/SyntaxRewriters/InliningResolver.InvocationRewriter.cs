@@ -52,13 +52,12 @@ internal sealed partial class InliningResolver(
 
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
+        if (node.Parent == null || model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
         {
             return base.VisitInvocationExpression(node);
         }
 
         var args = node.ArgumentList.Arguments;
-
         // Handle extension methods without arguments differently - they show up as static methods with the first parameter being 'this'
         // For extension methods, we need to treat the receiver (left side of the dot) as the first argument
         ExpressionSyntax firstArg;

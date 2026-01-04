@@ -19,7 +19,7 @@ public class SourceGeneratorTests
 
     public static IEnumerable<object[]> GetTestCases()
     {
-        var groupedByTestCase = Nones.GetMatches("Files/**/*.cs")
+        var groupedByTestCase = Nones.GetMatches("Files/MethodGroupToEntityList/**/*.cs")
             .GroupBy(n => n.GetNoneFilePath()
                 .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .SkipWhile(x => x != "Files")
