@@ -22,7 +22,7 @@ public static class OrderItemMapper
         Name = dto.ProductName,
         Qty = dto.Quantity,
         Price = dto.UnitPrice,
-        LineTotal = CalculateLineTotal(dto.Quantity, dto.UnitPrice)
+        LineTotal = OrderItemMapper.CalculateLineTotal(dto.Quantity, dto.UnitPrice)
     };
 
     // Bulk mapping operations with expression-bodied syntax

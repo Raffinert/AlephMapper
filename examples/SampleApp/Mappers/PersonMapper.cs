@@ -23,6 +23,7 @@ public static partial class PersonMapper
 
     // DTO to entity mapping with expression-bodied syntax
     //[Updatable]
+    [Expressive]
     public static Person ToEntity(PersonDto dto) => new()
     {
         PersonId = dto.Id,

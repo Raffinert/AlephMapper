@@ -1,7 +1,7 @@
 ﻿using AgileObjects.ReadableExpressions;
 using AlephMapper;
 
-namespace CurrentFailedTests;
+namespace Experiments;
 
 // Test models for extension method testing
 public class ExtensionTestAddress
@@ -83,8 +83,8 @@ public class ExtensionMethodInliningTests
         // Act
         var expression = ConditionalExtensionTestPersonMapper.ToDtoExpression();
         var readable = expression.ToReadableString();
-        //var expression1 = ConditionalExtensionTestPersonMapper.ToDto1Expression();
-        //var readable1 = expression1.ToReadableString();
+        var expression1 = ConditionalExtensionTestPersonMapper.ToDto1Expression();
+        var readable1 = expression1.ToReadableString();
 
         // Assert - The conditional access extension method call should be inlined
         await Assert.That(readable).Contains("new ExtensionTestAddressDto");
