@@ -8,8 +8,7 @@ internal sealed class MappingModel(
     INamedTypeSymbol containingType,
     IMethodSymbol methodSymbol,
     string name,
-    string paramName,
-    ITypeSymbol paramType,
+    IReadOnlyList<IParameterSymbol> parameters,
     ITypeSymbol returnType,
     ArrowExpressionClauseSyntax bodySyntax,
     SemanticModel semanticModel,
@@ -23,8 +22,8 @@ internal sealed class MappingModel(
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
     public readonly string Name = name;
-    public readonly string ParamName = paramName;
-    public readonly ITypeSymbol ParamType = paramType;
+    public readonly IReadOnlyList<IParameterSymbol> Parameters = parameters;
+    public readonly ITypeSymbol ParamType = parameters[0].Type;
     public readonly ITypeSymbol ReturnType = returnType;
     public readonly ArrowExpressionClauseSyntax BodySyntax = bodySyntax;
     public readonly SemanticModel SemanticModel = semanticModel;

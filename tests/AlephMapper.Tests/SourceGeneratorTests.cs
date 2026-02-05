@@ -83,7 +83,7 @@ public class SourceGeneratorTests
             compilationOptions);
 
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
-        
+
         var result = driver.GetRunResult().Results.Single();
 
         var actualSources = result.GeneratedSources.ToDictionary(
@@ -100,7 +100,7 @@ public class SourceGeneratorTests
                 },
                 file => NormalizeLineEndings(File.ReadAllText(file)),
                 StringComparer.Ordinal);
-
+        
         if (string.Equals(Environment.GetEnvironmentVariable("UPDATE_BASELINE"), "1", StringComparison.Ordinal))
         {
             var expectedRoot = Path.GetDirectoryName(expectedFiles.First())

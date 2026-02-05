@@ -4,7 +4,6 @@ using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
-
 namespace AlephMapper.Tests;
 
 [GeneratedCode("AlephMapper", "0.5.2")]
@@ -22,6 +21,6 @@ partial class TechDebtPersonMapperNone
         person => new TechDebtTestPersonDto
         {
             Name = person.Name,
-            AddressStr = person.Address.FormattedAddress ?? "No Address"
+            AddressStr = person.Address?.FormatAddress() ?? "No Address"
         };
 }

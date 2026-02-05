@@ -4,7 +4,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using TUnit.Core;
 
-
 namespace AlephMapper.Tests;
 
 [GeneratedCode("AlephMapper", "0.5.2")]
