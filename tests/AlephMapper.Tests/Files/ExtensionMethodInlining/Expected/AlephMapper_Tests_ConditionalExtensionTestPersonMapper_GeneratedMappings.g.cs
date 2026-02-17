@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.2")]
+[GeneratedCode("AlephMapper", "0.5.3")]
 partial class ConditionalExtensionTestPersonMapper
 {
     /// <summary>
@@ -22,6 +22,12 @@ partial class ConditionalExtensionTestPersonMapper
         {
             Id = person.Id,
             Name = person.Name,
-            Address = person.Address.ToDto()
+            Address = new ExtensionTestAddressDto
+            {
+                Street = person.Address.Street,
+                City = person.Address.City,
+                PostalCode = person.Address.PostalCode,
+                FormattedAddress = $"{person.Address.Street}, {person.Address.City} {person.Address.PostalCode}"
+            }
         };
 }

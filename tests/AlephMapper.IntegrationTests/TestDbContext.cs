@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 public class ComprehensiveTestDbContext(DbContextOptions<ComprehensiveTestDbContext> options) : DbContext(options)
 {

@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.EntityFrameworkCore;
 
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 // Core domain models for comprehensive testing
 public class Employee

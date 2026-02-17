@@ -1,4 +1,4 @@
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class SimpleEmployeeMapper

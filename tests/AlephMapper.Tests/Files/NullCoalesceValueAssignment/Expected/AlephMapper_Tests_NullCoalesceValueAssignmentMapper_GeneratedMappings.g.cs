@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.2")]
+[GeneratedCode("AlephMapper", "0.5.3")]
 partial class NullCoalesceValueAssignmentMapper
 {
     /// <summary>

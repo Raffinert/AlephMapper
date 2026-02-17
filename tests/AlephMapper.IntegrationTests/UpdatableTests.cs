@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 public class UpdatableTests
 {

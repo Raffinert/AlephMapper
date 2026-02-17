@@ -1,4 +1,4 @@
-﻿using AlephMapper.Helpers;
+using AlephMapper.Helpers;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -194,7 +194,14 @@ internal sealed partial class InliningResolver(
         substitutions = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
         conditionalAccessExpression = false;
 
-        var parameters = invokedMethod.Parameters;
+        // When an extension method is called via dot syntax (e.g. address.ToDto()),
+        // Roslyn returns the "reduced" form where Parameters does NOT include the 'this' parameter.
+        // We need the original definition's parameters (which include 'this') for correct substitution.
+        var isReducedExtension = invokedMethod.IsExtensionMethod && invokedMethod.ReducedFrom != null;
+        var parameters = isReducedExtension
+            ? invokedMethod.ReducedFrom.Parameters
+            : invokedMethod.Parameters;
+
         if (parameters.Length == 0)
         {
             return false;
@@ -202,7 +209,7 @@ internal sealed partial class InliningResolver(
 
         var nextParamIndex = 0;
 
-        if (invokedMethod.IsExtensionMethod)
+        if (isReducedExtension)
         {
             ExpressionSyntax receiver;
             if (node.Parent is ConditionalAccessExpressionSyntax caExpr)

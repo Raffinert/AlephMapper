@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 namespace AlephMapper.Tests.MultiParameterInlining;
 
 [GeneratedCode("AlephMapper", "0.5.3")]
-partial class PersonMapper
+partial class NestedMultiParamMapper
 {
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="ToDto(Person)"/>.
@@ -20,9 +20,6 @@ partial class PersonMapper
     public static Expression<Func<Person, PersonDto>> ToDtoExpression() => 
         person => new PersonDto
         {
-            FullName = person.First + " " + person.Last,
-            Address = person.Street + ", " + person.City + " " + person.Zip,
-            Description = person.First + " " + person.Last + " (age " + person.Age + ")",
-            BirthYear = 2026 - person.Age
+            FullName = person.First + " " + person.Last + " (age " + person.Age + ")"
         };
 }

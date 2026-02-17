@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.2")]
+[GeneratedCode("AlephMapper", "0.5.3")]
 partial class NestedExt_PersonMapper_Ignore
 {
     /// <summary>
@@ -20,6 +20,10 @@ partial class NestedExt_PersonMapper_Ignore
     public static Expression<Func<NestedExt_Person, NestedExt_PersonDto>> ToDtoExpression() => 
         p => new NestedExt_PersonDto
         {
-            HomeAddress = p.Friend.HomeAddress.ToDto()
+            HomeAddress = new NestedExt_AddressDto
+            {
+                Street = p.Friend.HomeAddress.Street,
+                City = p.Friend.HomeAddress.City
+            }
         };
 }

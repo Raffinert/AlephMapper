@@ -1,4 +1,4 @@
-﻿using AlephMapper.Models;
+using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
@@ -439,6 +439,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                 case ElementBindingExpressionSyntax ebs:
                     return _primarySourceParamName + "?" + ebs.WithoutTrivia();
 
+
+                case BinaryExpressionSyntax binary:
+                    var binLeft = Recurse(binary.Left);
+                    var op = binary.OperatorToken.Text;
+                    var binRight = Recurse(binary.Right);
+                    return binLeft + " " + op + " " + binRight;
 
                 case InterpolatedStringExpressionSyntax ise:
                     return FormatInterpolated(ise, Recurse);

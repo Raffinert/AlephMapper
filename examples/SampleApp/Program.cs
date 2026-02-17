@@ -1,5 +1,6 @@
-﻿using SampleApp.Entities;
+using SampleApp.Entities;
 using SampleApp.Mappers;
+using SampleApp.Models;
 using SampleApp.Services;
 
 // Create sample entity data
@@ -154,5 +155,54 @@ foreach (var item in highValueItems)
 
 var averageItemValue = OrderItemMapper.GetAverageItemValue(allItems);
 Console.WriteLine($"   Average item value: {averageItemValue:C}");
+
+// Demonstrate multi-parameter helper inlining
+Console.WriteLine("\n10. Multi-Parameter Helper Inlining (Expression + Updatable):");
+var employee = new Employee
+{
+    EmployeeId = 42,
+    FirstName = "Jane",
+    LastName = "Smith",
+    Email = "jane.smith@company.com",
+    BirthYear = 1988,
+    StartYear = 2015,
+    Department = "Engineering",
+    Title = "Sr. Developer",
+    Street = "456 Oak Ave",
+    City = "San Francisco",
+    State = "CA",
+    Country = "USA",
+    BaseSalary = 150_000m,
+    BonusPercent = 15m
+};
+
+// Use the original mapping method (calls multi-param helpers at runtime)
+var summary = EmployeeMapper.ToSummary(employee);
+Console.WriteLine($"   FullName:           {summary.FullName}");
+Console.WriteLine($"   DisplayName:        {summary.DisplayName}");
+Console.WriteLine($"   ContactInfo:        {summary.ContactInfo}");
+Console.WriteLine($"   Age:                {summary.Age}");
+Console.WriteLine($"   YearsOfService:     {summary.YearsOfService}");
+Console.WriteLine($"   Location:           {summary.Location}");
+Console.WriteLine($"   DepartmentTitle:    {summary.DepartmentTitle}");
+Console.WriteLine($"   TotalCompensation:  {summary.TotalCompensation:C}");
+
+// Use the generated expression (multi-param helpers are inlined into the expression tree)
+var empExpression = EmployeeMapper.ToSummaryExpression();
+Console.WriteLine($"\n   Generated Expression (helpers inlined):");
+Console.WriteLine($"   {empExpression}");
+var compiled = empExpression.Compile();
+var fromExpression = compiled(employee);
+Console.WriteLine($"\n   From compiled expression:");
+Console.WriteLine($"   FullName:           {fromExpression.FullName}");
+Console.WriteLine($"   TotalCompensation:  {fromExpression.TotalCompensation:C}");
+
+// Use the generated updatable method (multi-param helpers inlined into assignment statements)
+var updatable = new EmployeeSummaryDto();
+EmployeeMapper.ToSummary(employee, updatable);
+Console.WriteLine($"\n   From updatable method:");
+Console.WriteLine($"   FullName:           {updatable.FullName}");
+Console.WriteLine($"   Location:           {updatable.Location}");
+Console.WriteLine($"   TotalCompensation:  {updatable.TotalCompensation:C}");
 
 Console.WriteLine("\n=== Mapping Demonstration Complete ===");

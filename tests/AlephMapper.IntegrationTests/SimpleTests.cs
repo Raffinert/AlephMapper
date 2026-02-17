@@ -1,8 +1,8 @@
+using AgileObjects.ReadableExpressions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using AgileObjects.ReadableExpressions;
 
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 public class SimpleIntegrationTests
 {

@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.2")]
+[GeneratedCode("AlephMapper", "0.5.3")]
 partial class TechDebtPersonMapperRewrite
 {
     /// <summary>
@@ -22,7 +22,7 @@ partial class TechDebtPersonMapperRewrite
         {
             Name = person.Name,
             AddressStr = (person.Address != null
-                ? (person.Address.FormatAddress()) 
+                ? (person.Address.FormattedAddress) 
                 : (string)null) ?? "No Address"
         };
 }
