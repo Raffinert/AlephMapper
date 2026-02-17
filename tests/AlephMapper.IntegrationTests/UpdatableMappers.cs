@@ -1,4 +1,4 @@
-namespace AlephMapper.ComprehensiveTests;
+namespace AlephMapper.IntegrationTests;
 
 // Add a test mapper that uses conditional expressions like the PersonMapper
 [Updatable]

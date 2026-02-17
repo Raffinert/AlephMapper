@@ -86,10 +86,19 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
             foreach (var mm in methods)
             {
-                var srcName = mm.ParamName;
                 var nullableContextPosition = mm.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
-                var srcFqn = TypeDisplay.ForSymbol(mm.ParamType, mm.MethodSymbol.Parameters[0].NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                var parameterFqns = mm.Parameters
+                    .Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition)))
+                    .ToArray();
                 var destFqn = TypeDisplay.ForSymbol(mm.ReturnType, mm.MethodSymbol.ReturnNullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                var srcFqn = TypeDisplay.ForSymbol(mm.ParamType, mm.Parameters[0].NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                var srcName = mm.Parameters[0].Name;
+                var methodParameterList = string.Join(", ", parameterFqns);
+                var methodParameterListWithNames = string.Join(", ",
+                    mm.Parameters.Select(p => $"{TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition))} {p.Name}"));
+                var lambdaParameters = mm.Parameters.Count == 1
+                    ? mm.Parameters[0].Name
+                    : "(" + string.Join(", ", mm.Parameters.Select(p => p.Name)) + ")";
 
                 if (!mm.IsExpressive && !mm.IsUpdatable) continue;
 
@@ -120,7 +129,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     }
                     isFirst = false;
                     membersSb.AppendLine("    /// <summary>");
-                    membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({srcFqn})\"/>.");
+                    membersSb.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mm.Name}({methodParameterList})\"/>.");
                     membersSb.AppendLine("    /// </summary>");
                     membersSb.AppendLine("    /// <remarks>");
 
@@ -137,9 +146,10 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     membersSb.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
                     membersSb.AppendLine("    /// </para>");
                     membersSb.AppendLine("    /// </remarks>");
-                    membersSb.AppendLine("    public static Expression<Func<" + srcFqn + ", " + destFqn + ">> " + expressionMethodName + "() => ");
+                    var funcTypeArguments = string.Join(", ", parameterFqns.Append(destFqn));
+                    membersSb.AppendLine("    public static Expression<Func<" + funcTypeArguments + ">> " + expressionMethodName + "() => ");
                     var ocePrettyPrinted = PrettyPrinter.Print(inlinedBody, 2);
-                    membersSb.Append("        " + srcName + " => ");
+                    membersSb.Append("        " + lambdaParameters + " => ");
                     membersSb.AppendLine(ocePrettyPrinted + ";");
                 }
 
@@ -198,7 +208,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
                         membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
                         membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
-                        membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + srcFqn + " " + srcName + ", " + destFqn + " dest)");
+                        membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + methodParameterListWithNames + ", " + destFqn + " dest)");
                         membersSb.AppendLine("    {");
                         foreach (var l in lines) membersSb.AppendLine("        " + l);
                         membersSb.AppendLine("    }");
@@ -222,12 +232,14 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
             }
 
-            sb.AppendLine();
-
             if (!string.IsNullOrEmpty(containingNamespace))
             {
                 sb.AppendLine();
                 sb.AppendLine("namespace " + containingNamespace + ";");
+                sb.AppendLine();
+            }
+            else
+            {
                 sb.AppendLine();
             }
 
@@ -243,7 +255,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
                                : containingNamespace.Replace('.', '_') + "_")
                            + mapperType.Name + "_GeneratedMappings.g.cs";
 
-            spc.AddSource(fileName, sb.ToString());
+            var output = sb.ToString();
+            spc.AddSource(fileName, output);
         }
     }
 
@@ -273,7 +286,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        if (methodSymbol.Parameters.Length != 1)
+        if (methodSymbol.Parameters.Length == 0)
         {
             return null;
         }
@@ -308,8 +321,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             classSymbol,
             methodSymbol,
             methodSymbol.Name,
-            methodSymbol.Parameters[0].Name,
-            methodSymbol.Parameters[0].Type,
+            methodSymbol.Parameters,
             methodSymbol.ReturnType,
             bodyExpr,
             model,

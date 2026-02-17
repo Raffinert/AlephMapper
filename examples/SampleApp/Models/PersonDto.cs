@@ -1,4 +1,4 @@
-﻿namespace SampleApp.Models;
+namespace SampleApp.Models;
 
 public class PersonDto
 {
@@ -43,4 +43,17 @@ public class OrderItemDto
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TotalPrice { get; set; }
+}
+
+public class EmployeeSummaryDto
+{
+    public int Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string ContactInfo { get; set; } = string.Empty;
+    public int Age { get; set; }
+    public int YearsOfService { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public string DepartmentTitle { get; set; } = string.Empty;
+    public decimal TotalCompensation { get; set; }
 }

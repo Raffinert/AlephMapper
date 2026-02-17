@@ -1,4 +1,4 @@
-﻿namespace SampleApp.Entities;
+namespace SampleApp.Entities;
 
 public class Person
 {
@@ -67,4 +67,22 @@ public class OrderItem
     public int Qty { get; set; }
     public decimal Price { get; set; }
     public decimal LineTotal { get; set; }
+}
+
+public class Employee
+{
+    public int EmployeeId { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int BirthYear { get; set; }
+    public int StartYear { get; set; }
+    public string Department { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Street { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+    public decimal BaseSalary { get; set; }
+    public decimal BonusPercent { get; set; }
 }

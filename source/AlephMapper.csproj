@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Authors>Yevhen Cherkes</Authors>
-    <Copyright>Copyright $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
+    <Copyright>Copyright 2025 - $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
     <Description>Your manual mapping companion.</Description>
     <DevelopmentDependency>true</DevelopmentDependency>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.5.2</PackageVersion>
+    <PackageVersion>0.5.3</PackageVersion>
     <PackageTags>Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
