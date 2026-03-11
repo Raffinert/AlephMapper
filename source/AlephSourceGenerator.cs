@@ -203,11 +203,15 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         isFirst = false;
 
                         membersSb.AppendLine("    /// <summary>");
-                        membersSb.AppendLine($"    /// Updates an existing instance of <see cref=\"{destFqn}\"/> with values from the source object.");
+                        membersSb.AppendLine($"    /// Updates an existing or create new instance of <see cref=\"{destFqn}\"/> with values from the source object.");
                         membersSb.AppendLine("    /// </summary>");
                         membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
-                        membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, no updates are performed.</param>");
-                        membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>");
+                        foreach (var parameter in mm.Parameters.Skip(1))
+                        {
+                            membersSb.AppendLine($"    /// <param name=\"{parameter.Name}\"/>");
+                        }
+                        membersSb.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, the new instance is created.</param>");
+                        membersSb.AppendLine("    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>");
                         membersSb.AppendLine("    public static " + destFqn + " " + updateMethodName + "(" + methodParameterListWithNames + ", " + destFqn + " dest)");
                         membersSb.AppendLine("    {");
                         foreach (var l in lines) membersSb.AppendLine("        " + l);

@@ -13,14 +13,14 @@ public static partial class EmployeeMapper
 {
     [Expressive]
     [Updatable]
-    public static EmployeeSummaryDto ToSummary(Employee emp) => new()
+    public static EmployeeSummaryDto ToSummary(Employee emp, int year) => new()
     {
         Id = emp.EmployeeId,
         FullName = FormatName(emp.FirstName, emp.LastName),
         DisplayName = FormatDisplayName(emp.Title, emp.FirstName, emp.LastName),
         ContactInfo = FormatContact(emp.FirstName, emp.LastName, emp.Email),
-        Age = YearsSince(emp.BirthYear, DateTime.Now.Year),
-        YearsOfService = YearsSince(emp.StartYear, DateTime.Now.Year),
+        Age = YearsSince(emp.BirthYear, year),
+        YearsOfService = YearsSince(emp.StartYear, year),
         Location = FormatLocation(emp.City, emp.State, emp.Country),
         DepartmentTitle = CombineWithSeparator(emp.Department, emp.Title, " - "),
         TotalCompensation = CalculateCompensation(emp.BaseSalary, emp.BonusPercent)
