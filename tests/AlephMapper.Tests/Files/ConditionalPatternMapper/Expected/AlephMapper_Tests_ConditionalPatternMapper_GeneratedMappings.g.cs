@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
@@ -9,11 +9,11 @@ namespace AlephMapper.Tests;
 partial class ConditionalPatternMapper
 {
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel BothSidesObjects(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;
@@ -38,11 +38,11 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel ObjectThenNull(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;
@@ -64,11 +64,11 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel NullThenObject(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;
@@ -90,11 +90,11 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel NestedBothSides(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;
@@ -119,11 +119,11 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel ObjectThenThrow(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;
@@ -145,11 +145,11 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// Updates an existing instance of <see cref="DestModel"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="DestModel"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static DestModel ThrowThenObject(SourceModel source, DestModel dest)
     {
         if (source == null) return dest;

@@ -177,7 +177,7 @@ var employee = new Employee
 };
 
 // Use the original mapping method (calls multi-param helpers at runtime)
-var summary = EmployeeMapper.ToSummary(employee);
+var summary = EmployeeMapper.ToSummary(employee, DateTime.Now.Year);
 Console.WriteLine($"   FullName:           {summary.FullName}");
 Console.WriteLine($"   DisplayName:        {summary.DisplayName}");
 Console.WriteLine($"   ContactInfo:        {summary.ContactInfo}");
@@ -192,14 +192,14 @@ var empExpression = EmployeeMapper.ToSummaryExpression();
 Console.WriteLine($"\n   Generated Expression (helpers inlined):");
 Console.WriteLine($"   {empExpression}");
 var compiled = empExpression.Compile();
-var fromExpression = compiled(employee);
+var fromExpression = compiled(employee, DateTime.Now.Year);
 Console.WriteLine($"\n   From compiled expression:");
 Console.WriteLine($"   FullName:           {fromExpression.FullName}");
 Console.WriteLine($"   TotalCompensation:  {fromExpression.TotalCompensation:C}");
 
 // Use the generated updatable method (multi-param helpers inlined into assignment statements)
 var updatable = new EmployeeSummaryDto();
-EmployeeMapper.ToSummary(employee, updatable);
+EmployeeMapper.ToSummary(employee, DateTime.Now.Year, updatable);
 Console.WriteLine($"\n   From updatable method:");
 Console.WriteLine($"   FullName:           {updatable.FullName}");
 Console.WriteLine($"   Location:           {updatable.Location}");

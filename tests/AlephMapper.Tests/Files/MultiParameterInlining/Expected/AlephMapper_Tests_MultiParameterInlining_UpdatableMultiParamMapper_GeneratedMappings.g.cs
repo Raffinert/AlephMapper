@@ -1,4 +1,4 @@
-using AlephMapper;
+﻿using AlephMapper;
 using System;
 using System.CodeDom.Compiler;
 using System.Linq;
@@ -10,33 +10,34 @@ namespace AlephMapper.Tests.MultiParameterInlining;
 partial class UpdatableMultiParamMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ToDto(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="ToDto(Person, int)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, PersonDto>> ToDtoExpression() => 
-        person => new PersonDto
+    public static Expression<Func<Person, int, PersonDto>> ToDtoExpression() => 
+        (person, currentYear) => new PersonDto
         {
             FullName = person.First + " " + person.Last,
-            BirthYear = 2026 - person.Age
+            BirthYear = currentYear - person.Age
         };
 
     /// <summary>
-    /// Updates an existing instance of <see cref="PersonDto"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="PersonDto"/> with values from the source object.
     /// </summary>
     /// <param name="person">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
-    public static PersonDto ToDto(Person person, PersonDto dest)
+    /// <param name="currentYear"/>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
+    public static PersonDto ToDto(Person person, int currentYear, PersonDto dest)
     {
         if (person == null) return dest;
         if (dest == null)
             dest = new PersonDto();
         dest.FullName = person.First + " " + person.Last;
-        dest.BirthYear = 2026 - person.Age;
+        dest.BirthYear = currentYear - person.Age;
         return dest;
     }
 }

@@ -102,10 +102,10 @@ public static partial class UpdatableMultiParamMapper
 {
     [Expressive]
     [Updatable]
-    public static PersonDto ToDto(Person person) => new()
+    public static PersonDto ToDto(Person person, int currentYear) => new()
     {
         FullName = Combine(person.First, person.Last),
-        BirthYear = YearFromAge(person.Age, 2026)
+        BirthYear = YearFromAge(person.Age, currentYear)
     };
 
     public static string Combine(string first, string last) => first + " " + last;

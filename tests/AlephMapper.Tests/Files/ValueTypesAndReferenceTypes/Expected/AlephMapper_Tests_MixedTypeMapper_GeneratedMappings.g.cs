@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
@@ -36,11 +36,11 @@ partial class MixedTypeMapper
         };
 
     /// <summary>
-    /// Updates an existing instance of <see cref="MixedTypeDestination"/> with values from the source object.
+    /// Updates an existing or create new instance of <see cref="MixedTypeDestination"/> with values from the source object.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
-    /// <param name="dest">The destination object to update. If null, no updates are performed.</param>
-    /// <returns>The updated destination object for method chaining, or the original destination if either parameter is null.</returns>
+    /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
+    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
     public static MixedTypeDestination MapToDestination(MixedTypeSource source, MixedTypeDestination dest)
     {
         if (source == null) return dest;
