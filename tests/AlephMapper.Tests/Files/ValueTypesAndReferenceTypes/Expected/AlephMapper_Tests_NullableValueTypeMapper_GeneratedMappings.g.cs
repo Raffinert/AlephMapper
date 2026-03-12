@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.3")]
+[GeneratedCode("AlephMapper", "0.5.5")]
 partial class NullableValueTypeMapper
 {
     /// <summary>
@@ -25,7 +25,7 @@ partial class NullableValueTypeMapper
         };
 
     /// <summary>
-    /// Updates an existing or create new instance of <see cref="NullableValueTypeDestination"/> with values from the source object.
+    /// This is an auto-generated update method for <see cref="MapToDestination(NullableValueTypeSource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>

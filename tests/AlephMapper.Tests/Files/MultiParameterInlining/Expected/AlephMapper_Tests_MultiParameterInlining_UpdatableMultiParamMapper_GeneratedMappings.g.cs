@@ -1,4 +1,4 @@
-﻿using AlephMapper;
+using AlephMapper;
 using System;
 using System.CodeDom.Compiler;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParameterInlining;
 
-[GeneratedCode("AlephMapper", "0.5.3")]
+[GeneratedCode("AlephMapper", "0.5.5")]
 partial class UpdatableMultiParamMapper
 {
     /// <summary>
@@ -25,7 +25,7 @@ partial class UpdatableMultiParamMapper
         };
 
     /// <summary>
-    /// Updates an existing or create new instance of <see cref="PersonDto"/> with values from the source object.
+    /// This is an auto-generated update method for <see cref="ToDto(Person, int)"/>.
     /// </summary>
     /// <param name="person">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="currentYear"/>

@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.3")]
+[GeneratedCode("AlephMapper", "0.5.5")]
 partial class Address1Mapper
 {
     /// <summary>

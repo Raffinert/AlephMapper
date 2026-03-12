@@ -203,7 +203,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         isFirst = false;
 
                         membersSb.AppendLine("    /// <summary>");
-                        membersSb.AppendLine($"    /// Updates an existing or create new instance of <see cref=\"{destFqn}\"/> with values from the source object.");
+                        membersSb.AppendLine($"    /// This is an auto-generated update method for <see cref=\"{mm.Name}({methodParameterList})\"/>.");
                         membersSb.AppendLine("    /// </summary>");
                         membersSb.AppendLine($"    /// <param name=\"{srcName}\">The source object to map values from. If null, no updates are performed.</param>");
                         foreach (var parameter in mm.Parameters.Skip(1))
