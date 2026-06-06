@@ -51,7 +51,7 @@ public static class PhoneMapper
         || phoneNumber == ""
             ? string.Empty
             : phoneNumber.Length == 10
-                ? $"({phoneNumber.Take(3)}) {phoneNumber.Skip(3).Take(3)}-{phoneNumber.Skip(6)}"
+                ? $"({phoneNumber.Substring(0, 3)}) {phoneNumber.Substring(3, 3)}-{phoneNumber.Substring(6)}"
                 : phoneNumber;
 
     // Phone number cleaning with expression-bodied syntax
