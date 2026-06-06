@@ -72,7 +72,6 @@ When referencing AlephMapper directly from source, add it as an analyzer-only pr
 ## Requirements
 
 - Mapping methods must be `static`, expression-bodied, and declared in a `static partial` class.
-- The package targets `netstandard2.0` for broad compiler host compatibility.
 
 ## Quick Start
 
