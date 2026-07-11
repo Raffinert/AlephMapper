@@ -73,7 +73,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             var mapperType = kvp.Key;
             var methods = kvp.Value;
 
-            if (!methods.Any(m => (m.IsExpressive || m.IsUpdatable) && m.IsClassPartial))
+            if (!methods.Any(m => (m.IsExpressive || m.IsUpdatable || m.Adaptations.Count > 0) && m.IsClassPartial))
             {
                 continue;
             }
@@ -83,6 +83,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
             var allUsingDirectives = new HashSet<string>();
 
             bool isFirst = true;
+            var generatedMemberSignatures = new HashSet<string>(StringComparer.Ordinal);
+            var existingMemberNames = new HashSet<string>(mapperType.GetMembers().Select(m => m.Name), StringComparer.Ordinal);
 
             foreach (var mm in methods)
             {
@@ -100,7 +102,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     ? mm.Parameters[0].Name
                     : "(" + string.Join(", ", mm.Parameters.Select(p => p.Name)) + ")";
 
-                if (!mm.IsExpressive && !mm.IsUpdatable) continue;
+                if (!mm.IsExpressive && !mm.IsUpdatable && mm.Adaptations.Count == 0) continue;
 
                 // Expression method
                 if (mm.IsExpressive)
@@ -122,6 +124,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     }
 
                     var expressionMethodName = mm.Name + "Expression";
+                    generatedMemberSignatures.Add(expressionMethodName + "()");
 
                     if (!isFirst)
                     {
@@ -151,6 +154,106 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var ocePrettyPrinted = PrettyPrinter.Print(inlinedBody, 2);
                     membersSb.Append("        " + lambdaParameters + " => ");
                     membersSb.AppendLine(ocePrettyPrinted + ";");
+                }
+
+                // Explicit adaptations
+                foreach (var adaptation in mm.Adaptations)
+                {
+                    var generation = adaptation.Generation;
+                    var generateMap = (generation & AdaptGeneration.Map) == AdaptGeneration.Map;
+                    var generateExpression = (generation & AdaptGeneration.Expression) == AdaptGeneration.Expression;
+
+                    if (generateExpression && string.IsNullOrWhiteSpace(adaptation.GeneratedName))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptExpressionWithoutName,
+                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name));
+                        continue;
+                    }
+
+                    var adaptName = string.IsNullOrWhiteSpace(adaptation.GeneratedName) ? mm.Name : adaptation.GeneratedName!;
+                    var adaptSourceFqn = TypeDisplay.ForSymbol(adaptation.SourceType, NullableAnnotation.None, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                    var adaptDestFqn = TypeDisplay.ForSymbol(adaptation.DestinationType, NullableAnnotation.None, mm.SemanticModel.GetNullableContext(nullableContextPosition));
+                    var additionalParameterListWithNames = string.Join(", ",
+                        mm.Parameters.Skip(1).Select(p => $"{TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, mm.SemanticModel.GetNullableContext(nullableContextPosition))} {p.Name}"));
+                    var adaptMethodParametersWithNames = adaptSourceFqn + " " + srcName +
+                        (string.IsNullOrEmpty(additionalParameterListWithNames) ? "" : ", " + additionalParameterListWithNames);
+
+                    var adaptMapSignature = adaptName + "(" + string.Join(",", new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1))) + ")";
+                    var adaptExpressionName = adaptName + "Expression";
+                    if (generateMap && !generatedMemberSignatures.Add(adaptMapSignature))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptNameConflict,
+                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name,
+                            adaptMapSignature));
+                        continue;
+                    }
+
+                    if (generateExpression && (existingMemberNames.Contains(adaptExpressionName) || !generatedMemberSignatures.Add(adaptExpressionName + "()")))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptNameConflict,
+                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name,
+                            adaptExpressionName));
+                        continue;
+                    }
+
+                    var adaptInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false, adaptation.NullStrategy);
+                    var inlinedBody = (ExpressionSyntax)adaptInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
+                    allUsingDirectives.UnionWith(adaptInliner.UsingDirectives.Concat(mm.UsingDirectives));
+
+                    if (adaptInliner.CircularReferences.Any())
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptCircularHelper,
+                            mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name));
+                        continue;
+                    }
+
+                    if (!ValidateAdaptation(spc, mm, adaptation, inlinedBody))
+                    {
+                        continue;
+                    }
+
+                    var adaptedBody = RewriteAdaptedBody(inlinedBody, mm.ReturnType, adaptation.DestinationType, adaptDestFqn);
+                    var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
+
+                    if (generateMap)
+                    {
+                        if (!isFirst)
+                        {
+                            membersSb.AppendLine();
+                        }
+                        isFirst = false;
+
+                        membersSb.AppendLine("    /// <summary>");
+                        membersSb.AppendLine($"    /// This is an auto-generated adapted mapping method for <see cref=\"{mm.Name}({methodParameterList})\"/>.");
+                        membersSb.AppendLine("    /// </summary>");
+                        membersSb.AppendLine($"    public static {adaptDestFqn} {adaptName}({adaptMethodParametersWithNames}) =>");
+                        membersSb.AppendLine("        " + adaptedBodyText + ";");
+                    }
+
+                    if (generateExpression)
+                    {
+                        if (!isFirst)
+                        {
+                            membersSb.AppendLine();
+                        }
+                        isFirst = false;
+
+                        var adaptFuncArgs = string.Join(", ", new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1)).Append(adaptDestFqn));
+                        membersSb.AppendLine("    /// <summary>");
+                        membersSb.AppendLine($"    /// This is an auto-generated adapted expression companion for <see cref=\"{mm.Name}({methodParameterList})\"/>.");
+                        membersSb.AppendLine("    /// </summary>");
+                        membersSb.AppendLine("    public static Expression<Func<" + adaptFuncArgs + ">> " + adaptExpressionName + "() => ");
+                        membersSb.Append("        " + lambdaParameters + " => ");
+                        membersSb.AppendLine(adaptedBodyText + ";");
+                    }
                 }
 
                 // Update method - check for circular references like expressive methods do
@@ -301,6 +404,8 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var hasUpdatable = SymbolHelpers.HasAttribute(classSymbol, typeof(UpdatableAttribute).FullName)
                             || SymbolHelpers.HasAttribute(methodSymbol, typeof(UpdatableAttribute).FullName);
 
+        var adaptations = GetAdaptations(methodSymbol);
+
         var bodyExpr = ExtractBodyExpression(methodDecl);
 
         if (bodyExpr == null)
@@ -334,8 +439,234 @@ public class AlephSourceGenerator : IIncrementalGenerator
             isClassPartial,
             nullStrategy,
             collectionUpdatePolicy,
-            usingDirectives
+            usingDirectives,
+            adaptations
         );
+    }
+
+    private static IReadOnlyList<AdaptationModel> GetAdaptations(IMethodSymbol methodSymbol)
+    {
+        var result = new List<AdaptationModel>();
+        foreach (var attribute in methodSymbol.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != typeof(AdaptAttribute).FullName)
+            {
+                continue;
+            }
+
+            if (attribute.ConstructorArguments.Length < 2 ||
+                attribute.ConstructorArguments[0].Value is not INamedTypeSymbol sourceType ||
+                attribute.ConstructorArguments[1].Value is not INamedTypeSymbol destinationType)
+            {
+                continue;
+            }
+
+            string? name = null;
+            var generation = AdaptGeneration.Both;
+            var nullStrategy = NullConditionalRewrite.Ignore;
+
+            foreach (var named in attribute.NamedArguments)
+            {
+                if (named.Key == nameof(AdaptAttribute.Name))
+                {
+                    name = named.Value.Value as string;
+                }
+                else if (named.Key == nameof(AdaptAttribute.Generate) && named.Value.Value is int generationValue)
+                {
+                    generation = (AdaptGeneration)generationValue;
+                }
+                else if (named.Key == nameof(AdaptAttribute.NullConditionalRewrite) && named.Value.Value is int nullStrategyValue)
+                {
+                    nullStrategy = (NullConditionalRewrite)nullStrategyValue;
+                }
+            }
+
+            result.Add(new AdaptationModel(sourceType, destinationType, name, generation, nullStrategy, attribute));
+        }
+
+        return result;
+    }
+
+    private static bool ValidateAdaptation(SourceProductionContext spc, MappingModel mapping, AdaptationModel adaptation, ExpressionSyntax body)
+    {
+        var location = adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mapping.MethodSymbol.Locations.FirstOrDefault();
+        var ok = true;
+
+        if (SymbolEqualityComparer.Default.Equals(adaptation.SourceType, mapping.Parameters[0].Type) &&
+            SymbolEqualityComparer.Default.Equals(adaptation.DestinationType, mapping.ReturnType))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.InvalidAdaptType, location, mapping.MethodSymbol.Name));
+            ok = false;
+        }
+
+        if (adaptation.SourceType.IsUnboundGenericType || adaptation.DestinationType.IsUnboundGenericType ||
+            adaptation.SourceType.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter) ||
+            adaptation.DestinationType.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.AdaptOpenGenericType, location, mapping.MethodSymbol.Name));
+            ok = false;
+        }
+
+        foreach (var path in CollectSourceMemberPaths(body, mapping.Parameters[0].Name))
+        {
+            if (!CanResolveReadablePath(adaptation.SourceType, path))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.AdaptSourceMemberMissing,
+                    location,
+                    mapping.MethodSymbol.Name,
+                    string.Join(".", path),
+                    adaptation.SourceType.ToDisplayString()));
+                ok = false;
+            }
+        }
+
+        foreach (var memberName in CollectTopLevelDestinationAssignments(body))
+        {
+            if (!HasWritableInstanceMember(adaptation.DestinationType, memberName))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.AdaptDestinationMemberMissing,
+                    location,
+                    mapping.MethodSymbol.Name,
+                    memberName,
+                    adaptation.DestinationType.ToDisplayString()));
+                ok = false;
+            }
+        }
+
+        return ok;
+    }
+
+    private static IEnumerable<string[]> CollectSourceMemberPaths(ExpressionSyntax body, string sourceParameterName)
+    {
+        var paths = new List<string[]>();
+        foreach (var access in body.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>())
+        {
+            var segments = TryGetMemberPath(access, sourceParameterName);
+            if (segments is { Length: > 0 })
+            {
+                paths.Add(segments);
+            }
+        }
+
+        return paths
+            .GroupBy(p => string.Join(".", p), StringComparer.Ordinal)
+            .Select(g => g.First());
+    }
+
+    private static string[]? TryGetMemberPath(ExpressionSyntax expression, string sourceParameterName)
+    {
+        var segments = new Stack<string>();
+        ExpressionSyntax current = expression;
+
+        while (current is MemberAccessExpressionSyntax memberAccess)
+        {
+            segments.Push(memberAccess.Name.Identifier.Text);
+            current = memberAccess.Expression;
+        }
+
+        return current is IdentifierNameSyntax identifier && identifier.Identifier.Text == sourceParameterName
+            ? segments.ToArray()
+            : null;
+    }
+
+    private static bool CanResolveReadablePath(ITypeSymbol rootType, IReadOnlyList<string> path)
+    {
+        ITypeSymbol currentType = rootType;
+        foreach (var segment in path)
+        {
+            var member = currentType.GetMembers(segment)
+                .FirstOrDefault(static m => !m.IsStatic && IsReadableValueMember(m));
+            if (member == null)
+            {
+                return false;
+            }
+
+            currentType = GetMemberType(member)!;
+            if (currentType == null)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsReadableValueMember(ISymbol member)
+    {
+        return member switch
+        {
+            IPropertySymbol property => property.GetMethod != null,
+            IFieldSymbol field => !field.IsConst,
+            _ => false
+        };
+    }
+
+    private static ITypeSymbol? GetMemberType(ISymbol member)
+    {
+        return member switch
+        {
+            IPropertySymbol property => property.Type,
+            IFieldSymbol field => field.Type,
+            _ => null
+        };
+    }
+
+    private static IEnumerable<string> CollectTopLevelDestinationAssignments(ExpressionSyntax body)
+    {
+        InitializerExpressionSyntax? initializer = body switch
+        {
+            ObjectCreationExpressionSyntax objectCreation => objectCreation.Initializer,
+            ImplicitObjectCreationExpressionSyntax implicitCreation => implicitCreation.Initializer,
+            _ => null
+        };
+
+        if (initializer == null)
+        {
+            yield break;
+        }
+
+        foreach (var assignment in initializer.Expressions.OfType<AssignmentExpressionSyntax>())
+        {
+            if (assignment.Left is IdentifierNameSyntax identifier)
+            {
+                yield return identifier.Identifier.Text;
+            }
+            else if (assignment.Left is MemberAccessExpressionSyntax memberAccess)
+            {
+                yield return memberAccess.Name.Identifier.Text;
+            }
+        }
+    }
+
+    private static bool HasWritableInstanceMember(INamedTypeSymbol type, string memberName)
+    {
+        return type.GetMembers(memberName).Any(static m => m switch
+        {
+            IPropertySymbol property => !property.IsStatic && property.SetMethod != null,
+            IFieldSymbol field => !field.IsStatic && !field.IsReadOnly && !field.IsConst,
+            _ => false
+        });
+    }
+
+    private static ExpressionSyntax RewriteAdaptedBody(ExpressionSyntax body, ITypeSymbol originalDestinationType, INamedTypeSymbol adaptedDestinationType, string adaptedDestinationTypeName)
+    {
+        if (body is ImplicitObjectCreationExpressionSyntax implicitCreation)
+        {
+            return SyntaxFactory.ObjectCreationExpression(
+                    SyntaxFactory.ParseTypeName(adaptedDestinationTypeName),
+                    implicitCreation.ArgumentList,
+                    implicitCreation.Initializer)
+                .WithTriviaFrom(body);
+        }
+
+        if (body is ObjectCreationExpressionSyntax objectCreation)
+        {
+            return objectCreation.WithType(SyntaxFactory.ParseTypeName(adaptedDestinationTypeName));
+        }
+
+        return body;
     }
 
     private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)

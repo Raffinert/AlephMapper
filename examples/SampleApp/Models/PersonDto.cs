@@ -57,3 +57,27 @@ public class EmployeeSummaryDto
     public string DepartmentTitle { get; set; } = string.Empty;
     public decimal TotalCompensation { get; set; }
 }
+
+public class ApplicantBriefDto
+{
+    public int Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string ContactLine { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public int YearsActive { get; set; }
+    public string RoutingKey { get; set; } = string.Empty;
+    public decimal Score { get; set; }
+}
+
+public class ContractorBriefDto
+{
+    // Same writable destination members used by ApplicantBriefDto, but a different explicit destination type.
+    public int Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string ContactLine { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public int YearsActive { get; set; }
+    public string RoutingKey { get; set; } = string.Empty;
+    public decimal Score { get; set; }
+    public string VendorLabel { get; set; } = string.Empty;
+}

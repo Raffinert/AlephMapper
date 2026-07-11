@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace AlephMapper;
 
@@ -52,6 +52,70 @@ public sealed class UpdatableAttribute : Attribute
     /// Gets or sets the policy for handling collection updates during mapping operations
     /// </summary>
     public CollectionPropertiesPolicy CollectionProperties { get; set; } = CollectionPropertiesPolicy.Skip;
+}
+
+/// <summary>
+/// Defines which adapted companions are generated for an <see cref="AdaptAttribute"/> declaration.
+/// </summary>
+[Flags]
+public enum AdaptGeneration
+{
+    /// <summary>
+    /// Generate a regular mapping method.
+    /// </summary>
+    Map = 1,
+
+    /// <summary>
+    /// Generate an expression companion method.
+    /// </summary>
+    Expression = 2,
+
+    /// <summary>
+    /// Generate both a regular mapping method and an expression companion method.
+    /// </summary>
+    Both = Map | Expression
+}
+
+/// <summary>
+/// Reuses a mapping method as a compile-time template for one explicitly specified source/destination pair.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+public sealed class AdaptAttribute : Attribute
+{
+    /// <summary>
+    /// Initializes a new adaptation from the template method to the specified source and destination types.
+    /// </summary>
+    public AdaptAttribute(Type sourceType, Type destinationType)
+    {
+        SourceType = sourceType;
+        DestinationType = destinationType;
+    }
+
+    /// <summary>
+    /// Gets the adapted source type.
+    /// </summary>
+    public Type SourceType { get; }
+
+    /// <summary>
+    /// Gets the adapted destination type.
+    /// </summary>
+    public Type DestinationType { get; }
+
+    /// <summary>
+    /// Gets or sets the generated method base name.
+    /// Required when expression generation is requested.
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets which adapted companions are generated.
+    /// </summary>
+    public AdaptGeneration Generate { get; set; } = AdaptGeneration.Both;
+
+    /// <summary>
+    /// Gets or sets how null-conditional operators are handled.
+    /// </summary>
+    public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }
 
 /// <summary>

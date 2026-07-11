@@ -205,4 +205,35 @@ Console.WriteLine($"   FullName:           {updatable.FullName}");
 Console.WriteLine($"   Location:           {updatable.Location}");
 Console.WriteLine($"   TotalCompensation:  {updatable.TotalCompensation:C}");
 
+// Demonstrate explicit structural adaptation
+Console.WriteLine("\n11. Adapt Attribute (Explicit Structural Substitution):");
+var contractor = new ContractorRecord
+{
+    Id = 7007,
+    Name = new PersonName { First = "Alex", Last = "Rivera" },
+    Contact = new ContactInfo { Email = "alex.rivera@contoso-contracts.com", Phone = "555-0100" },
+    WorkAddress = new WorkAddress { City = "Austin", State = "TX", Country = "USA" },
+    Title = "Principal Consultant",
+    StartYear = 2018,
+    Rating = 4.8m,
+    CompletedProjects = 37,
+    VendorName = "Contoso Contractors"
+};
+
+// MapContractorBrief is generated from the MapApplicantBrief template method.
+var contractorBrief = AdaptExampleMapper.MapContractorBrief(contractor, DateTime.Now.Year, "TENANT-A");
+Console.WriteLine($"   DisplayName: {contractorBrief.DisplayName}");
+Console.WriteLine($"   Contact:     {contractorBrief.ContactLine}");
+Console.WriteLine($"   Location:    {contractorBrief.Location}");
+Console.WriteLine($"   YearsActive: {contractorBrief.YearsActive}");
+Console.WriteLine($"   RoutingKey:  {contractorBrief.RoutingKey}");
+Console.WriteLine($"   Score:       {contractorBrief.Score}");
+
+// The expression companion is also generated for the adapted source/destination pair.
+var contractorExpression = AdaptExampleMapper.MapContractorBriefExpression();
+Console.WriteLine($"\n   Generated Adapt Expression:");
+Console.WriteLine($"   {contractorExpression}");
+var contractorFromExpression = contractorExpression.Compile()(contractor, DateTime.Now.Year, "TENANT-A");
+Console.WriteLine($"\n   From compiled adapt expression: {contractorFromExpression.DisplayName} ({contractorFromExpression.RoutingKey})");
+
 Console.WriteLine("\n=== Mapping Demonstration Complete ===");
