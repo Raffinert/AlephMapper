@@ -85,6 +85,13 @@ public class AlephSourceGenerator : IIncrementalGenerator
             bool isFirst = true;
             var generatedMemberSignatures = new HashSet<string>(StringComparer.Ordinal);
             var existingMemberNames = new HashSet<string>(mapperType.GetMembers().Select(m => m.Name), StringComparer.Ordinal);
+            var existingMethodSignatures = new HashSet<string>(
+                mapperType.GetMembers().OfType<IMethodSymbol>()
+                    .Where(m => m.MethodKind == MethodKind.Ordinary)
+                    .Select(m => BuildMethodSignature(
+                        m.Name,
+                        m.Parameters.Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, NullableContext.Disabled)))),
+                StringComparer.Ordinal);
 
             foreach (var mm in methods)
             {
@@ -157,6 +164,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                 }
 
                 // Explicit adaptations
+                var adaptationPairs = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var adaptation in mm.Adaptations)
                 {
                     var generation = adaptation.Generation;
@@ -180,9 +188,21 @@ public class AlephSourceGenerator : IIncrementalGenerator
                     var adaptMethodParametersWithNames = adaptSourceFqn + " " + srcName +
                         (string.IsNullOrEmpty(additionalParameterListWithNames) ? "" : ", " + additionalParameterListWithNames);
 
-                    var adaptMapSignature = adaptName + "(" + string.Join(",", new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1))) + ")";
+                    var adaptPairSignature = BuildMethodSignature("", [adaptSourceFqn, adaptDestFqn]);
+                    if (!adaptationPairs.Add(adaptPairSignature))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptDuplicatePair,
+                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name,
+                            adaptation.SourceType.ToDisplayString(),
+                            adaptation.DestinationType.ToDisplayString()));
+                        continue;
+                    }
+
+                    var adaptMapSignature = BuildMethodSignature(adaptName, new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1)));
                     var adaptExpressionName = adaptName + "Expression";
-                    if (generateMap && !generatedMemberSignatures.Add(adaptMapSignature))
+                    if (generateMap && (existingMethodSignatures.Contains(adaptMapSignature) || !generatedMemberSignatures.Add(adaptMapSignature)))
                     {
                         spc.ReportDiagnostic(Diagnostic.Create(
                             DiagnosticDescriptors.AdaptNameConflict,
@@ -220,7 +240,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    var adaptedBody = RewriteAdaptedBody(inlinedBody, mm.ReturnType, adaptation.DestinationType, adaptDestFqn);
+                    var adaptedBody = RewriteAdaptedBody(inlinedBody, mm.ReturnType, adaptation.DestinationType, adaptDestFqn, mm.SemanticModel);
                     var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
 
                     if (generateMap)
@@ -650,23 +670,79 @@ public class AlephSourceGenerator : IIncrementalGenerator
         });
     }
 
-    private static ExpressionSyntax RewriteAdaptedBody(ExpressionSyntax body, ITypeSymbol originalDestinationType, INamedTypeSymbol adaptedDestinationType, string adaptedDestinationTypeName)
+    private static ExpressionSyntax RewriteAdaptedBody(
+        ExpressionSyntax body,
+        ITypeSymbol originalDestinationType,
+        INamedTypeSymbol adaptedDestinationType,
+        string adaptedDestinationTypeName,
+        SemanticModel semanticModel)
     {
-        if (body is ImplicitObjectCreationExpressionSyntax implicitCreation)
+        return (ExpressionSyntax)new AdaptedDestinationRewriter(originalDestinationType, adaptedDestinationTypeName, semanticModel, body)
+            .Visit(body)!;
+    }
+
+    private sealed class AdaptedDestinationRewriter(
+        ITypeSymbol originalDestinationType,
+        string adaptedDestinationTypeName,
+        SemanticModel semanticModel,
+        ExpressionSyntax root) : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
-            return SyntaxFactory.ObjectCreationExpression(
-                    SyntaxFactory.ParseTypeName(adaptedDestinationTypeName),
-                    implicitCreation.ArgumentList,
-                    implicitCreation.Initializer)
-                .WithTriviaFrom(body);
+            var rewritten = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)!;
+            return IsOriginalDestinationCreation(node)
+                ? rewritten.WithType(SyntaxFactory.ParseTypeName(adaptedDestinationTypeName))
+                : rewritten;
         }
 
-        if (body is ObjectCreationExpressionSyntax objectCreation)
+        public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax node)
         {
-            return objectCreation.WithType(SyntaxFactory.ParseTypeName(adaptedDestinationTypeName));
+            var rewritten = (ImplicitObjectCreationExpressionSyntax)base.VisitImplicitObjectCreationExpression(node)!;
+            return IsOriginalDestinationCreation(node)
+                ? SyntaxFactory.ObjectCreationExpression(
+                        SyntaxFactory.ParseTypeName(adaptedDestinationTypeName),
+                        rewritten.ArgumentList,
+                        rewritten.Initializer)
+                    .WithTriviaFrom(rewritten)
+                : rewritten;
         }
 
-        return body;
+        private bool IsOriginalDestinationCreation(ExpressionSyntax node)
+        {
+            try
+            {
+                var typeInfo = semanticModel.GetTypeInfo(node);
+                var type = typeInfo.Type ?? typeInfo.ConvertedType;
+                if (type != null)
+                {
+                    return SymbolEqualityComparer.Default.Equals(type, originalDestinationType);
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Inlined/re-trivia'd nodes may be detached from the semantic model's tree.
+            }
+
+            if (node is ObjectCreationExpressionSyntax objectCreation)
+            {
+                var typeText = objectCreation.Type.ToString();
+                return typeText == originalDestinationType.Name ||
+                       typeText == originalDestinationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ||
+                       typeText == originalDestinationType.ToDisplayString();
+            }
+
+            return ReferenceEquals(node, root);
+        }
+    }
+
+    private static string BuildMethodSignature(string name, IEnumerable<string> parameterTypeNames)
+    {
+        return name + "(" + string.Join(",", parameterTypeNames.Select(RemoveNullableSignatureMarker)) + ")";
+    }
+
+    private static string RemoveNullableSignatureMarker(string typeName)
+    {
+        return typeName.EndsWith("?", StringComparison.Ordinal) ? typeName.Substring(0, typeName.Length - 1) : typeName;
     }
 
     private static NullConditionalRewrite? GetNullStrategy(ISymbol sym)
