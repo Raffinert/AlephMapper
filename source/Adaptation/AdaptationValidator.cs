@@ -37,6 +37,29 @@ internal static class AdaptationValidator
             isValid = false;
         }
 
+        var destinationCreations = GetDestinationCreations(
+            mapping.BodySyntax.Expression,
+            mapping.SemanticModel,
+            mapping.ReturnType).ToArray();
+        if (destinationCreations.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.AdaptUnsupportedSyntax,
+                location,
+                mapping.MethodSymbol.Name,
+                mapping.BodySyntax.Expression.Kind()));
+            isValid = false;
+        }
+        else if (!HasCompatibleConstructors(destinationCreations, adaptation.DestinationType, mapping.SemanticModel.Compilation, mapping.SemanticModel))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.AdaptRebindingFailed,
+                location,
+                mapping.MethodSymbol.Name,
+                "the adapted destination does not expose a compatible constructor"));
+            isValid = false;
+        }
+
         var sourcePaths = CollectSourceMemberPaths(mapping.BodySyntax.Expression, mapping.SemanticModel, mapping.Parameters[0]);
         foreach (var path in sourcePaths)
         {
@@ -52,7 +75,7 @@ internal static class AdaptationValidator
             }
         }
 
-        foreach (var assignment in CollectDestinationAssignments(mapping.BodySyntax.Expression, mapping.SemanticModel, mapping.ReturnType))
+        foreach (var assignment in CollectDestinationAssignments(destinationCreations, mapping.SemanticModel))
         {
             var destinationMember = GetWritableInstanceMember(adaptation.DestinationType, assignment.MemberName);
             if (destinationMember == null)
@@ -118,17 +141,24 @@ internal static class AdaptationValidator
         return false;
     }
 
-    private static IEnumerable<(string MemberName, ExpressionSyntax Expression)> CollectDestinationAssignments(
+    private static IEnumerable<ExpressionSyntax> GetDestinationCreations(
         ExpressionSyntax body,
         SemanticModel semanticModel,
         ITypeSymbol originalDestinationType)
     {
-        foreach (var creation in body.DescendantNodesAndSelf()
+        return body.DescendantNodesAndSelf()
                      .OfType<ExpressionSyntax>()
                      .Where(node => node is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax)
                      .Where(node => SymbolEqualityComparer.Default.Equals(
                          semanticModel.GetTypeInfo(node).Type ?? semanticModel.GetTypeInfo(node).ConvertedType,
-                         originalDestinationType)))
+                         originalDestinationType));
+    }
+
+    private static IEnumerable<(string MemberName, ExpressionSyntax Expression)> CollectDestinationAssignments(
+        IEnumerable<ExpressionSyntax> destinationCreations,
+        SemanticModel semanticModel)
+    {
+        foreach (var creation in destinationCreations)
         {
             var initializer = creation switch
             {
@@ -220,5 +250,28 @@ internal static class AdaptationValidator
                destination != null &&
                compilation is CSharpCompilation csharpCompilation &&
                csharpCompilation.ClassifyConversion(source, destination).IsImplicit;
+    }
+
+    private static bool HasCompatibleConstructors(
+        IEnumerable<ExpressionSyntax> destinationCreations,
+        INamedTypeSymbol adaptedDestinationType,
+        Compilation compilation,
+        SemanticModel semanticModel)
+    {
+        foreach (var creation in destinationCreations.OfType<ObjectCreationExpressionSyntax>())
+        {
+            var argumentTypes = creation.ArgumentList?.Arguments
+                .Select(argument => semanticModel.GetTypeInfo(argument.Expression).Type)
+                .ToArray() ?? [];
+            if (!adaptedDestinationType.InstanceConstructors.Any(constructor =>
+                    constructor.Parameters.Length == argumentTypes.Length &&
+                    constructor.Parameters.Zip(argumentTypes, (parameter, argumentType) =>
+                        IsImplicitlyConvertible(compilation, argumentType, parameter.Type)).All(isCompatible => isCompatible)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

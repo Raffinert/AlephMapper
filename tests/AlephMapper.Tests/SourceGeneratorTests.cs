@@ -196,6 +196,74 @@ public class SourceGeneratorTests
         await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == "AM0008")).IsTrue();
     }
 
+    [Test]
+    public async Task AdaptationDiagnosticsAreReported()
+    {
+        var cases = new Dictionary<string, string>
+        {
+            ["AM0005"] = CreateAdaptationSource("[Adapt(typeof(Person), typeof(PersonDto), Name = \"MapPersonCopy\")]", "new() { Name = source.Name }"),
+            ["AM0006"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new() { Name = source.Name }", employeeMembers: "public int Id { get; set; }"),
+            ["AM0007"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new() { Name = source.Name }", employeeDtoMembers: "public int Id { get; set; }"),
+            ["AM0008"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new() { Name = source.Name }", employeeMembers: "public int Name { get; set; }"),
+            ["AM0009"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new() { Name = source.Name }", additionalMethods: "public static EmployeeDto MapEmployee(Employee source) => new();"),
+            ["AM0010"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "null"),
+            ["AM0011"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Generate = AdaptGeneration.Expression)]", "new() { Name = source.Name }"),
+            ["AM0012"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]\n    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployeeAgain\")]", "new() { Name = source.Name }"),
+            ["AM0013"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "Loop(source)", additionalMethods: "private static PersonDto Loop(Person source) => MapPerson(source);"),
+            ["AM0014"] = CreateAdaptationSource("[Adapt(typeof(List<>), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new() { Name = source.Name }", additionalUsings: "using System.Collections.Generic;"),
+            ["AM0015"] = CreateAdaptationSource("[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]", "new PersonDto(source.Id)", employeeMembers: "public string Name { get; set; } = string.Empty; public int Id { get; set; }", personDtoConstructor: "public PersonDto(int id) { Name = id.ToString(); }", employeeDtoConstructor: "public EmployeeDto() { }")
+        };
+
+        foreach (var testCase in cases)
+        {
+            await AssertAdaptationDiagnostic(testCase.Value, testCase.Key);
+        }
+    }
+
+    private async Task AssertAdaptationDiagnostic(string source, string diagnosticId)
+    {
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            diagnosticId,
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var diagnostics = driver.GetRunResult().Results.Single().Diagnostics;
+        await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == diagnosticId)).IsTrue();
+    }
+
+    private static string CreateAdaptationSource(
+        string attribute,
+        string body,
+        string employeeMembers = "public string Name { get; set; } = string.Empty;",
+        string employeeDtoMembers = "public string Name { get; set; } = string.Empty;",
+        string additionalMethods = "",
+        string additionalUsings = "",
+        string personDtoConstructor = "public PersonDto() { }",
+        string employeeDtoConstructor = "public EmployeeDto() { }")
+    {
+        return $$"""
+            using AlephMapper;
+            {{additionalUsings}}
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                {{attribute}}
+                public static PersonDto MapPerson(Person source) => {{body}};
+                {{additionalMethods}}
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; public int Id { get; set; } }
+            public sealed class Employee { {{employeeMembers}} }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; {{personDtoConstructor}} }
+            public sealed class EmployeeDto { {{employeeDtoMembers}} {{employeeDtoConstructor}} }
+            """;
+    }
+
     private static string NormalizeLineEndings(string value)
     {
         return value.Replace("\r\n", "\n", StringComparison.Ordinal)
