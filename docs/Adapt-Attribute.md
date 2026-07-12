@@ -37,7 +37,7 @@ public enum AdaptGeneration
 {
     Map = 1,
     Expression = 2,
-    MapAndExpression = Map | Expression
+    Update = 4
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
@@ -48,7 +48,7 @@ public sealed class AdaptAttribute : Attribute
     public Type SourceType { get; }
     public Type DestinationType { get; }
     public string Name { get; set; }
-    public AdaptGeneration Generate { get; set; } = AdaptGeneration.MapAndExpression;
+    public AdaptGeneration Generate { get; set; } = AdaptGeneration.Map | AdaptGeneration.Expression;
     public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }
 ```
@@ -76,7 +76,7 @@ public static partial class PersonMapper
         typeof(Employee),
         typeof(EmployeeDto),
         Name = "MapEmployee",
-        Generate = AdaptGeneration.MapAndExpression)]
+        Generate = AdaptGeneration.Map | AdaptGeneration.Expression)]
     public static PersonDto MapPerson(Person source, int currentYear) => new()
     {
         Id = source.Id,
@@ -102,7 +102,8 @@ PersonDto person = PersonMapper.MapPerson(personSource, currentYear);
 | --- | --- |
 | `AdaptGeneration.Map` | A regular mapping method. |
 | `AdaptGeneration.Expression` | An `Expression<Func<...>>` factory. |
-| `AdaptGeneration.MapAndExpression` | Both members; this is the default. |
+| `AdaptGeneration.Update` | An overload that updates an existing destination instance. |
+| `AdaptGeneration.Map | AdaptGeneration.Expression` | Both members; this is the default. |
 
 `Name` is the generated base name.
 
@@ -111,6 +112,18 @@ PersonDto person = PersonMapper.MapPerson(personSource, currentYear);
 ```
 
 This produces `MapEmployee(...)` and `MapEmployeeExpression()` when the default mode is used.
+
+To generate an adapted update overload, include `Update`:
+
+```csharp
+[Adapt(
+    typeof(EmployeeUpdateDto),
+    typeof(Employee),
+    Name = "MapEmployee",
+    Generate = AdaptGeneration.Map | AdaptGeneration.Update)]
+```
+
+This additionally produces `MapEmployee(EmployeeUpdateDto source, Employee dest)`. Any additional template parameters appear before `dest`. Update generation uses the template's `CollectionProperties` policy and has the same value-type and circular-reference safeguards as `[Updatable]`.
 
 An expression factory has no method parameters, so an expression-generating adaptation must supply `Name`. Otherwise the generator reports `AM0011` and skips that adaptation. A map-only adaptation may omit `Name`; in that case it uses the template method name and is emitted as an overload if the adapted first-parameter type makes the signature distinct.
 

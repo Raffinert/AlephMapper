@@ -23,6 +23,7 @@ internal static class AdaptationMemberEmitter
         {
             var generateMap = (adaptation.Generation & AdaptGeneration.Map) == AdaptGeneration.Map;
             var generateExpression = (adaptation.Generation & AdaptGeneration.Expression) == AdaptGeneration.Expression;
+            var generateUpdate = (adaptation.Generation & AdaptGeneration.Update) == AdaptGeneration.Update;
             if (generateExpression && string.IsNullOrWhiteSpace(adaptation.GeneratedName))
             {
                 context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
@@ -79,15 +80,20 @@ internal static class AdaptationMemberEmitter
 
             var adaptationParameterTypes = new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).ToArray();
             var mapSignature = MethodSignature.Build(adaptationName, adaptationParameterTypes);
+            var updateParameterTypes = adaptationParameterTypes.Append(destinationTypeName).ToArray();
+            var updateSignature = MethodSignature.Build(adaptationName, updateParameterTypes);
             var expressionName = adaptationName + "Expression";
             var expressionSignature = expressionName + "()";
             var generatedConflict = (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature)) ||
-                                    (generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature));
+                                    (generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature)) ||
+                                    (generateUpdate && context.GeneratedMemberSignatures.Contains(updateSignature));
             var plannerConflict = !context.AdaptationMembers.TryReserve(
                 adaptationName,
                 adaptationParameterTypes,
                 generateMap,
                 generateExpression,
+                generateUpdate,
+                updateParameterTypes,
                 out var conflict);
             if (generatedConflict || plannerConflict)
             {
@@ -96,7 +102,11 @@ internal static class AdaptationMemberEmitter
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name,
                     generatedConflict
-                        ? (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature) ? mapSignature : expressionSignature)
+                        ? (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature)
+                            ? mapSignature
+                            : generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature)
+                                ? expressionSignature
+                                : updateSignature)
                         : conflict));
                 continue;
             }
@@ -112,6 +122,59 @@ internal static class AdaptationMemberEmitter
                 context.GeneratedMemberSignatures.Add(expressionSignature);
                 var functionArguments = string.Join(", ", new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).Append(destinationTypeName));
                 EmitExpressionMember(details, expressionName, functionArguments, adaptedBodyText, context);
+            }
+
+            if (generateUpdate)
+            {
+                if (adaptation.DestinationType.IsValueType && !SymbolHelpers.CanBeNull(adaptation.DestinationType))
+                {
+                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.UpdatableValueTypeReturn,
+                        GetLocation(mapping, adaptation),
+                        adaptationName,
+                        adaptation.DestinationType.ToDisplayString()));
+                    continue;
+                }
+
+                var updateInliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None);
+                var inlinedUpdateBody = (ExpressionSyntax)updateInliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
+                context.AddUsings(updateInliner.UsingDirectives.Concat(mapping.UsingDirectives));
+                if (updateInliner.CircularReferences.Any())
+                {
+                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.UpdatableCircularReferences,
+                        GetLocation(mapping, adaptation),
+                        adaptationName));
+                    continue;
+                }
+
+                var adaptedUpdateBody = AdaptedDestinationRewriter.Rewrite(
+                    mapping.BodySyntax.Expression,
+                    inlinedUpdateBody,
+                    mapping.SemanticModel,
+                    mapping.ReturnType,
+                    destinationTypeName);
+                var lines = new List<string>();
+                if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(
+                        adaptedUpdateBody,
+                        "dest",
+                        adaptation.DestinationType,
+                        adaptation.SourceType,
+                        mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
+                        mapping.CollectionPolicy,
+                        lines))
+                {
+                    continue;
+                }
+
+                context.GeneratedMemberSignatures.Add(updateSignature);
+                EmitUpdateMember(
+                    details,
+                    adaptationName,
+                    adaptationParametersWithNames,
+                    destinationTypeName,
+                    lines,
+                    context);
             }
         }
     }
@@ -149,6 +212,29 @@ internal static class AdaptationMemberEmitter
             members.AppendLine("    public static Expression<Func<" + functionArguments + ">> " + expressionName + "() => ");
             members.Append("        " + details.LambdaParameters + " => ");
             members.AppendLine(adaptedBodyText + ";");
+        });
+    }
+
+    private static void EmitUpdateMember(
+        MappingMethodDetails details,
+        string adaptationName,
+        string parametersWithNames,
+        string destinationTypeName,
+        IEnumerable<string> lines,
+        MapperGenerationContext context)
+    {
+        context.AppendMember(members =>
+        {
+            members.AppendLine("    /// <summary>");
+            members.AppendLine($"    /// This is an auto-generated adapted update method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
+            members.AppendLine("    /// </summary>");
+            members.AppendLine($"    public static {destinationTypeName} {adaptationName}({parametersWithNames}, {destinationTypeName} dest)");
+            members.AppendLine("    {");
+            foreach (var line in lines)
+            {
+                members.AppendLine("        " + line);
+            }
+            members.AppendLine("    }");
         });
     }
 

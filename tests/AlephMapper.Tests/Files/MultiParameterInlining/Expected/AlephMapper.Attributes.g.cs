@@ -71,9 +71,9 @@ public enum AdaptGeneration
     Expression = 2,
 
     /// <summary>
-    /// Generate both a compiled mapping method and an expression-tree companion method.
+    /// Generate an overload that updates an existing destination instance.
     /// </summary>
-    MapAndExpression = Map | Expression
+    Update = 4
 }
 
 /// <summary>
@@ -110,7 +110,7 @@ public sealed class AdaptAttribute : Attribute
     /// <summary>
     /// Gets or sets which adapted companions are generated.
     /// </summary>
-    public AdaptGeneration Generate { get; set; } = AdaptGeneration.MapAndExpression;
+    public AdaptGeneration Generate { get; set; } = AdaptGeneration.Map | AdaptGeneration.Expression;
 
     /// <summary>
     /// Gets or sets how null-conditional operators are handled.

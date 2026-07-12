@@ -209,7 +209,7 @@ public static partial class PersonMapper
         typeof(Employee),
         typeof(EmployeeDto),
         Name = "MapEmployee",
-        Generate = AdaptGeneration.MapAndExpression)]
+        Generate = AdaptGeneration.Map | AdaptGeneration.Expression)]
     public static PersonDto MapPerson(Person source) => new()
     {
         Id = source.Id,
@@ -238,7 +238,7 @@ public static Expression<Func<Employee, EmployeeDto>> MapEmployeeExpression() =>
     };
 ```
 
-`Generate` defaults to `AdaptGeneration.MapAndExpression`. Use `AdaptGeneration.Map` to generate only a map, or `AdaptGeneration.Expression` to generate only an expression. `Name` is required whenever expression generation is enabled; for map-only adaptations, omitting it generates an overload using the template method's name.
+`Generate` defaults to `AdaptGeneration.Map | AdaptGeneration.Expression`. Combine the flags to request a map, expression, and/or update overload. `Name` is required whenever expression generation is enabled; for map-only or update-only adaptations, omitting it generates an overload using the template method's name.
 
 Before generating code, AlephMapper checks the members and conversions used by the template: the adapted source must expose the used readable member paths, the adapted destination must have compatible writable members and constructors, and generated member signatures must not conflict. Invalid adaptations report `AM0005`–`AM0015` diagnostics.
 
@@ -260,7 +260,7 @@ public static PersonDto MapToPerson(Employee employee) => ...
 public static PersonDto MapToPerson(Employee employee, PersonDto target) => ...
 ```
 
-For each `[Adapt]` declaration, AlephMapper substitutes the explicitly declared source and destination types into the template body and generates the requested map and/or expression members. Additional template method parameters are preserved in the generated mapping signature and expression delegate.
+For each `[Adapt]` declaration, AlephMapper substitutes the explicitly declared source and destination types into the template body and generates the requested map, expression, and/or update members. Additional template method parameters are preserved in each generated signature.
 
 Helper methods in the same mapper class are inlined where possible.
 

@@ -11,9 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-	<Compile Remove="Files\**\*.cs" />
-	<None Include="Files\**\*.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <Compile Remove="Files\**\*.cs" />
+    <None Include="Files\**\*.cs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

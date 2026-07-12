@@ -41,7 +41,14 @@ internal static class UpdatableMemberEmitter
 
         var lines = new List<string>();
         var replacedMethod = mapping.BodySyntax.ReplaceNode(mapping.BodySyntax.Expression, inlinedBody);
-        if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(replacedMethod.Expression, "dest", lines, mapping))
+        if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(
+                replacedMethod.Expression,
+                "dest",
+                mapping.ReturnType,
+                mapping.ParamType,
+                mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
+                mapping.CollectionPolicy,
+                lines))
         {
             return;
         }

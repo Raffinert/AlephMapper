@@ -73,7 +73,7 @@ internal static class MappingModelFactory
             }
 
             string? name = null;
-            var generation = AdaptGeneration.MapAndExpression;
+            var generation = AdaptGeneration.Map | AdaptGeneration.Expression;
             var nullStrategy = NullConditionalRewrite.Ignore;
             foreach (var namedArgument in attribute.NamedArguments)
             {

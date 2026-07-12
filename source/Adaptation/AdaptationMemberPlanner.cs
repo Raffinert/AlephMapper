@@ -42,6 +42,8 @@ internal sealed class AdaptationMemberPlanner
         IEnumerable<string> mapParameterTypes,
         bool generateMap,
         bool generateExpression,
+        bool generateUpdate,
+        IEnumerable<string> updateParameterTypes,
         out string conflict)
     {
         var requestedSignatures = new List<string>();
@@ -66,6 +68,17 @@ internal sealed class AdaptationMemberPlanner
             }
 
             requestedSignatures.Add(MethodSignature.Build(expressionName, []));
+        }
+
+        if (generateUpdate)
+        {
+            if (_existingNonMethodNames.Contains(mapName) || _generatedNonMethodNames.Contains(mapName))
+            {
+                conflict = mapName;
+                return false;
+            }
+
+            requestedSignatures.Add(MethodSignature.Build(mapName, updateParameterTypes));
         }
 
         foreach (var signature in requestedSignatures)

@@ -1,5 +1,5 @@
 ﻿using AlephMapper.CodeGenerators;
-using AlephMapper.Models;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,23 +8,30 @@ namespace AlephMapper.Helpers;
 
 internal static class EmitHelpers
 {
-    public static bool TryBuildUpdateAssignmentsWithInlining(ExpressionSyntax inlinedBody, string destPrefix, List<string> lines, MappingModel mm)
+    public static bool TryBuildUpdateAssignmentsWithInlining(
+        ExpressionSyntax inlinedBody,
+        string destPrefix,
+        ITypeSymbol destinationType,
+        ITypeSymbol sourceType,
+        IReadOnlyList<string> sourceParameterNames,
+        CollectionPropertiesPolicy collectionPolicy,
+        List<string> lines)
     {
         // Seed type collection with the destination (return) type to reliably resolve
         // object-initializer property types without depending on fragile LHS binding
-        var propertyInfoCollector = new PropertyTypeInfoCollector(mm.ReturnType, destPrefix);
+        var propertyInfoCollector = new PropertyTypeInfoCollector(destinationType, destPrefix);
 
-        if (mm.CollectionPolicy == CollectionPropertiesPolicy.Skip)
+        if (collectionPolicy == CollectionPropertiesPolicy.Skip)
         {
             propertyInfoCollector.Visit(inlinedBody);
         }
 
         var typeContext = propertyInfoCollector.TypeContext;
 
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, mm.Parameters.Select(p => p.Name).ToArray());
+        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, sourceParameterNames);
         List<string> processedLines;
 
-        var srcName = mm.Parameters[0].Name;
+        var srcName = sourceParameterNames[0];
 
         // Build null check conditions
         switch (inlinedBody)
@@ -46,7 +53,7 @@ internal static class EmitHelpers
                 return false;
         }
 
-        if (SymbolHelpers.CanBeNull(mm.ParamType))
+        if (SymbolHelpers.CanBeNull(sourceType))
         {
             lines.Add($"if ({srcName} == null) return dest;");
         }
