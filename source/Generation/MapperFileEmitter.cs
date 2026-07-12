@@ -1,0 +1,85 @@
+using Microsoft.CodeAnalysis;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace AlephMapper.Generation;
+
+internal static class MapperFileEmitter
+{
+    private static readonly string[] RequiredUsings =
+    [
+        "System",
+        "System.Linq",
+        "System.Linq.Expressions",
+        "System.CodeDom.Compiler"
+    ];
+
+    public static GeneratedMapperFile Render(MapperGenerationContext context)
+    {
+        context.AddUsings(RequiredUsings);
+        var mapperType = context.MapperType;
+        var containingNamespace = mapperType.ContainingNamespace is { IsGlobalNamespace: false }
+            ? mapperType.ContainingNamespace.ToDisplayString()
+            : "";
+
+        var output = new StringBuilder();
+        foreach (var usingDirective in context.UsingDirectives.OrderBy(static directive => directive))
+        {
+            if (usingDirective != containingNamespace && !string.IsNullOrEmpty(usingDirective))
+            {
+                output.AppendLine($"using {usingDirective};");
+            }
+        }
+
+        output.AppendLine();
+        if (!string.IsNullOrEmpty(containingNamespace))
+        {
+            output.AppendLine("namespace " + containingNamespace + ";");
+            output.AppendLine();
+        }
+
+        output.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]" );
+        var containingTypes = GetContainingTypes(mapperType);
+        foreach (var containingType in containingTypes)
+        {
+            output.AppendLine("partial class " + GetTypeDeclarationName(containingType));
+            output.AppendLine("{");
+        }
+
+        output.Append(context.Members);
+        for (var index = containingTypes.Count - 1; index >= 0; index--)
+        {
+            output.AppendLine("}");
+        }
+
+        var hintName = (string.IsNullOrEmpty(containingNamespace) ? "" : containingNamespace.Replace('.', '_') + "_") +
+                       mapperType.Name + "_GeneratedMappings.g.cs";
+        return new GeneratedMapperFile(hintName, output.ToString());
+    }
+
+    private static List<INamedTypeSymbol> GetContainingTypes(INamedTypeSymbol mapperType)
+    {
+        var containingTypes = new List<INamedTypeSymbol>();
+        for (var current = mapperType; current != null; current = current.ContainingType)
+        {
+            containingTypes.Add(current);
+        }
+
+        containingTypes.Reverse();
+        return containingTypes;
+    }
+
+    private static string GetTypeDeclarationName(INamedTypeSymbol type)
+    {
+        return type.TypeParameters.Length == 0
+            ? type.Name
+            : type.Name + "<" + string.Join(", ", type.TypeParameters.Select(static parameter => parameter.Name)) + ">";
+    }
+}
+
+internal sealed class GeneratedMapperFile(string hintName, string source)
+{
+    public string HintName { get; } = hintName;
+    public string Source { get; } = source;
+}

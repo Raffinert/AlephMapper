@@ -17,7 +17,8 @@ internal sealed class MappingModel(
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
     CollectionPropertiesPolicy collectionPolicy,
-    IReadOnlyList<string> usingDirectives)
+    IReadOnlyList<string> usingDirectives,
+    IReadOnlyList<AdaptationModel> adaptations)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
@@ -35,6 +36,7 @@ internal sealed class MappingModel(
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
     public readonly CollectionPropertiesPolicy CollectionPolicy = collectionPolicy;
     public readonly IReadOnlyList<string> UsingDirectives = usingDirectives;
+    public readonly IReadOnlyList<AdaptationModel> Adaptations = adaptations;
 
     public override bool Equals(object obj)
     {

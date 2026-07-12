@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParamExtensionInlining;
 
-[GeneratedCode("AlephMapper", "0.5.5")]
+[GeneratedCode("AlephMapper", "0.5.6")]
 partial class PersonProductMapperIgnore
 {
     /// <summary>

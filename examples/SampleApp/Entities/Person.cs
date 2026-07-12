@@ -86,3 +86,48 @@ public class Employee
     public decimal BaseSalary { get; set; }
     public decimal BonusPercent { get; set; }
 }
+
+public class ApplicantProfile
+{
+    public int Id { get; set; }
+    public PersonName Name { get; set; } = new();
+    public ContactInfo Contact { get; set; } = new();
+    public WorkAddress WorkAddress { get; set; } = new();
+    public string Title { get; set; } = string.Empty;
+    public int StartYear { get; set; }
+    public decimal Rating { get; set; }
+    public int CompletedProjects { get; set; }
+}
+
+public class ContractorRecord
+{
+    // Same member paths used by ApplicantProfile, but a different explicit source type.
+    public int Id { get; set; }
+    public PersonName Name { get; set; } = new();
+    public ContactInfo Contact { get; set; } = new();
+    public WorkAddress WorkAddress { get; set; } = new();
+    public string Title { get; set; } = string.Empty;
+    public int StartYear { get; set; }
+    public decimal Rating { get; set; }
+    public int CompletedProjects { get; set; }
+    public string VendorName { get; set; } = string.Empty;
+}
+
+public class PersonName
+{
+    public string First { get; set; } = string.Empty;
+    public string Last { get; set; } = string.Empty;
+}
+
+public class ContactInfo
+{
+    public string Email { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+}
+
+public class WorkAddress
+{
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+}
