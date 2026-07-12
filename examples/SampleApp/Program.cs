@@ -81,7 +81,7 @@ Console.WriteLine($"   Age: {mappedBackEntity.Age}");
 Console.WriteLine("\n3. Phone Number Processing:");
 foreach (var phone in person.ContactNumbers)
 {
-    var phoneDto = PhoneMapper.ToDto(phone);
+    var phoneDto = phone.ToDto();
     Console.WriteLine($"   {PhoneMapper.GetPhoneTypeString(phone.PhoneType)}: {phoneDto.Number}");
     Console.WriteLine($"   Valid: {PhoneMapper.IsValidPhoneDto(phoneDto)}");
     Console.WriteLine($"   Clean Number: {PhoneMapper.CleanPhoneNumber(phoneDto.Number)}");
@@ -137,17 +137,17 @@ Console.WriteLine($"   Recent Orders: {personSummary.Orders.Count}");
 // Demonstrate bulk operations
 Console.WriteLine("\n8. Bulk Operations:");
 var personList = new List<Person> { person };
-var dtoList = PersonMapper.ToDtoList(personList);
-Console.WriteLine($"   Bulk mapped DTOs: {dtoList.Count()}");
+var dtoList = PersonMapper.ToDtoList(personList).ToList();
+Console.WriteLine($"   Bulk mapped DTOs: {dtoList.Count}");
 
-var mappedBackList = PersonMapper.ToEntityList(dtoList);
-Console.WriteLine($"   Bulk mapped back to entities: {mappedBackList.Count()}");
+var mappedBackList = PersonMapper.ToEntityList(dtoList).ToList();
+Console.WriteLine($"   Bulk mapped back to entities: {mappedBackList.Count}");
 
 // Demonstrate high-value item filtering
 Console.WriteLine("\n9. Advanced Item Filtering:");
-var allItems = personDto.Orders.SelectMany(o => o.Items);
-var highValueItems = OrderItemMapper.GetHighValueItems(allItems, 75.00m);
-Console.WriteLine($"   High-value items (>$75): {highValueItems.Count()}");
+var allItems = personDto.Orders.SelectMany(o => o.Items).ToList();
+var highValueItems = OrderItemMapper.GetHighValueItems(allItems, 75.00m).ToList();
+Console.WriteLine($"   High-value items (>$75): {highValueItems.Count}");
 foreach (var item in highValueItems)
 {
     Console.WriteLine($"     - {OrderItemMapper.FormatItemDescription(item)}");
@@ -189,18 +189,18 @@ Console.WriteLine($"   TotalCompensation:  {summary.TotalCompensation:C}");
 
 // Use the generated expression (multi-param helpers are inlined into the expression tree)
 var empExpression = EmployeeMapper.ToSummaryExpression();
-Console.WriteLine($"\n   Generated Expression (helpers inlined):");
+Console.WriteLine("\n   Generated Expression (helpers inlined):");
 Console.WriteLine($"   {empExpression}");
 var compiled = empExpression.Compile();
 var fromExpression = compiled(employee, DateTime.Now.Year);
-Console.WriteLine($"\n   From compiled expression:");
+Console.WriteLine("\n   From compiled expression:");
 Console.WriteLine($"   FullName:           {fromExpression.FullName}");
 Console.WriteLine($"   TotalCompensation:  {fromExpression.TotalCompensation:C}");
 
 // Use the generated updatable method (multi-param helpers inlined into assignment statements)
 var updatable = new EmployeeSummaryDto();
 EmployeeMapper.ToSummary(employee, DateTime.Now.Year, updatable);
-Console.WriteLine($"\n   From updatable method:");
+Console.WriteLine("\n   From updatable method:");
 Console.WriteLine($"   FullName:           {updatable.FullName}");
 Console.WriteLine($"   Location:           {updatable.Location}");
 Console.WriteLine($"   TotalCompensation:  {updatable.TotalCompensation:C}");
@@ -231,7 +231,7 @@ Console.WriteLine($"   Score:       {contractorBrief.Score}");
 
 // The expression companion is also generated for the adapted source/destination pair.
 var contractorExpression = AdaptExampleMapper.MapContractorBriefExpression();
-Console.WriteLine($"\n   Generated Adapt Expression:");
+Console.WriteLine("\n   Generated Adapt Expression:");
 Console.WriteLine($"   {contractorExpression}");
 var contractorFromExpression = contractorExpression.Compile()(contractor, DateTime.Now.Year, "TENANT-A");
 Console.WriteLine($"\n   From compiled adapt expression: {contractorFromExpression.DisplayName} ({contractorFromExpression.RoutingKey})");
