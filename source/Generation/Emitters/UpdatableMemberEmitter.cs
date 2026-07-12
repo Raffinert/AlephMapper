@@ -1,6 +1,5 @@
 using AlephMapper.Diagnostics;
 using AlephMapper.Helpers;
-using AlephMapper.Models;
 using AlephMapper.SyntaxRewriters;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
