@@ -382,11 +382,18 @@ public class AlephSourceGenerator : IIncrementalGenerator
             }
 
             sb.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
-            sb.AppendLine("partial class " + mapperType.Name);
-            sb.AppendLine("{");
+            var containingTypes = GetContainingTypes(mapperType);
+            foreach (var type in containingTypes)
+            {
+                sb.AppendLine("partial class " + GetTypeDeclarationName(type));
+                sb.AppendLine("{");
+            }
             sb.Append(membersSb);
 
-            sb.AppendLine("}"); // class
+            for (var i = containingTypes.Count - 1; i >= 0; i--)
+            {
+                sb.AppendLine("}"); // class
+            }
 
             var fileName = (string.IsNullOrEmpty(containingNamespace)
                                ? ""
@@ -403,6 +410,27 @@ public class AlephSourceGenerator : IIncrementalGenerator
         var assembly = typeof(AlephSourceGenerator).Assembly;
         using var streamReader = new StreamReader(assembly.GetManifestResourceStream("AlephMapper.Attributes.cs")!);
         return streamReader.ReadToEnd();
+    }
+
+    private static List<INamedTypeSymbol> GetContainingTypes(INamedTypeSymbol mapperType)
+    {
+        var containingTypes = new List<INamedTypeSymbol>();
+        for (var current = mapperType; current != null; current = current.ContainingType)
+        {
+            containingTypes.Add(current);
+        }
+        containingTypes.Reverse();
+        return containingTypes;
+    }
+
+    private static string GetTypeDeclarationName(INamedTypeSymbol type)
+    {
+        if (type.TypeParameters.Length == 0)
+        {
+            return type.Name;
+        }
+
+        return type.Name + "<" + string.Join(", ", type.TypeParameters.Select(parameter => parameter.Name)) + ">";
     }
 
     private static MappingModel GetMappingModel(GeneratorSyntaxContext ctx, CancellationToken ct)

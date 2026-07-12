@@ -23,7 +23,7 @@ internal sealed partial class InliningResolver
             objectCreation = objectCreation.WithInitializer((InitializerExpressionSyntax)VisitInitializerExpression(implicitNew.Initializer));
         }
 
-        if (implicitNew.ArgumentList.Arguments.Count > 0)
+        if (implicitNew.Initializer == null || implicitNew.ArgumentList.Arguments.Count > 0)
         {
             objectCreation = objectCreation.WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList));
         }

@@ -110,6 +110,7 @@ internal static class AdaptationValidator
     {
         return body.DescendantNodesAndSelf()
             .OfType<MemberAccessExpressionSyntax>()
+            .Where(access => semanticModel.GetSymbolInfo(access).Symbol is IPropertySymbol or IFieldSymbol)
             .Select(access => TryGetDirectSourcePath(access, semanticModel, sourceParameter, out var path) ? path : null)
             .Where(path => path != null)
             .GroupBy(path => string.Join(".", path!), StringComparer.Ordinal)
@@ -264,9 +265,39 @@ internal static class AdaptationValidator
                 .Select(argument => semanticModel.GetTypeInfo(argument.Expression).Type)
                 .ToArray() ?? [];
             if (!adaptedDestinationType.InstanceConstructors.Any(constructor =>
-                    constructor.Parameters.Length == argumentTypes.Length &&
-                    constructor.Parameters.Zip(argumentTypes, (parameter, argumentType) =>
-                        IsImplicitlyConvertible(compilation, argumentType, parameter.Type)).All(isCompatible => isCompatible)))
+                    IsCompatibleConstructor(constructor, argumentTypes, compilation)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsCompatibleConstructor(
+        IMethodSymbol constructor,
+        IReadOnlyList<ITypeSymbol?> argumentTypes,
+        Compilation compilation)
+    {
+        var parameters = constructor.Parameters;
+        var paramsIndex = parameters.Length > 0 && parameters[parameters.Length - 1].IsParams
+            ? parameters.Length - 1
+            : -1;
+        var requiredParameters = parameters.Count(parameter => !parameter.IsOptional && !parameter.IsParams);
+        if (argumentTypes.Count < requiredParameters || (paramsIndex < 0 && argumentTypes.Count > parameters.Length))
+        {
+            return false;
+        }
+
+        for (var argumentIndex = 0; argumentIndex < argumentTypes.Count; argumentIndex++)
+        {
+            var parameter = argumentIndex < parameters.Length
+                ? parameters[argumentIndex]
+                : parameters[paramsIndex];
+            var parameterType = parameter.IsParams && parameter.Type is IArrayTypeSymbol arrayType
+                ? arrayType.ElementType
+                : parameter.Type;
+            if (!IsImplicitlyConvertible(compilation, argumentTypes[argumentIndex], parameterType))
             {
                 return false;
             }

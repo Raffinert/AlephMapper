@@ -165,6 +165,83 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptedOutputCompilesForGenericNestedMapper()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Outer<TOuter>
+            {
+                public static partial class Mapper<TMapper>
+                {
+                    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                    public static PersonDto MapPerson(Person source) => new() { Name = source.Name };
+                }
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; }
+            public sealed class Employee { public string Name { get; set; } = string.Empty; }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+            """;
+
+        await AssertAdaptedOutputCompiles(source, "GenericNestedMapper");
+    }
+
+    [Test]
+    public async Task AdaptedOutputAcceptsOptionalAndParamsConstructors()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                public static PersonDto MapPerson(Person source) => new();
+
+                [Adapt(typeof(Employee), typeof(EmployeeParamsDto), Name = "MapEmployeeParams")]
+                public static PersonParamsDto MapPersonParams(Person source) => new PersonParamsDto(source.Id, source.Id);
+            }
+
+            public sealed class Person { public int Id { get; set; } }
+            public sealed class Employee { public int Id { get; set; } }
+            public sealed class PersonDto { public PersonDto() { } }
+            public sealed class EmployeeDto { public EmployeeDto(int version = 1) { } }
+            public sealed class PersonParamsDto { public PersonParamsDto(params int[] ids) { } }
+            public sealed class EmployeeParamsDto { public EmployeeParamsDto(params int[] ids) { } }
+            """;
+
+        await AssertAdaptedOutputCompiles(source, "OptionalAndParamsConstructors");
+    }
+
+    [Test]
+    public async Task AdaptedOutputAcceptsSourceInstanceMethodCalls()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                public static PersonDto MapPerson(Person source) => new() { Name = source.Name.Trim() };
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; }
+            public sealed class Employee { public string Name { get; set; } = string.Empty; }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+            """;
+
+        await AssertAdaptedOutputCompiles(source, "InstanceMethodCall");
+    }
+
+    [Test]
     public async Task AdaptReportsIncompatibleDirectMemberAssignment()
     {
         const string source = """
@@ -232,6 +309,21 @@ public class SourceGeneratorTests
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
         var diagnostics = driver.GetRunResult().Results.Single().Diagnostics;
         await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == diagnosticId)).IsTrue();
+    }
+
+    private async Task AssertAdaptedOutputCompiles(string source, string assemblyName)
+    {
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(driver.GetRunResult().Results.Single().Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
     private static string CreateAdaptationSource(

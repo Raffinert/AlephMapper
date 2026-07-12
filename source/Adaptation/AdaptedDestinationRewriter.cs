@@ -43,7 +43,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         {
             return SyntaxFactory.ObjectCreationExpression(
                     SyntaxFactory.ParseTypeName(adaptedDestinationTypeName),
-                    implicitCreation.ArgumentList,
+                    implicitCreation.ArgumentList ?? SyntaxFactory.ArgumentList(),
                     implicitCreation.Initializer)
                 .WithTriviaFrom(implicitCreation);
         }
@@ -82,7 +82,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
     {
         var rewritten = (ImplicitObjectCreationExpressionSyntax)base.VisitImplicitObjectCreationExpression(node)!;
         return _destinationCreationSpans.Contains(node.Span) || ReferenceEquals(node, _root)
-            ? SyntaxFactory.ObjectCreationExpression(_adaptedDestinationType, rewritten.ArgumentList, rewritten.Initializer)
+            ? SyntaxFactory.ObjectCreationExpression(_adaptedDestinationType, rewritten.ArgumentList ?? SyntaxFactory.ArgumentList(), rewritten.Initializer)
                 .WithTriviaFrom(rewritten)
             : rewritten;
     }
