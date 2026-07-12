@@ -27,7 +27,7 @@ public sealed class AdaptAttribute : Attribute
 	public Type SourceType { get; }
 	public Type DestinationType { get; }
 	public string Name { get; set; }           // Required when Generate includes Expression
-	public AdaptGeneration Generate { get; set; } = AdaptGeneration.Both;
+	public AdaptGeneration Generate { get; set; } = AdaptGeneration.MapAndExpression;
 	public NullConditionalRewrite NullConditionalRewrite { get; set; } = NullConditionalRewrite.Ignore;
 }
 ```

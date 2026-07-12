@@ -4,7 +4,7 @@ namespace Tests;
 
 public static partial class PersonMapper
 {
-    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", Generate = AdaptGeneration.Both)]
+    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", Generate = AdaptGeneration.MapAndExpression)]
     public static PersonDto MapPerson(Person source, bool includeEmail) => includeEmail
         ? new PersonDto
         {

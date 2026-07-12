@@ -36,7 +36,7 @@ public static partial class PersonMapper
         typeof(Employee),
         typeof(EmployeeDto),
         Name = "MapEmployee",
-        Generate = AdaptGeneration.Both)]
+        Generate = AdaptGeneration.MapAndExpression)]
     public static PersonDto MapPerson(Person source) => new()
     {
         Id = source.Id,
@@ -89,7 +89,7 @@ Example:
     typeof(Employee),
     typeof(EmployeeDto),
     Name = "MapEmployee",
-    Generate = AdaptGeneration.Both)]
+    Generate = AdaptGeneration.MapAndExpression)]
 public static PersonDto MapPerson(Person source) => ...;
 ```
 
@@ -167,7 +167,7 @@ public sealed class AdaptAttribute : Attribute
     public string? Name { get; set; }
 
     public AdaptGeneration Generate { get; set; } =
-        AdaptGeneration.Both;
+        AdaptGeneration.MapAndExpression;
 
     public NullConditionalRewrite NullConditionalRewrite { get; set; } =
         NullConditionalRewrite.Ignore;
@@ -1012,7 +1012,7 @@ Acceptance example:
     typeof(Employee),
     typeof(EmployeeDto),
     Name = "MapEmployee",
-    Generate = AdaptGeneration.Both)]
+    Generate = AdaptGeneration.MapAndExpression)]
 public static PersonDto MapPerson(Person source) => new()
 {
     Id = source.Id,
@@ -1133,7 +1133,7 @@ public static partial class Mapper
         typeof(Employee),
         typeof(EmployeeDto),
         Name = "MapEmployee",
-        Generate = AdaptGeneration.Both)]
+        Generate = AdaptGeneration.MapAndExpression)]
     public static PersonDto MapPerson(Person source) => new()
     {
         Id = source.Id,

@@ -482,7 +482,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
             }
 
             string? name = null;
-            var generation = AdaptGeneration.Both;
+            var generation = AdaptGeneration.MapAndExpression;
             var nullStrategy = NullConditionalRewrite.Ignore;
 
             foreach (var named in attribute.NamedArguments)

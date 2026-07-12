@@ -16,7 +16,7 @@ public static partial class AdaptExampleMapper
         typeof(ContractorRecord),
         typeof(ContractorBriefDto),
         Name = "MapContractorBrief",
-        Generate = AdaptGeneration.Both)]
+        Generate = AdaptGeneration.MapAndExpression)]
     public static ApplicantBriefDto MapApplicantBrief(ApplicantProfile source, int currentYear, string tenant) => new()
     {
         Id = source.Id,
