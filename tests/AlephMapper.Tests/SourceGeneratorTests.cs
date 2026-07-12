@@ -82,7 +82,9 @@ public class SourceGeneratorTests
             references,
             compilationOptions);
 
-        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
 
         var result = driver.GetRunResult().Results.Single();
 
@@ -127,6 +129,71 @@ public class SourceGeneratorTests
 
             await Assert.That(actual).IsEqualTo(expected.Value);
         }
+    }
+
+    [Test]
+    public async Task AdaptedOutputCompilesForImplicitObjectCreation()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                public static PersonDto MapPerson(Person source) => new() { Name = source.Name };
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; }
+            public sealed class Employee { public string Name { get; set; } = string.Empty; }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "AdaptedOutput",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(driver.GetRunResult().Results.Single().Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task AdaptReportsIncompatibleDirectMemberAssignment()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                public static PersonDto MapPerson(Person source) => new() { Name = source.Name };
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; }
+            public sealed class Employee { public int Name { get; set; } }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "IncompatibleAdaptation",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var diagnostics = driver.GetRunResult().Results.Single().Diagnostics;
+        await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == "AM0008")).IsTrue();
     }
 
     private static string NormalizeLineEndings(string value)

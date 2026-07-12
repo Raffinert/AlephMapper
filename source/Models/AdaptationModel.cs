@@ -1,3 +1,5 @@
+#nullable enable
+
 using Microsoft.CodeAnalysis;
 
 namespace AlephMapper.Models;
@@ -7,7 +9,7 @@ internal sealed class AdaptationModel
     public AdaptationModel(
         INamedTypeSymbol sourceType,
         INamedTypeSymbol destinationType,
-        string generatedName,
+        string? generatedName,
         AdaptGeneration generation,
         NullConditionalRewrite nullStrategy,
         AttributeData attribute)
@@ -22,7 +24,7 @@ internal sealed class AdaptationModel
 
     public INamedTypeSymbol SourceType { get; }
     public INamedTypeSymbol DestinationType { get; }
-    public string GeneratedName { get; }
+    public string? GeneratedName { get; }
     public AdaptGeneration Generation { get; }
     public NullConditionalRewrite NullStrategy { get; }
     public AttributeData Attribute { get; }

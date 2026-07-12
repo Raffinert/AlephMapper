@@ -1,6 +1,7 @@
 ﻿using AlephMapper.Helpers;
 using AlephMapper.Models;
 using AlephMapper.SyntaxRewriters;
+using AlephMapper.Adaptation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -84,14 +85,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
 
             bool isFirst = true;
             var generatedMemberSignatures = new HashSet<string>(StringComparer.Ordinal);
-            var existingMemberNames = new HashSet<string>(mapperType.GetMembers().Select(m => m.Name), StringComparer.Ordinal);
-            var existingMethodSignatures = new HashSet<string>(
-                mapperType.GetMembers().OfType<IMethodSymbol>()
-                    .Where(m => m.MethodKind == MethodKind.Ordinary)
-                    .Select(m => BuildMethodSignature(
-                        m.Name,
-                        m.Parameters.Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, NullableContext.Disabled)))),
-                StringComparer.Ordinal);
+            var adaptationMemberPlanner = new AdaptationMemberPlanner(mapperType);
 
             foreach (var mm in methods)
             {
@@ -200,28 +194,7 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    var adaptMapSignature = BuildMethodSignature(adaptName, new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1)));
                     var adaptExpressionName = adaptName + "Expression";
-                    if (generateMap && (existingMethodSignatures.Contains(adaptMapSignature) || !generatedMemberSignatures.Add(adaptMapSignature)))
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(
-                            DiagnosticDescriptors.AdaptNameConflict,
-                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
-                            mm.MethodSymbol.Name,
-                            adaptMapSignature));
-                        continue;
-                    }
-
-                    if (generateExpression && (existingMemberNames.Contains(adaptExpressionName) || !generatedMemberSignatures.Add(adaptExpressionName + "()")))
-                    {
-                        spc.ReportDiagnostic(Diagnostic.Create(
-                            DiagnosticDescriptors.AdaptNameConflict,
-                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
-                            mm.MethodSymbol.Name,
-                            adaptExpressionName));
-                        continue;
-                    }
-
                     var adaptInliner = new InliningResolver(mm.SemanticModel, modelsByMethod, false, adaptation.NullStrategy);
                     var inlinedBody = (ExpressionSyntax)adaptInliner.Visit(mm.BodySyntax.Expression)!.WithoutTrivia();
                     allUsingDirectives.UnionWith(adaptInliner.UsingDirectives.Concat(mm.UsingDirectives));
@@ -235,13 +208,51 @@ public class AlephSourceGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    if (!ValidateAdaptation(spc, mm, adaptation, inlinedBody))
+                    if (!AdaptationValidator.Validate(spc, mm, adaptation))
                     {
                         continue;
                     }
 
-                    var adaptedBody = RewriteAdaptedBody(inlinedBody, mm.ReturnType, adaptation.DestinationType, adaptDestFqn, mm.SemanticModel);
+                    var adaptedBody = AdaptedDestinationRewriter.Rewrite(
+                        mm.BodySyntax.Expression,
+                        inlinedBody,
+                        mm.SemanticModel,
+                        mm.ReturnType,
+                        adaptDestFqn);
                     var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
+
+                    var adaptMapParameterTypes = new[] { adaptSourceFqn }.Concat(parameterFqns.Skip(1)).ToArray();
+                    var adaptMapSignature = BuildMethodSignature(adaptName, adaptMapParameterTypes);
+                    var adaptExpressionSignature = adaptExpressionName + "()";
+                    var generatedConflict = (generateMap && generatedMemberSignatures.Contains(adaptMapSignature)) ||
+                                            (generateExpression && generatedMemberSignatures.Contains(adaptExpressionSignature));
+                    var conflict = string.Empty;
+                    var plannerConflict = !adaptationMemberPlanner.TryReserve(
+                            adaptName,
+                            adaptMapParameterTypes,
+                            generateMap,
+                            generateExpression,
+                            out conflict);
+                    if (generatedConflict || plannerConflict)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.AdaptNameConflict,
+                            adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mm.MethodSymbol.Locations.FirstOrDefault(),
+                            mm.MethodSymbol.Name,
+                            generatedConflict
+                                ? (generateMap && generatedMemberSignatures.Contains(adaptMapSignature) ? adaptMapSignature : adaptExpressionSignature)
+                                : conflict));
+                        continue;
+                    }
+
+                    if (generateMap)
+                    {
+                        generatedMemberSignatures.Add(adaptMapSignature);
+                    }
+                    if (generateExpression)
+                    {
+                        generatedMemberSignatures.Add(adaptExpressionSignature);
+                    }
 
                     if (generateMap)
                     {
@@ -505,234 +516,6 @@ public class AlephSourceGenerator : IIncrementalGenerator
         }
 
         return result;
-    }
-
-    private static bool ValidateAdaptation(SourceProductionContext spc, MappingModel mapping, AdaptationModel adaptation, ExpressionSyntax body)
-    {
-        var location = adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? mapping.MethodSymbol.Locations.FirstOrDefault();
-        var ok = true;
-
-        if (SymbolEqualityComparer.Default.Equals(adaptation.SourceType, mapping.Parameters[0].Type) &&
-            SymbolEqualityComparer.Default.Equals(adaptation.DestinationType, mapping.ReturnType))
-        {
-            spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.InvalidAdaptType, location, mapping.MethodSymbol.Name));
-            ok = false;
-        }
-
-        if (adaptation.SourceType.IsUnboundGenericType || adaptation.DestinationType.IsUnboundGenericType ||
-            adaptation.SourceType.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter) ||
-            adaptation.DestinationType.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter))
-        {
-            spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.AdaptOpenGenericType, location, mapping.MethodSymbol.Name));
-            ok = false;
-        }
-
-        foreach (var path in CollectSourceMemberPaths(body, mapping.Parameters[0].Name))
-        {
-            if (!CanResolveReadablePath(adaptation.SourceType, path))
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.AdaptSourceMemberMissing,
-                    location,
-                    mapping.MethodSymbol.Name,
-                    string.Join(".", path),
-                    adaptation.SourceType.ToDisplayString()));
-                ok = false;
-            }
-        }
-
-        foreach (var memberName in CollectTopLevelDestinationAssignments(body))
-        {
-            if (!HasWritableInstanceMember(adaptation.DestinationType, memberName))
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.AdaptDestinationMemberMissing,
-                    location,
-                    mapping.MethodSymbol.Name,
-                    memberName,
-                    adaptation.DestinationType.ToDisplayString()));
-                ok = false;
-            }
-        }
-
-        return ok;
-    }
-
-    private static IEnumerable<string[]> CollectSourceMemberPaths(ExpressionSyntax body, string sourceParameterName)
-    {
-        var paths = new List<string[]>();
-        foreach (var access in body.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>())
-        {
-            var segments = TryGetMemberPath(access, sourceParameterName);
-            if (segments is { Length: > 0 })
-            {
-                paths.Add(segments);
-            }
-        }
-
-        return paths
-            .GroupBy(p => string.Join(".", p), StringComparer.Ordinal)
-            .Select(g => g.First());
-    }
-
-    private static string[]? TryGetMemberPath(ExpressionSyntax expression, string sourceParameterName)
-    {
-        var segments = new Stack<string>();
-        ExpressionSyntax current = expression;
-
-        while (current is MemberAccessExpressionSyntax memberAccess)
-        {
-            segments.Push(memberAccess.Name.Identifier.Text);
-            current = memberAccess.Expression;
-        }
-
-        return current is IdentifierNameSyntax identifier && identifier.Identifier.Text == sourceParameterName
-            ? segments.ToArray()
-            : null;
-    }
-
-    private static bool CanResolveReadablePath(ITypeSymbol rootType, IReadOnlyList<string> path)
-    {
-        ITypeSymbol currentType = rootType;
-        foreach (var segment in path)
-        {
-            var member = currentType.GetMembers(segment)
-                .FirstOrDefault(static m => !m.IsStatic && IsReadableValueMember(m));
-            if (member == null)
-            {
-                return false;
-            }
-
-            currentType = GetMemberType(member)!;
-            if (currentType == null)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsReadableValueMember(ISymbol member)
-    {
-        return member switch
-        {
-            IPropertySymbol property => property.GetMethod != null,
-            IFieldSymbol field => !field.IsConst,
-            _ => false
-        };
-    }
-
-    private static ITypeSymbol? GetMemberType(ISymbol member)
-    {
-        return member switch
-        {
-            IPropertySymbol property => property.Type,
-            IFieldSymbol field => field.Type,
-            _ => null
-        };
-    }
-
-    private static IEnumerable<string> CollectTopLevelDestinationAssignments(ExpressionSyntax body)
-    {
-        InitializerExpressionSyntax? initializer = body switch
-        {
-            ObjectCreationExpressionSyntax objectCreation => objectCreation.Initializer,
-            ImplicitObjectCreationExpressionSyntax implicitCreation => implicitCreation.Initializer,
-            _ => null
-        };
-
-        if (initializer == null)
-        {
-            yield break;
-        }
-
-        foreach (var assignment in initializer.Expressions.OfType<AssignmentExpressionSyntax>())
-        {
-            if (assignment.Left is IdentifierNameSyntax identifier)
-            {
-                yield return identifier.Identifier.Text;
-            }
-            else if (assignment.Left is MemberAccessExpressionSyntax memberAccess)
-            {
-                yield return memberAccess.Name.Identifier.Text;
-            }
-        }
-    }
-
-    private static bool HasWritableInstanceMember(INamedTypeSymbol type, string memberName)
-    {
-        return type.GetMembers(memberName).Any(static m => m switch
-        {
-            IPropertySymbol property => !property.IsStatic && property.SetMethod != null,
-            IFieldSymbol field => !field.IsStatic && !field.IsReadOnly && !field.IsConst,
-            _ => false
-        });
-    }
-
-    private static ExpressionSyntax RewriteAdaptedBody(
-        ExpressionSyntax body,
-        ITypeSymbol originalDestinationType,
-        INamedTypeSymbol adaptedDestinationType,
-        string adaptedDestinationTypeName,
-        SemanticModel semanticModel)
-    {
-        return (ExpressionSyntax)new AdaptedDestinationRewriter(originalDestinationType, adaptedDestinationTypeName, semanticModel, body)
-            .Visit(body)!;
-    }
-
-    private sealed class AdaptedDestinationRewriter(
-        ITypeSymbol originalDestinationType,
-        string adaptedDestinationTypeName,
-        SemanticModel semanticModel,
-        ExpressionSyntax root) : CSharpSyntaxRewriter
-    {
-        public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
-        {
-            var rewritten = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)!;
-            return IsOriginalDestinationCreation(node)
-                ? rewritten.WithType(SyntaxFactory.ParseTypeName(adaptedDestinationTypeName))
-                : rewritten;
-        }
-
-        public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax node)
-        {
-            var rewritten = (ImplicitObjectCreationExpressionSyntax)base.VisitImplicitObjectCreationExpression(node)!;
-            return IsOriginalDestinationCreation(node)
-                ? SyntaxFactory.ObjectCreationExpression(
-                        SyntaxFactory.ParseTypeName(adaptedDestinationTypeName),
-                        rewritten.ArgumentList,
-                        rewritten.Initializer)
-                    .WithTriviaFrom(rewritten)
-                : rewritten;
-        }
-
-        private bool IsOriginalDestinationCreation(ExpressionSyntax node)
-        {
-            try
-            {
-                var typeInfo = semanticModel.GetTypeInfo(node);
-                var type = typeInfo.Type ?? typeInfo.ConvertedType;
-                if (type != null)
-                {
-                    return SymbolEqualityComparer.Default.Equals(type, originalDestinationType);
-                }
-            }
-            catch (ArgumentException)
-            {
-                // Inlined/re-trivia'd nodes may be detached from the semantic model's tree.
-            }
-
-            if (node is ObjectCreationExpressionSyntax objectCreation)
-            {
-                var typeText = objectCreation.Type.ToString();
-                return typeText == originalDestinationType.Name ||
-                       typeText == originalDestinationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ||
-                       typeText == originalDestinationType.ToDisplayString();
-            }
-
-            return ReferenceEquals(node, root);
-        }
     }
 
     private static string BuildMethodSignature(string name, IEnumerable<string> parameterTypeNames)
