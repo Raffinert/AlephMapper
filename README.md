@@ -17,7 +17,7 @@ To learn more about the war and how you can help, [click here](https://stand-wit
 [![NuGet Downloads](https://img.shields.io/nuget/dt/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AlephMapper is a C# source generator for reusable manual mappings. Write one expression-bodied mapping method and generate companion methods for EF Core projections and optional update-in-place mapping from the same code.
+AlephMapper is a C# source generator for reusable manual mappings. Write one expression-bodied mapping method and generate companion methods for EF Core projections, optional update-in-place mapping, and explicitly declared structural adaptations from the same code.
 
 Use it when you want hand-written mapping logic without maintaining a separate `Expression<Func<...>>` for queries or a second method for updating existing objects.
 
@@ -28,6 +28,7 @@ Use it when you want hand-written mapping logic without maintaining a separate `
 - **Method inlining** - reuse small helper methods in mappings and let AlephMapper inline them into generated code.
 - **Configurable null handling** - choose how null-conditional access (`?.`) is handled in generated expressions.
 - **Update-in-place mapping** - mutate existing destination instances, including EF Core tracked entities.
+- **Explicit mapping adaptation** - reuse a mapping template for a specified source/destination type pair with `[Adapt]`.
 
 ## Install
 
@@ -195,6 +196,52 @@ public static Person MapToPerson(PersonUpdateDto dto) => new()
 };
 ```
 
+## Adapt a Mapping Template
+
+Use `[Adapt]` when two type pairs share the mapping shape but are not the same declared types. It reuses a mapping method as a compile-time template for the explicit source and destination types supplied to the attribute; it does not scan for or infer compatible types.
+
+```csharp
+using AlephMapper;
+
+public static partial class PersonMapper
+{
+    [Adapt(
+        typeof(Employee),
+        typeof(EmployeeDto),
+        Name = "MapEmployee",
+        Generate = AdaptGeneration.MapAndExpression)]
+    public static PersonDto MapPerson(Person source) => new()
+    {
+        Id = source.Id,
+        Name = source.FirstName + " " + source.LastName,
+        Email = source.Email
+    };
+}
+```
+
+The original `MapPerson(Person)` method is unchanged. AlephMapper generates an adapted map and expression companion using the specified types:
+
+```csharp
+public static EmployeeDto MapEmployee(Employee source) => new()
+{
+    Id = source.Id,
+    Name = source.FirstName + " " + source.LastName,
+    Email = source.Email
+};
+
+public static Expression<Func<Employee, EmployeeDto>> MapEmployeeExpression() =>
+    source => new EmployeeDto
+    {
+        Id = source.Id,
+        Name = source.FirstName + " " + source.LastName,
+        Email = source.Email
+    };
+```
+
+`Generate` defaults to `AdaptGeneration.MapAndExpression`. Use `AdaptGeneration.Map` to generate only a map, or `AdaptGeneration.Expression` to generate only an expression. `Name` is required whenever expression generation is enabled; for map-only adaptations, omitting it generates an overload using the template method's name.
+
+Before generating code, AlephMapper checks the members and conversions used by the template: the adapted source must expose the used readable member paths, the adapted destination must have compatible writable members and constructors, and generated member signatures must not conflict. Invalid adaptations report `AM0005`–`AM0015` diagnostics.
+
 ## How It Works
 
 For each `[Expressive]` method, AlephMapper generates a method named `<OriginalMethodName>Expression()` returning `Expression<Func<...>>`.
@@ -213,6 +260,8 @@ public static PersonDto MapToPerson(Employee employee) => ...
 public static PersonDto MapToPerson(Employee employee, PersonDto target) => ...
 ```
 
+For each `[Adapt]` declaration, AlephMapper substitutes the explicitly declared source and destination types into the template body and generates the requested map and/or expression members. Additional template method parameters are preserved in the generated mapping signature and expression delegate.
+
 Helper methods in the same mapper class are inlined where possible.
 
 ## Supported Mapping Shape
@@ -230,7 +279,11 @@ AlephMapper is best suited for object initializer mappings and small helper meth
 
 ### Generated method is missing
 
-Check that the mapper class is `static partial`, the method is expression-bodied, and the method or containing class has `[Expressive]` or `[Updatable]`.
+Check that the mapper class is `static partial`, the method is expression-bodied, and the method or containing class has `[Expressive]` or `[Updatable]`. For adaptation, ensure the method has an `[Adapt]` declaration with explicit source and destination types.
+
+### Adaptation reports a diagnostic
+
+Check that the adapted source exposes every member path used by the template, the adapted destination has compatible writable members and constructors, and the generated name does not conflict with another member. `Name` is required when `Generate` includes `AdaptGeneration.Expression`.
 
 ### NullReferenceException after using `?.`
 
@@ -296,6 +349,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ## Related Projects
 
+- [NeinLinq](https://github.com/axelheer/nein-linq)
 - [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables)
 - [Expressionify](https://github.com/ClaveConsulting/Expressionify)
 - [AutoMapper](https://automapper.org/)
