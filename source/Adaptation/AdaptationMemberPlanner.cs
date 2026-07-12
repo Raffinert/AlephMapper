@@ -1,6 +1,7 @@
 #nullable enable
 
 using AlephMapper.Helpers;
+using AlephMapper.Generation;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -24,7 +25,7 @@ internal sealed class AdaptationMemberPlanner
         _existingMethodSignatures = new HashSet<string>(
             mapperType.GetMembers().OfType<IMethodSymbol>()
                 .Where(m => m.MethodKind == MethodKind.Ordinary)
-                .Select(m => BuildMethodSignature(
+                .Select(m => MethodSignature.Build(
                     m.Name,
                     m.Parameters.Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, NullableContext.Disabled)))),
             StringComparer.Ordinal);
@@ -52,7 +53,7 @@ internal sealed class AdaptationMemberPlanner
                 return false;
             }
 
-            requestedSignatures.Add(BuildMethodSignature(mapName, mapParameterTypes));
+            requestedSignatures.Add(MethodSignature.Build(mapName, mapParameterTypes));
         }
 
         if (generateExpression)
@@ -64,7 +65,7 @@ internal sealed class AdaptationMemberPlanner
                 return false;
             }
 
-            requestedSignatures.Add(BuildMethodSignature(expressionName, []));
+            requestedSignatures.Add(MethodSignature.Build(expressionName, []));
         }
 
         foreach (var signature in requestedSignatures)
@@ -79,15 +80,5 @@ internal sealed class AdaptationMemberPlanner
         _generatedMethodSignatures.UnionWith(requestedSignatures);
         conflict = string.Empty;
         return true;
-    }
-
-    private static string BuildMethodSignature(string name, IEnumerable<string> parameterTypeNames)
-    {
-        return name + "(" + string.Join(",", parameterTypeNames.Select(RemoveNullableSignatureMarker)) + ")";
-    }
-
-    private static string RemoveNullableSignatureMarker(string typeName)
-    {
-        return typeName.EndsWith("?", StringComparison.Ordinal) ? typeName.Substring(0, typeName.Length - 1) : typeName;
     }
 }
