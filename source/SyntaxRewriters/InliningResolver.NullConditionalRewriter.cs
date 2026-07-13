@@ -24,7 +24,7 @@ internal partial class InliningResolver
             {
                 _conditionalAccessExpressionsStack.Push(node.Expression);
                 var rewritten = (ExpressionSyntax)base.VisitConditionalAccessExpression(node)!;
-                var annotated = rewritten.GetAnnotatedNodes("AlephMapper.InlinedConditional").ToArray();
+                var annotated = rewritten.GetAnnotatedNodes(InlinedConditionalAnnotation).ToArray();
                 if (annotated.FirstOrDefault() is { } ann) return ann;
                 return rewritten;
             }

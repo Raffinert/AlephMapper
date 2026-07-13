@@ -7,6 +7,14 @@ namespace AlephMapper.SyntaxRewriters;
 
 internal sealed partial class InliningResolver
 {
+    public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
+    {
+        var rewritten = base.VisitObjectCreationExpression(node)!;
+        return IsAnnotatedReturnCreation(node)
+            ? rewritten.WithAdditionalAnnotations(new SyntaxAnnotation(InlinedReturnCreationAnnotation))
+            : rewritten;
+    }
+
     public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax implicitNew)
     {
         var type = model.GetTypeInfo(implicitNew).Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
@@ -28,6 +36,17 @@ internal sealed partial class InliningResolver
             objectCreation = objectCreation.WithArgumentList((ArgumentListSyntax)VisitArgumentList(implicitNew.ArgumentList));
         }
 
-        return objectCreation.WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
+        objectCreation = objectCreation.WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
+        return IsAnnotatedReturnCreation(implicitNew)
+            ? objectCreation.WithAdditionalAnnotations(new SyntaxAnnotation(InlinedReturnCreationAnnotation))
+            : objectCreation;
+    }
+
+    private bool IsAnnotatedReturnCreation(ExpressionSyntax expression)
+    {
+        return returnTypeToAnnotate != null &&
+               SymbolEqualityComparer.Default.Equals(
+                   model.GetTypeInfo(expression).Type ?? model.GetTypeInfo(expression).ConvertedType,
+                   returnTypeToAnnotate);
     }
 }

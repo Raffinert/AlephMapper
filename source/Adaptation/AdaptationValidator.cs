@@ -16,7 +16,11 @@ namespace AlephMapper.Adaptation;
 /// </summary>
 internal static class AdaptationValidator
 {
-    public static bool Validate(SourceProductionContext context, MappingModel mapping, AdaptationModel adaptation)
+    public static bool Validate(
+        SourceProductionContext context,
+        MappingModel mapping,
+        AdaptationModel adaptation,
+        ExpressionSyntax inlinedBody)
     {
         var location = adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()
             ?? mapping.MethodSymbol.Locations.FirstOrDefault();
@@ -41,7 +45,8 @@ internal static class AdaptationValidator
             mapping.BodySyntax.Expression,
             mapping.SemanticModel,
             mapping.ReturnType).ToArray();
-        if (destinationCreations.Length == 0)
+        var hasInlinedDestinationCreation = inlinedBody.GetAnnotatedNodes(SyntaxRewriters.InliningResolver.InlinedReturnCreationAnnotation).Any();
+        if (destinationCreations.Length == 0 && !hasInlinedDestinationCreation)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.AdaptUnsupportedSyntax,

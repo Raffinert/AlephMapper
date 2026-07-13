@@ -65,7 +65,7 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            if (!AdaptationValidator.Validate(context.SourceProductionContext, mapping, adaptation))
+            if (!AdaptationValidator.Validate(context.SourceProductionContext, mapping, adaptation, inlinedBody))
             {
                 continue;
             }
@@ -75,7 +75,9 @@ internal static class AdaptationMemberEmitter
                 inlinedBody,
                 mapping.SemanticModel,
                 mapping.ReturnType,
-                destinationTypeName);
+                destinationTypeName,
+                adaptation.DestinationType,
+                details.NullableContext);
             var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
 
             var adaptationParameterTypes = new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).ToArray();
@@ -153,7 +155,9 @@ internal static class AdaptationMemberEmitter
                     inlinedUpdateBody,
                     mapping.SemanticModel,
                     mapping.ReturnType,
-                    destinationTypeName);
+                    destinationTypeName,
+                    adaptation.DestinationType,
+                    details.NullableContext);
                 var lines = new List<string>();
                 if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(
                         adaptedUpdateBody,

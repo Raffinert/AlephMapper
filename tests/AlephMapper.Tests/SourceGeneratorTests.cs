@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +28,7 @@ public class SourceGeneratorTests
 
         foreach (var testCaseGroup in groupedByTestCase)
         {
-            var testCaseName = Path.GetFileName(testCaseGroup.Key)!;
+            var testCaseName = Path.GetFileName(testCaseGroup.Key);
             var sourceFiles = testCaseGroup
                 .Where(n => n.GetNoneFilePath().Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).SkipWhile(x => x != "Files").Take(3).Last() == "Sources")
                 .Select(n => n.GetNoneFilePath())
@@ -89,7 +89,7 @@ public class SourceGeneratorTests
         var result = driver.GetRunResult().Results.Single();
 
         var actualSources = result.GeneratedSources.ToDictionary(
-            source => Path.GetFileName(source.HintName)!,
+            source => Path.GetFileName(source.HintName),
             source => NormalizeLineEndings(source.SourceText.ToString()),
             StringComparer.Ordinal);
 
@@ -242,6 +242,225 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptedOutputSupportsNullConditionalRewrite()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static PersonDto MapPerson(Person source) => new() { Street = source.Address?.Street ?? "Unknown" };
+            }
+
+            public sealed class Person { public Address? Address { get; set; } }
+            public sealed class Employee { public Address? Address { get; set; } }
+            public sealed class Address { public string Street { get; set; } = string.Empty; }
+            public sealed class PersonDto { public string Street { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Street { get; set; } = string.Empty; }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "NullConditionalAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("?.");
+        await Assert.That(generatedSource).Contains("source.Address != null");
+    }
+
+    [Test]
+    public async Task AdaptedOutputSupportsNullConditionalRewriteWithExtensionInlining()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class AddressMapper
+            {
+                public static AddressDto ToDto(this Address source) => new() { Street = source.Street };
+            }
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static PersonDto MapPerson(Person source) => new() { Address = source.Address?.ToDto() };
+            }
+
+            public sealed class Person { public Address? Address { get; set; } }
+            public sealed class Employee { public Address? Address { get; set; } }
+            public sealed class Address { public string Street { get; set; } = string.Empty; }
+            public sealed class PersonDto { public AddressDto? Address { get; set; } }
+            public sealed class EmployeeDto { public AddressDto? Address { get; set; } }
+            public sealed class AddressDto { public string Street { get; set; } = string.Empty; }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "NullConditionalExtensionAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("?.");
+        await Assert.That(generatedSource).DoesNotContain(".ToDto(");
+        await Assert.That(generatedSource).Contains("source.Address != null");
+        await Assert.That(generatedSource).Contains("Street = source.Address.Street");
+    }
+
+    [Test]
+    public async Task AdaptedOutputSupportsNullConditionalRootExtensionInlining()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", Generate = AdaptGeneration.Expression, NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static PersonDto MapPerson(Person source) => source?.MapNonNullPerson();
+
+                private static PersonDto MapNonNullPerson(this Person source) => new()
+                {
+                    Name = source.Name,
+                    Tax = new TaxInfo { Rate = source.TaxRate }
+                };
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; public decimal TaxRate { get; set; } }
+            public sealed class Employee { public string Name { get; set; } = string.Empty; public decimal TaxRate { get; set; } }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; public TaxInfo Tax { get; set; } = new(); }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; public EmployeeTaxInfo Tax { get; set; } = new(); }
+            public sealed class TaxInfo { public decimal Rate { get; set; } }
+            public sealed class EmployeeTaxInfo { public decimal Rate { get; set; } }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "NullConditionalRootExtensionAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("?.");
+        await Assert.That(generatedSource).DoesNotContain("MapNonNullPerson");
+        await Assert.That(generatedSource).Contains("source != null");
+        await Assert.That(generatedSource).Contains("new EmployeeDto");
+        await Assert.That(generatedSource).Contains("Tax = new EmployeeTaxInfo");
+    }
+
+    [Test]
+    public async Task AdaptedOutputSupportsComplexNullConditionalRootExtensionInlining()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class OrderItemMapper
+            {
+                [Adapt(typeof(OrderItemInput), typeof(ReadOnlyOrderItem), Generate = AdaptGeneration.Expression, Name = "MapInputToReadOnlyItem", NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static OrderItem MapInputToItem(this OrderItemInput source) => source?.MapNonNullInputToItem();
+
+                private static OrderItem MapNonNullInputToItem(this OrderItemInput source) => new()
+                {
+                    ProductName = source.ProductName,
+                    CurrencyCode = source.CurrencyCode,
+                    UnitPrice = source.UnitPrice,
+                    Quantity = source.Quantity,
+                    Subtotal = source.Subtotal.Round(2),
+                    Sequence = source.Sequence,
+                    Sku = source.Sku,
+                    DiscountAmount = source.Discount,
+                    TaxPercentage = source.TaxRate,
+                    IsArchived = false,
+                    TotalAmount = (source.Subtotal * (1m + source.TaxRate / 100m)).Round(2),
+                    OrderNumber = source.OrderNumber,
+                    OrderLineNumber = source.OrderLineNumber,
+                    Tax = new TaxInfo
+                    {
+                        Rate = source.TaxRate,
+                        Amount = (source.Subtotal * source.TaxRate / 100m).Round(2)
+                    }
+                };
+
+                private static decimal Round(this decimal value, int decimals) => decimal.Round(value, decimals);
+            }
+
+            public sealed class OrderItemInput
+            {
+                public string ProductName { get; set; } = string.Empty;
+                public string CurrencyCode { get; set; } = string.Empty;
+                public decimal UnitPrice { get; set; }
+                public decimal Quantity { get; set; }
+                public decimal Subtotal { get; set; }
+                public int Sequence { get; set; }
+                public string Sku { get; set; } = string.Empty;
+                public decimal Discount { get; set; }
+                public decimal TaxRate { get; set; }
+                public string OrderNumber { get; set; } = string.Empty;
+                public string OrderLineNumber { get; set; } = string.Empty;
+            }
+
+            public sealed class OrderItem
+            {
+                public string ProductName { get; set; } = string.Empty;
+                public string CurrencyCode { get; set; } = string.Empty;
+                public decimal UnitPrice { get; set; }
+                public decimal Quantity { get; set; }
+                public decimal Subtotal { get; set; }
+                public int Sequence { get; set; }
+                public string Sku { get; set; } = string.Empty;
+                public decimal DiscountAmount { get; set; }
+                public decimal TaxPercentage { get; set; }
+                public bool IsArchived { get; set; }
+                public decimal TotalAmount { get; set; }
+                public string OrderNumber { get; set; } = string.Empty;
+                public string OrderLineNumber { get; set; } = string.Empty;
+                public TaxInfo Tax { get; set; } = new();
+            }
+
+            public sealed class ReadOnlyOrderItem
+            {
+                public string ProductName { get; set; } = string.Empty;
+                public string CurrencyCode { get; set; } = string.Empty;
+                public decimal UnitPrice { get; set; }
+                public decimal Quantity { get; set; }
+                public decimal Subtotal { get; set; }
+                public int Sequence { get; set; }
+                public string Sku { get; set; } = string.Empty;
+                public decimal DiscountAmount { get; set; }
+                public decimal TaxPercentage { get; set; }
+                public bool IsArchived { get; set; }
+                public decimal TotalAmount { get; set; }
+                public string OrderNumber { get; set; } = string.Empty;
+                public string OrderLineNumber { get; set; } = string.Empty;
+                public ReadOnlyTaxInfo Tax { get; set; } = new();
+            }
+
+            public sealed class TaxInfo
+            {
+                public decimal Rate { get; set; }
+                public decimal Amount { get; set; }
+            }
+
+            public sealed class ReadOnlyTaxInfo
+            {
+                public decimal Rate { get; set; }
+                public decimal Amount { get; set; }
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "ComplexNullConditionalRootExtensionAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapInputToReadOnlyItemExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("?.");
+        await Assert.That(generatedSource).DoesNotContain("MapNonNullInputToItem");
+        await Assert.That(generatedSource).Contains("source != null");
+        await Assert.That(generatedSource).Contains("new ReadOnlyOrderItem");
+        await Assert.That(generatedSource).Contains("Tax = new ReadOnlyTaxInfo");
+        await Assert.That(generatedSource).Contains("TotalAmount = decimal.Round((source.Subtotal * (1m + source.TaxRate / 100m)), 2)");
+    }
+
+    [Test]
     public async Task AdaptReportsIncompatibleDirectMemberAssignment()
     {
         const string source = """
@@ -311,7 +530,7 @@ public class SourceGeneratorTests
         await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == diagnosticId)).IsTrue();
     }
 
-    private async Task AssertAdaptedOutputCompiles(string source, string assemblyName)
+    private async Task<IReadOnlyList<string>> AssertAdaptedOutputCompiles(string source, string assemblyName)
     {
         var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
         var compilation = CSharpCompilation.Create(
@@ -324,6 +543,9 @@ public class SourceGeneratorTests
         await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(driver.GetRunResult().Results.Single().Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        return driver.GetRunResult().Results.Single().GeneratedSources
+            .Select(sourceText => sourceText.SourceText.ToString())
+            .ToArray();
     }
 
     private static string CreateAdaptationSource(
