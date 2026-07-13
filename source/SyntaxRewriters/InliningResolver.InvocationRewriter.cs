@@ -14,9 +14,13 @@ internal sealed partial class InliningResolver(
     SemanticModel model,
     IDictionary<IMethodSymbol, MappingModel> catalog,
     bool forUpdateMethod,
-    NullConditionalRewrite rewriteSupport)
+    NullConditionalRewrite rewriteSupport,
+    ITypeSymbol returnTypeToAnnotate = null)
     : CSharpSyntaxRewriter
 {
+    internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
+    internal const string InlinedReturnCreationAnnotation = "AlephMapper.InlinedReturnCreation";
+
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
     private List<CircularReferenceInfo> _circularReferences = [];
     private Dictionary<IMethodSymbol, MappingModel> _inlinedMethods = new(SymbolEqualityComparer.Default);
@@ -93,7 +97,7 @@ internal sealed partial class InliningResolver(
                         {
                             _inlinedMethods[normalizedMethod] = callee;
                             var inlinedBody =
-                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod, rewriteSupport)
+                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod, rewriteSupport, callee.ReturnType)
                                 {
                                     _callStack = _callStack,
                                     _circularReferences = _circularReferences,
@@ -159,7 +163,7 @@ internal sealed partial class InliningResolver(
         try
         {
             _inlinedMethods[directCallMethod] = callee2;
-            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport)
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, callee2.ReturnType)
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,
@@ -172,7 +176,7 @@ internal sealed partial class InliningResolver(
 
             if (conditionalAccessExpression)
             {
-                substituted = substituted.WithAdditionalAnnotations(new SyntaxAnnotation("AlephMapper.InlinedConditional"));
+                substituted = substituted.WithAdditionalAnnotations(new SyntaxAnnotation(InlinedConditionalAnnotation));
             }
 
             return substituted;
@@ -282,4 +286,3 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
     public IMethodSymbol Method { get; } = method;
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
 }
-

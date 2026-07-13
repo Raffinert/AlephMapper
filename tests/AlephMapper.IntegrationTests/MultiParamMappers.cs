@@ -1,4 +1,4 @@
-namespace AlephMapper.IntegrationTests;
+﻿namespace AlephMapper.IntegrationTests;
 
 // ──────────────────────────────────────────────────────────────────
 // 1. Expressive mapper with multi-parameter helper inlining
@@ -7,8 +7,8 @@ namespace AlephMapper.IntegrationTests;
 public static partial class MultiParamEmployeeMapper
 {
     // Two-parameter helper: concatenate first + last
-    public static string FormatName(string first, string last) =>
-        first + " " + last;
+    public static string FormatName(string first, string last, string separator) =>
+        first + separator + last;
 
     // Three-parameter helper: build a formatted address string
     public static string FormatAddress(string street, string city, string country) =>
@@ -20,7 +20,7 @@ public static partial class MultiParamEmployeeMapper
 
     // Nested multi-param: calls FormatName internally
     public static string FormatNameWithEmail(string first, string last, string email) =>
-        FormatName(first, last) + " <" + email + ">";
+        FormatName(first, last, " ") + " <" + email + ">";
 
     // Single-param helper to ensure mixing single + multi works
     public static string GetDepartmentName(Employee employee) =>
@@ -28,13 +28,13 @@ public static partial class MultiParamEmployeeMapper
 
     // ── Expression mapping that uses all the above helpers ──
     [Expressive]
-    public static EmployeeDto MapToDto(Employee employee) => new()
+    public static EmployeeDto MapToDto(Employee e) => new()
     {
-        Id = employee.Id,
-        FullName = FormatName(employee.FirstName, employee.LastName),
-        Email = employee.Email,
-        DepartmentName = GetDepartmentName(employee),
-        IsActive = employee.IsActive
+        Id = e.Id,
+        FullName = FormatName(e.FirstName, e.LastName, " "),
+        Email = e.Email,
+        DepartmentName = GetDepartmentName(e),
+        IsActive = e.IsActive
     };
 
     // Mapping that exercises three-parameter helper

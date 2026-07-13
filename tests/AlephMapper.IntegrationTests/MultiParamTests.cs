@@ -1,4 +1,4 @@
-using AgileObjects.ReadableExpressions;
+﻿using AgileObjects.ReadableExpressions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,9 +39,11 @@ public class MultiParamIntegrationTests
         var expression = MultiParamEmployeeMapper.MapToDtoExpression();
 
         // Act
-        var dtos = await _context.Employees
+        var query = _context.Employees
             .Select(expression)
-            .ToListAsync();
+            .Where(e => e.IsActive);
+
+        var dtos = await query.ToListAsync();
 
         // Assert
         await Assert.That(dtos.Count).IsEqualTo(6);
