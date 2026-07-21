@@ -24,9 +24,13 @@ internal sealed class MappingMethodDetails
         MethodParameterList = string.Join(", ", ParameterTypeNames);
         MethodParameterListWithNames = string.Join(", ", mapping.Parameters.Select(parameter =>
             $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext)} {parameter.Name}"));
+        ExtraExpressionParameterTypeNames = ParameterTypeNames.Skip(1).ToArray();
+        ExtraExpressionParameterListWithNames = string.Join(", ", mapping.Parameters.Skip(1).Select(parameter =>
+            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext)} {parameter.Name}"));
         LambdaParameters = mapping.Parameters.Count == 1
             ? mapping.Parameters[0].Name
             : "(" + string.Join(", ", mapping.Parameters.Select(parameter => parameter.Name)) + ")";
+        ProjectionLambdaParameter = mapping.Parameters[0].Name;
         NullableContext = nullableContext;
     }
 
@@ -37,6 +41,9 @@ internal sealed class MappingMethodDetails
     public string SourceName { get; }
     public string MethodParameterList { get; }
     public string MethodParameterListWithNames { get; }
+    public string[] ExtraExpressionParameterTypeNames { get; }
+    public string ExtraExpressionParameterListWithNames { get; }
     public string LambdaParameters { get; }
+    public string ProjectionLambdaParameter { get; }
     public Microsoft.CodeAnalysis.NullableContext NullableContext { get; }
 }

@@ -29,7 +29,7 @@ internal static class ExpressiveMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
-        context.GeneratedMemberSignatures.Add(expressionMethodName + "()");
+        context.GeneratedMemberSignatures.Add(MethodSignature.Build(expressionMethodName, details.ExtraExpressionParameterTypeNames));
         var nullStrategyDescription = mapping.NullStrategy switch
         {
             NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
@@ -37,8 +37,11 @@ internal static class ExpressiveMemberEmitter
             NullConditionalRewrite.Rewrite => "Null-conditional operators are rewritten as explicit null checks for better compatibility.",
             _ => "Default null handling strategy is applied."
         };
-        var funcTypeArguments = string.Join(", ", details.ParameterTypeNames.Append(details.DestinationTypeName));
+        var funcTypeArguments = string.Join(", ", new[] { details.SourceTypeName, details.DestinationTypeName });
         var prettyBody = PrettyPrinter.Print(inlinedBody, 2);
+        var expressionMethodParameters = string.IsNullOrEmpty(details.ExtraExpressionParameterListWithNames)
+            ? "()"
+            : "(" + details.ExtraExpressionParameterListWithNames + ")";
 
         context.AppendMember(members =>
         {
@@ -50,8 +53,8 @@ internal static class ExpressiveMemberEmitter
             members.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
             members.AppendLine("    /// </para>");
             members.AppendLine("    /// </remarks>");
-            members.AppendLine("    public static Expression<Func<" + funcTypeArguments + ">> " + expressionMethodName + "() => ");
-            members.Append("        " + details.LambdaParameters + " => ");
+            members.AppendLine("    public static Expression<Func<" + funcTypeArguments + ">> " + expressionMethodName + expressionMethodParameters + " => ");
+            members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(prettyBody + ";");
         });
     }

@@ -85,13 +85,14 @@ internal static class AdaptationMemberEmitter
             var updateParameterTypes = adaptationParameterTypes.Append(destinationTypeName).ToArray();
             var updateSignature = MethodSignature.Build(adaptationName, updateParameterTypes);
             var expressionName = adaptationName + "Expression";
-            var expressionSignature = expressionName + "()";
+            var expressionSignature = MethodSignature.Build(expressionName, details.ExtraExpressionParameterTypeNames);
             var generatedConflict = (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature)) ||
                                     (generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature)) ||
                                     (generateUpdate && context.GeneratedMemberSignatures.Contains(updateSignature));
             var plannerConflict = !context.AdaptationMembers.TryReserve(
                 adaptationName,
                 adaptationParameterTypes,
+                details.ExtraExpressionParameterTypeNames,
                 generateMap,
                 generateExpression,
                 generateUpdate,
@@ -122,7 +123,7 @@ internal static class AdaptationMemberEmitter
             if (generateExpression)
             {
                 context.GeneratedMemberSignatures.Add(expressionSignature);
-                var functionArguments = string.Join(", ", new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).Append(destinationTypeName));
+                var functionArguments = string.Join(", ", new[] { sourceTypeName, destinationTypeName });
                 EmitExpressionMember(details, expressionName, functionArguments, adaptedBodyText, context);
             }
 
@@ -213,8 +214,11 @@ internal static class AdaptationMemberEmitter
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted expression companion for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
             members.AppendLine("    /// </summary>");
-            members.AppendLine("    public static Expression<Func<" + functionArguments + ">> " + expressionName + "() => ");
-            members.Append("        " + details.LambdaParameters + " => ");
+            var expressionMethodParameters = string.IsNullOrEmpty(details.ExtraExpressionParameterListWithNames)
+                ? "()"
+                : "(" + details.ExtraExpressionParameterListWithNames + ")";
+            members.AppendLine("    public static Expression<Func<" + functionArguments + ">> " + expressionName + expressionMethodParameters + " => ");
+            members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(adaptedBodyText + ";");
         });
     }

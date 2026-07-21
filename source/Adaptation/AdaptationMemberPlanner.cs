@@ -40,6 +40,7 @@ internal sealed class AdaptationMemberPlanner
     public bool TryReserve(
         string mapName,
         IEnumerable<string> mapParameterTypes,
+        IEnumerable<string> expressionParameterTypes,
         bool generateMap,
         bool generateExpression,
         bool generateUpdate,
@@ -67,7 +68,7 @@ internal sealed class AdaptationMemberPlanner
                 return false;
             }
 
-            requestedSignatures.Add(MethodSignature.Build(expressionName, []));
+            requestedSignatures.Add(MethodSignature.Build(expressionName, expressionParameterTypes));
         }
 
         if (generateUpdate)

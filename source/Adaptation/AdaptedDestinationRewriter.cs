@@ -18,7 +18,6 @@ namespace AlephMapper.Adaptation;
 internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
 {
     private readonly HashSet<TextSpan> _destinationCreationSpans;
-    private readonly HashSet<TextSpan> _inlinedDestinationCreationSpans;
     private readonly HashSet<string> _destinationCreationTypeTexts;
     private readonly TypeSyntax _adaptedDestinationType;
     private readonly ITypeSymbol _adaptedDestinationTypeSymbol;
@@ -30,7 +29,6 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
 
     private AdaptedDestinationRewriter(
         IEnumerable<TextSpan> destinationCreationSpans,
-        IEnumerable<TextSpan> inlinedDestinationCreationSpans,
         IEnumerable<string> destinationCreationTypeTexts,
         IEnumerable<string> originalDestinationTypeTexts,
         string adaptedDestinationTypeName,
@@ -39,7 +37,6 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         ExpressionSyntax root)
     {
         _destinationCreationSpans = new HashSet<TextSpan>(destinationCreationSpans);
-        _inlinedDestinationCreationSpans = new HashSet<TextSpan>(inlinedDestinationCreationSpans);
         _destinationCreationTypeTexts = new HashSet<string>(destinationCreationTypeTexts);
         _adaptedDestinationType = SyntaxFactory.ParseTypeName(adaptedDestinationTypeName);
         _adaptedDestinationTypeSymbol = adaptedDestinationTypeSymbol;
@@ -80,10 +77,6 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
             .ToArray();
 
         var spans = destinationCreations.Select(node => node.Span);
-        var inlinedSpans = bodyToRewrite
-            .GetAnnotatedNodes(InliningResolver.InlinedReturnCreationAnnotation)
-            .OfType<ExpressionSyntax>()
-            .Select(node => node.Span);
         var typeTexts = destinationCreations
             .OfType<ObjectCreationExpressionSyntax>()
             .Select(node => node.Type.ToString());
@@ -91,7 +84,6 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
 
         return (ExpressionSyntax)new AdaptedDestinationRewriter(
                 spans,
-                inlinedSpans,
                 typeTexts,
                 originalDestinationTypeTexts,
                 adaptedDestinationTypeName,
@@ -209,8 +201,8 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
     private ITypeSymbol? GetObjectCreationTargetType(ObjectCreationExpressionSyntax node)
     {
         if (_destinationCreationSpans.Contains(node.Span) ||
-            _inlinedDestinationCreationSpans.Contains(node.Span) ||
-            _destinationCreationTypeTexts.Contains(node.Type.ToString()))
+            _destinationCreationTypeTexts.Contains(node.Type.ToString()) ||
+            _originalDestinationTypeTexts.Contains(node.Type.ToString()))
         {
             return _adaptedDestinationTypeSymbol;
         }

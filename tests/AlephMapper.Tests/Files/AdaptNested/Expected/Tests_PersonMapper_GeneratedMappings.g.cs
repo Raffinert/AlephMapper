@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.5.7")]
+[GeneratedCode("AlephMapper", "0.5.8")]
 partial class PersonMapper
 {
     /// <summary>
@@ -30,8 +30,8 @@ partial class PersonMapper
     /// <summary>
     /// This is an auto-generated adapted expression companion for <see cref="MapPerson(Person, bool)"/>.
     /// </summary>
-    public static Expression<Func<Employee, bool, EmployeeDto>> MapEmployeeExpression() => 
-        (source, includeEmail) => includeEmail
+    public static Expression<Func<Employee, EmployeeDto>> MapEmployeeExpression(bool includeEmail) => 
+        source => includeEmail
             ? new EmployeeDto
             {
                 Id = source.Id,
@@ -44,4 +44,19 @@ partial class PersonMapper
                 Name = source.FirstName + " " + source.LastName,
                 Email = string.Empty
             };
+
+    /// <summary>
+    /// This is an auto-generated adapted expression companion for <see cref="MapPersonWithDetail(PersonWithDetail, string)"/>.
+    /// </summary>
+    public static Expression<Func<EmployeeWithDetail, EmployeeWithDetailDto>> MapEmployeeWithDetailExpression(string userLanguageCode) => 
+        source => new EmployeeWithDetailDto
+        {
+            Id = source.Id,
+            Details = source.Details.Select(detail => new DetailDto
+            {
+                Code = detail.Code,
+                Description = detail.Descriptions
+            .Where(description => description.LanguageCode == userLanguageCode)            .Select(description => description.Text)            .FirstOrDefault() ?? detail.Code
+            }).ToList()
+        };
 }

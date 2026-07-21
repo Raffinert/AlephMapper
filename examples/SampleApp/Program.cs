@@ -188,11 +188,11 @@ Console.WriteLine($"   DepartmentTitle:    {summary.DepartmentTitle}");
 Console.WriteLine($"   TotalCompensation:  {summary.TotalCompensation:C}");
 
 // Use the generated expression (multi-param helpers are inlined into the expression tree)
-var empExpression = EmployeeMapper.ToSummaryExpression();
+var empExpression = EmployeeMapper.ToSummaryExpression(DateTime.Now.Year);
 Console.WriteLine("\n   Generated Expression (helpers inlined):");
 Console.WriteLine($"   {empExpression}");
 var compiled = empExpression.Compile();
-var fromExpression = compiled(employee, DateTime.Now.Year);
+var fromExpression = compiled(employee);
 Console.WriteLine("\n   From compiled expression:");
 Console.WriteLine($"   FullName:           {fromExpression.FullName}");
 Console.WriteLine($"   TotalCompensation:  {fromExpression.TotalCompensation:C}");
@@ -230,10 +230,10 @@ Console.WriteLine($"   RoutingKey:  {contractorBrief.RoutingKey}");
 Console.WriteLine($"   Score:       {contractorBrief.Score}");
 
 // The expression companion is also generated for the adapted source/destination pair.
-var contractorExpression = AdaptExampleMapper.MapContractorBriefExpression();
+var contractorExpression = AdaptExampleMapper.MapContractorBriefExpression(DateTime.Now.Year, "TENANT-A");
 Console.WriteLine("\n   Generated Adapt Expression:");
 Console.WriteLine($"   {contractorExpression}");
-var contractorFromExpression = contractorExpression.Compile()(contractor, DateTime.Now.Year, "TENANT-A");
+var contractorFromExpression = contractorExpression.Compile()(contractor);
 Console.WriteLine($"\n   From compiled adapt expression: {contractorFromExpression.DisplayName} ({contractorFromExpression.RoutingKey})");
 
 Console.WriteLine("\n=== Mapping Demonstration Complete ===");

@@ -82,7 +82,7 @@ public static partial class NestedMultiParamMapper
 
 /// <summary>
 /// Tests that a multi-parameter [Expressive] mapping method itself
-/// generates the correct Expression with multiple Func type arguments.
+/// generates a single-parameter projection expression factory.
 /// </summary>
 public static partial class MultiParamExpressiveMapper
 {
