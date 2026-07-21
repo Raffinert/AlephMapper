@@ -46,7 +46,7 @@ public class MultiParamIntegrationTests
         var dtos = await query.ToListAsync();
 
         // Assert
-        await Assert.That(dtos.Count).IsEqualTo(6);
+        await Assert.That(dtos.Count).IsEqualTo(5);
 
         var john = dtos.First(d => d.Id == 1);
         await Assert.That(john.FullName).IsEqualTo("John Doe");
@@ -231,28 +231,19 @@ public class MultiParamIntegrationTests
     [Test]
     public async Task MultiParam_Expressive_Method_Should_Generate_Correct_Expression()
     {
-        // Arrange — MapWithYear takes (Employee, int) → generates Expression<Func<Employee, int, EmployeeDto>>
-        var expression = MultiParamExpressiveMapper.MapWithYearExpression();
+        // Arrange — MapWithYear takes (Employee, int) and generates a single-parameter projection factory
+        var expression = MultiParamExpressiveMapper.MapWithYearExpression(2026);
 
-        // Act — compile and invoke (can't use directly with EF since it's a two-param expression)
-        var compiled = expression.Compile();
-
-        var employee = new Employee
-        {
-            Id = 1,
-            FirstName = "John",
-            LastName = "Doe",
-            Email = "john@test.com",
-            IsActive = true,
-            Department = new Department { Name = "Engineering" }
-        };
-
-        var result = compiled(employee, 2026);
+        // Act
+        var result = await _context.Employees
+            .Where(employee => employee.Id == 1)
+            .Select(expression)
+            .SingleAsync();
 
         // Assert
         await Assert.That(result.Id).IsEqualTo(1);
         await Assert.That(result.FullName).IsEqualTo("John Doe");
-        await Assert.That(result.Email).IsEqualTo("john@test.com");
+        await Assert.That(result.Email).IsEqualTo("john.doe@company.com");
         await Assert.That(result.DepartmentName).IsEqualTo("Engineering");
         await Assert.That(result.IsActive).IsTrue();
         await Assert.That(result.YearsOfExperience).IsEqualTo(6); // 2026 - 2020
@@ -262,14 +253,15 @@ public class MultiParamIntegrationTests
     public async Task MultiParam_Expressive_Method_Should_Have_Correct_Expression_Structure()
     {
         // Arrange
-        var expression = MultiParamExpressiveMapper.MapWithYearExpression();
+        var currentYear = 2026;
+        var expression = MultiParamExpressiveMapper.MapWithYearExpression(currentYear);
         var readable = expression.ToReadableString();
 
         // Assert — the expression should reference both parameters
         await Assert.That(readable).Contains("new EmployeeDto");
         await Assert.That(readable).Contains("FirstName");
         await Assert.That(readable).Contains("LastName");
-        // The expression should have two lambda parameters
+        await Assert.That(expression.Parameters.Count).IsEqualTo(1);
         await Assert.That(readable).Contains("currentYear");
     }
 

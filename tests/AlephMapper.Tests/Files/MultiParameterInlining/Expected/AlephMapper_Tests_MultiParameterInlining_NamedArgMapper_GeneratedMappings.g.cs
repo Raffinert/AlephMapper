@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParameterInlining;
 
-[GeneratedCode("AlephMapper", "0.5.7")]
+[GeneratedCode("AlephMapper", "0.5.8")]
 partial class NamedArgMapper
 {
     /// <summary>

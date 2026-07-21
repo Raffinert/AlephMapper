@@ -113,7 +113,7 @@ public static partial class MultiParamUpdatableMapper
 
 // ──────────────────────────────────────────────────────────────────
 // 4. Multi-parameter [Expressive] method itself
-//    Generates Expression<Func<Employee, int, EmployeeDto>>
+//    Generates Expression<Func<Employee, EmployeeDto>> MapWithYearExpression(int currentYear)
 // ──────────────────────────────────────────────────────────────────
 [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class MultiParamExpressiveMapper

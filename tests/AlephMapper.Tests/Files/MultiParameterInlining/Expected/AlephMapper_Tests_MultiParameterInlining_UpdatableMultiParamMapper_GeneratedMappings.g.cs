@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParameterInlining;
 
-[GeneratedCode("AlephMapper", "0.5.7")]
+[GeneratedCode("AlephMapper", "0.5.8")]
 partial class UpdatableMultiParamMapper
 {
     /// <summary>
@@ -17,8 +17,8 @@ partial class UpdatableMultiParamMapper
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, int, PersonDto>> ToDtoExpression() => 
-        (person, currentYear) => new PersonDto
+    public static Expression<Func<Person, PersonDto>> ToDtoExpression(int currentYear) => 
+        person => new PersonDto
         {
             FullName = person.First + " " + person.Last,
             BirthYear = currentYear - person.Age
