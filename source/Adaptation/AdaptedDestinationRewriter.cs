@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using AlephMapper.SyntaxRewriters;
 using AlephMapper.Helpers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -182,6 +183,16 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         }
     }
 
+    public override SyntaxNode VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
+    {
+        return VisitLambdaWithoutOuterExpectedType(node, base.VisitSimpleLambdaExpression);
+    }
+
+    public override SyntaxNode VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
+    {
+        return VisitLambdaWithoutOuterExpectedType(node, base.VisitParenthesizedLambdaExpression);
+    }
+
     public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax node)
     {
         var rewritten = (ImplicitObjectCreationExpressionSyntax)base.VisitImplicitObjectCreationExpression(node)!;
@@ -295,5 +306,29 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         candidates.Add(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty) + "?");
 
         return candidates;
+    }
+
+    private T VisitLambdaWithoutOuterExpectedType<T>(T node, Func<T, SyntaxNode?> visit)
+        where T : LambdaExpressionSyntax
+    {
+        if (_expectedExpressionTypeStack.Count == 0)
+        {
+            return (T)visit(node)!;
+        }
+
+        var expectedTypes = _expectedExpressionTypeStack.Reverse().ToArray();
+        _expectedExpressionTypeStack.Clear();
+
+        try
+        {
+            return (T)visit(node)!;
+        }
+        finally
+        {
+            foreach (var expectedType in expectedTypes)
+            {
+                _expectedExpressionTypeStack.Push(expectedType);
+            }
+        }
     }
 }

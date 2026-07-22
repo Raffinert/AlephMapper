@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.8")]
+[GeneratedCode("AlephMapper", "0.5.9")]
 partial class EfCoreMapper
 {
     /// <summary>
@@ -227,7 +227,9 @@ partial class EfCoreMapper
     /// </para>
     /// </remarks>
     public static Expression<Func<Person, decimal>> GetTotalOrderAmountExpression() => 
-        person => person.Orders.Where(o => o.IsCompleted).Sum(o => o.Amount);
+        person => person.Orders
+            .Where(o => o.IsCompleted)
+            .Sum(o => o.Amount);
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetLatestOrderNumber(Person)"/>.
@@ -238,8 +240,12 @@ partial class EfCoreMapper
     /// </para>
     /// </remarks>
     public static Expression<Func<Person, string>> GetLatestOrderNumberExpression() => 
-        person => (person.Orders.OrderByDescending(o => o.OrderDate).FirstOrDefault() != null
-            ? (person.Orders.OrderByDescending(o => o.OrderDate).FirstOrDefault().OrderNumber) 
+        person => (person.Orders
+            .OrderByDescending(o => o.OrderDate)
+            .FirstOrDefault() != null
+            ? (person.Orders
+                .OrderByDescending(o => o.OrderDate)
+                .FirstOrDefault().OrderNumber) 
             : (string)null) ?? "No orders";
 
     /// <summary>
@@ -294,5 +300,7 @@ partial class EfCoreMapper
     /// </para>
     /// </remarks>
     public static Expression<Func<Person, bool>> IsVipCustomerExpression() => 
-        person => person.Orders.Where(o => o.IsCompleted).Sum(o => o.Amount) >= 1000m;
+        person => person.Orders
+            .Where(o => o.IsCompleted)
+            .Sum(o => o.Amount) >= 1000m;
 }

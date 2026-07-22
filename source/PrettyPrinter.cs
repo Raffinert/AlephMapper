@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -135,6 +136,28 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         Visit(node.Right.WithoutLeadingTrivia());
     }
 
+    public override void VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        if (!TryCollectFluentChain(node, out var root, out var calls))
+        {
+            base.VisitInvocationExpression(node);
+            return;
+        }
+
+        Visit(root.WithoutTrailingTrivia());
+        Indent();
+
+        foreach (var (name, arguments) in calls)
+        {
+            WriteLine();
+            WriteRaw(".");
+            Visit(name.WithoutTrivia());
+            Visit(arguments.WithoutTrivia());
+        }
+
+        Unindent();
+    }
+
     // -------- the only special case: object creation --------
 
     public override void VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
@@ -172,5 +195,27 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         Unindent();
         WriteLine();
         WriteRaw("}");
+    }
+
+    private static bool TryCollectFluentChain(
+        InvocationExpressionSyntax node,
+        out ExpressionSyntax root,
+        out IReadOnlyList<(SimpleNameSyntax Name, ArgumentListSyntax Arguments)> calls)
+    {
+        var collectedCalls = new List<(SimpleNameSyntax Name, ArgumentListSyntax Arguments)>();
+        ExpressionSyntax current = node;
+
+        while (current is InvocationExpressionSyntax invocation &&
+               invocation.Expression is MemberAccessExpressionSyntax memberAccess &&
+               memberAccess.OperatorToken.IsKind(SyntaxKind.DotToken))
+        {
+            collectedCalls.Add((memberAccess.Name, invocation.ArgumentList));
+            current = memberAccess.Expression;
+        }
+
+        collectedCalls.Reverse();
+        root = current;
+        calls = collectedCalls;
+        return collectedCalls.Count > 1;
     }
 }

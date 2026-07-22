@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.8")]
+[GeneratedCode("AlephMapper", "0.5.9")]
 partial class SimpleObjectMapper
 {
     /// <summary>
@@ -20,6 +20,8 @@ partial class SimpleObjectMapper
     public static Expression<Func<SimpleObject, SimpleDto>> MapToDtoExpression() => 
         so => new SimpleDto
         {
-            Attributes = so.Attributes.Select(attr => attr.Name).ToList() ?? new List<string>()
+            Attributes = so.Attributes
+                .Select(attr => attr.Name)
+                .ToList() ?? new List<string>()
         };
 }
