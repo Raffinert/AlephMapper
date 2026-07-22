@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using AlephMapper.Diagnostics;
 using AlephMapper.Models;
@@ -189,13 +189,13 @@ internal static class AdaptationValidator
         }
     }
 
-    private static bool TryResolveReadablePath(INamedTypeSymbol rootType, IEnumerable<string> path, out ISymbol member)
+    private static bool TryResolveReadablePath(INamedTypeSymbol rootType, IEnumerable<string> path, out ISymbol? member)
     {
         ITypeSymbol currentType = rootType;
         member = null!;
         foreach (var segment in path)
         {
-            member = GetReadableInstanceMember(currentType, segment)!;
+            member = GetReadableInstanceMember(currentType, segment);
             if (member == null)
             {
                 return false;

@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.5.8")]
+[GeneratedCode("AlephMapper", "0.5.9")]
 partial class PersonMapper
 {
     /// <summary>
@@ -52,11 +52,15 @@ partial class PersonMapper
         source => new EmployeeWithDetailDto
         {
             Id = source.Id,
-            Details = source.Details.Select(detail => new DetailDto
-            {
-                Code = detail.Code,
-                Description = detail.Descriptions
-            .Where(description => description.LanguageCode == userLanguageCode)            .Select(description => description.Text)            .FirstOrDefault() ?? detail.Code
-            }).ToList()
+            Details = source.Details
+                .Select(detail => new DetailDto
+                {
+                    Code = detail.Code,
+                    Description = detail.Descriptions
+                        .Where(description => description.LanguageCode == userLanguageCode)
+                        .Select(description => description.Text)
+                        .FirstOrDefault() ?? detail.Code
+                })
+                .ToList()
         };
 }

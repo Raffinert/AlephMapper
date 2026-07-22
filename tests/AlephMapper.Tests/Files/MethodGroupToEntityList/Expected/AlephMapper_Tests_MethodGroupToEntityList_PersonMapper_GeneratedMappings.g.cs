@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MethodGroupToEntityList;
 
-[GeneratedCode("AlephMapper", "0.5.8")]
+[GeneratedCode("AlephMapper", "0.5.9")]
 partial class PersonMapper
 {
     /// <summary>
@@ -21,9 +21,11 @@ partial class PersonMapper
     public static Expression<Func<PersonDto, Person>> ToEntityExpression() => 
         dto => new Person
         {
-            ContactNumbers = dto.PhoneNumbers.Select(dto => new PhoneNumber
-            {
-                Number = dto.Number
-            }).ToList()
+            ContactNumbers = dto.PhoneNumbers
+                .Select(dto => new PhoneNumber
+                {
+                    Number = dto.Number
+                })
+                .ToList()
         };
 }

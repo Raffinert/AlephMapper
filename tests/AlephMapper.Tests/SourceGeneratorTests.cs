@@ -461,6 +461,61 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptedOutputDoesNotApplyOuterAssignmentTypeInsideLambdas()
+    {
+        const string source = """
+            using AlephMapper;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", Generate = AdaptGeneration.Expression)]
+                public static PersonDto MapPerson(Person source, string preferredLanguage, string fallbackLanguage) => new()
+                {
+                    Description = MapDescription(source.Value, preferredLanguage, fallbackLanguage)
+                };
+
+                private static string MapDescription(Value value, string preferredLanguage, string fallbackLanguage) =>
+                    value.Descriptions
+                        .Select(description => description.ToDescriptionWithOrder(preferredLanguage, fallbackLanguage))
+                        .Where(description => description.Order < 3)
+                        .OrderBy(description => description.Order)
+                        .Select(description => description.Description)
+                        .FirstOrDefault() ?? value.Code;
+
+                private static DescriptionWithOrder ToDescriptionWithOrder(this Description description, string preferredLanguage, string fallbackLanguage) =>
+                    new()
+                    {
+                        Order = description.Language == preferredLanguage ? 1 : description.Language == fallbackLanguage ? 2 : 3,
+                        Description = description.Text
+                    };
+
+                private sealed class DescriptionWithOrder
+                {
+                    public int Order { get; set; }
+                    public string Description { get; set; } = string.Empty;
+                }
+            }
+
+            public sealed class Person { public Value Value { get; set; } = new(); }
+            public sealed class Employee { public Value Value { get; set; } = new(); }
+            public sealed class PersonDto { public string Description { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Description { get; set; } = string.Empty; }
+            public sealed class Value { public string Code { get; set; } = string.Empty; public List<Description> Descriptions { get; set; } = []; }
+            public sealed class Description { public string Language { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "LambdaOuterAssignmentTypeAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("new string");
+        await Assert.That(generatedSource).Contains("new DescriptionWithOrder");
+    }
+
+    [Test]
     public async Task AdaptReportsIncompatibleDirectMemberAssignment()
     {
         const string source = """

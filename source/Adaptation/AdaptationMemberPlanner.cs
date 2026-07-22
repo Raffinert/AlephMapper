@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using AlephMapper.Helpers;
 using AlephMapper.Generation;
@@ -18,7 +18,6 @@ internal sealed class AdaptationMemberPlanner
     private readonly HashSet<string> _existingMethodSignatures;
     private readonly HashSet<string> _existingNonMethodNames;
     private readonly HashSet<string> _generatedMethodSignatures = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _generatedNonMethodNames = new(StringComparer.Ordinal);
 
     public AdaptationMemberPlanner(INamedTypeSymbol mapperType)
     {
@@ -50,7 +49,7 @@ internal sealed class AdaptationMemberPlanner
         var requestedSignatures = new List<string>();
         if (generateMap)
         {
-            if (_existingNonMethodNames.Contains(mapName) || _generatedNonMethodNames.Contains(mapName))
+            if (_existingNonMethodNames.Contains(mapName))
             {
                 conflict = mapName;
                 return false;
@@ -62,7 +61,7 @@ internal sealed class AdaptationMemberPlanner
         if (generateExpression)
         {
             var expressionName = mapName + "Expression";
-            if (_existingNonMethodNames.Contains(expressionName) || _generatedNonMethodNames.Contains(expressionName))
+            if (_existingNonMethodNames.Contains(expressionName))
             {
                 conflict = expressionName;
                 return false;
@@ -73,7 +72,7 @@ internal sealed class AdaptationMemberPlanner
 
         if (generateUpdate)
         {
-            if (_existingNonMethodNames.Contains(mapName) || _generatedNonMethodNames.Contains(mapName))
+            if (_existingNonMethodNames.Contains(mapName))
             {
                 conflict = mapName;
                 return false;
