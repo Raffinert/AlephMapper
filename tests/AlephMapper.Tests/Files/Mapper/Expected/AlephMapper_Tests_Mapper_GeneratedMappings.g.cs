@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.9")]
+[GeneratedCode("AlephMapper", "0.6.0")]
 partial class Mapper
 {
     /// <summary>
@@ -114,7 +114,7 @@ partial class Mapper
         {
             Name = source.Name,
             BirthInfo = source.BirthInfo == null
-                ? null 
+                ? null
                 : new BirthInfoDto
                 {
                     Age = source.BirthInfo.Age,

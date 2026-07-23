@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.9")]
+[GeneratedCode("AlephMapper", "0.6.0")]
 partial class AddressLineMapper
 {
     /// <summary>
@@ -18,7 +18,7 @@ partial class AddressLineMapper
     /// </remarks>
     public static Expression<Func<AddressLine, AddressLineDto>> MapToDtoExpression() => 
         sourceAddressLine1 => sourceAddressLine1 == null
-            ? null 
+            ? null
             : new AddressLineDto
             {
                 Street = sourceAddressLine1.Street,

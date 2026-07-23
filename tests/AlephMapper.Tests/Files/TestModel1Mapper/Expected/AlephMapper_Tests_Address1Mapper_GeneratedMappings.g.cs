@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.5.9")]
+[GeneratedCode("AlephMapper", "0.6.0")]
 partial class Address1Mapper
 {
     /// <summary>
@@ -20,14 +20,14 @@ partial class Address1Mapper
         sourceAddress => new Address1Dto
         {
             Line1 = sourceAddress.Line1 == null
-                ? null 
+                ? null
                 : new AddressLineDto
                 {
                     Street = sourceAddress.Line1.Street,
                     HouseNumber = sourceAddress.Line1.HouseNumber
                 },
             Line2 = sourceAddress.Line2 == null
-                ? null 
+                ? null
                 : new AddressLineDto
                 {
                     Street = sourceAddress.Line2.Street,

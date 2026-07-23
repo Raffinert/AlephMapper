@@ -516,6 +516,98 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptedOutputFormatsAnonymousObjectsInsideFluentChains()
+    {
+        const string source = """
+            using AlephMapper;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee", Generate = AdaptGeneration.Expression)]
+                public static PersonDto MapPerson(Person source, string preferredLanguage, string fallbackLanguage) => new()
+                {
+                    Description = MapDescription(source.Value, preferredLanguage, fallbackLanguage)
+                };
+
+                private static string MapDescription(Value value, string preferredLanguage, string fallbackLanguage) =>
+                    value.Descriptions
+                        .Select(description => new
+                        {
+                            Order = description.Language == preferredLanguage ? 1 : description.Language == fallbackLanguage ? 2 : 3,
+                            Description = description.Text
+                        })
+                        .Where(description => description.Order < 3)
+                        .OrderBy(description => description.Order)
+                        .Select(description => description.Description)
+                        .FirstOrDefault() ?? value.Code;
+            }
+
+            public sealed class Person { public Value Value { get; set; } = new(); }
+            public sealed class Employee { public Value Value { get; set; } = new(); }
+            public sealed class PersonDto { public string Description { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Description { get; set; } = string.Empty; }
+            public sealed class Value { public string Code { get; set; } = string.Empty; public List<Description> Descriptions { get; set; } = []; }
+            public sealed class Description { public string Language { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "AnonymousObjectFluentChainAdapt");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
+
+        await Assert.That(generatedSource).DoesNotContain("new\r\n        {");
+        await Assert.That(generatedSource).DoesNotContain("new\n        {");
+        await Assert.That(generatedSource).Contains(".Select(description => new");
+        await Assert.That(generatedSource).Contains("Order = description.Language == preferredLanguage");
+    }
+
+    [Test]
+    public async Task ExpressionOutputFormatsLogicalConditionChains()
+    {
+        const string source = """
+            using AlephMapper;
+            using System;
+
+            namespace Fixture;
+
+            public static partial class Criteria
+            {
+                [Expressive]
+                public static bool HasCategoryLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
+                    line.Invoice.DataSetId == dataSetId &&
+                    line.Invoice.InvoiceIdReference == invoiceId &&
+                    line.CategoryId != null;
+
+                [Expressive]
+                public static bool HasCategoryLineSingleLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
+                    line.Invoice.DataSetId == dataSetId && line.Invoice.InvoiceIdReference == invoiceId && line.CategoryId != null;
+            }
+
+            public sealed class InvoiceLine
+            {
+                public Invoice Invoice { get; set; } = new();
+                public Guid? CategoryId { get; set; }
+            }
+
+            public sealed class Invoice
+            {
+                public Guid DataSetId { get; set; }
+                public Guid InvoiceIdReference { get; set; }
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "LogicalConditionChainExpression");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("HasCategoryLineExpression"));
+
+        await Assert.That(generatedSource).Contains("line => line.Invoice.DataSetId == dataSetId");
+        await Assert.That(generatedSource).Contains($"{Environment.NewLine}            && line.Invoice.InvoiceIdReference == invoiceId");
+        await Assert.That(generatedSource).Contains($"{Environment.NewLine}            && line.CategoryId != null;");
+        await Assert.That(generatedSource).Contains("line => line.Invoice.DataSetId == dataSetId && line.Invoice.InvoiceIdReference == invoiceId && line.CategoryId != null;");
+    }
+
+    [Test]
     public async Task AdaptReportsIncompatibleDirectMemberAssignment()
     {
         const string source = """

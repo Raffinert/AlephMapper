@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParamExtensionInlining;
 
-[GeneratedCode("AlephMapper", "0.5.9")]
+[GeneratedCode("AlephMapper", "0.6.0")]
 partial class PersonProductMapperRewrite
 {
     /// <summary>
@@ -22,7 +22,7 @@ partial class PersonProductMapperRewrite
         {
             Name = person.Name,
             FavoritePrice = (person.FavoriteProduct != null
-                ? ("$" + person.FavoriteProduct.Price) 
+                ? ("$" + person.FavoriteProduct.Price)
                 : (string)null)
         };
 }
