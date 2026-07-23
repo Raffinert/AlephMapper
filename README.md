@@ -41,7 +41,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.5.9">
+<PackageReference Include="AlephMapper" Version="0.6.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -51,7 +51,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.5.9" />
+<PackageVersion Include="AlephMapper" Version="0.6.0" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
