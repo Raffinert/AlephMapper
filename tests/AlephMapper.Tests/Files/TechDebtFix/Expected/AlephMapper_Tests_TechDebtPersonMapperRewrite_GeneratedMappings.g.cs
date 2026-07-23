@@ -22,7 +22,7 @@ partial class TechDebtPersonMapperRewrite
         {
             Name = person.Name,
             AddressStr = (person.Address != null
-                ? (person.Address.FormattedAddress) 
+                ? (person.Address.FormattedAddress)
                 : (string)null) ?? "No Address"
         };
 }

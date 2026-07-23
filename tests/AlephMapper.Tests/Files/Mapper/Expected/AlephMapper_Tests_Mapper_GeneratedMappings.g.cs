@@ -114,7 +114,7 @@ partial class Mapper
         {
             Name = source.Name,
             BirthInfo = source.BirthInfo == null
-                ? null 
+                ? null
                 : new BirthInfoDto
                 {
                     Age = source.BirthInfo.Age,

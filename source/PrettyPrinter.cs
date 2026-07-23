@@ -39,6 +39,8 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
 
     private void WriteLine()
     {
+        TrimTrailingWhitespace(0, includeLineBreaks: false);
+
         // Avoid stacking multiple blank lines when we're already at the start of a line
         if (_sb.Length > 0)
         {
@@ -54,7 +56,7 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         _atLineStart = true;
     }
 
-    private void TrimTrailingWhitespace(int startIndex)
+    private void TrimTrailingWhitespace(int startIndex, bool includeLineBreaks = true)
     {
         var length = _sb.Length;
 
@@ -62,7 +64,7 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         {
             var ch = _sb[length - 1];
 
-            if (ch == '\r' || ch == '\n' || ch == ' ' || ch == '\t')
+            if (ch == ' ' || ch == '\t' || (includeLineBreaks && (ch == '\r' || ch == '\n')))
             {
                 length--;
                 continue;
@@ -129,6 +131,23 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
 
     public override void VisitBinaryExpression(BinaryExpressionSyntax node)
     {
+        if (TryCollectLogicalChain(node, out var operands, out var operatorText))
+        {
+            Visit(operands[0].WithoutTrailingTrivia());
+            Indent();
+
+            for (var i = 1; i < operands.Count; i++)
+            {
+                WriteLine();
+                WriteRaw(operatorText);
+                WriteRaw(" ");
+                Visit(operands[i].WithoutLeadingTrivia());
+            }
+
+            Unindent();
+            return;
+        }
+
         Visit(node.Left.WithoutTrailingTrivia());
         WriteRaw(" ");
         WriteRaw(node.OperatorToken.Text);
@@ -197,6 +216,42 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         WriteRaw("}");
     }
 
+    public override void VisitAnonymousObjectCreationExpression(AnonymousObjectCreationExpressionSyntax node)
+    {
+        WriteRaw("new");
+        WriteLine();
+        WriteRaw("{");
+        Indent();
+
+        var initializers = node.Initializers;
+        for (int i = 0; i < initializers.Count; i++)
+        {
+            WriteLine();
+            WriteRaw(string.Empty);
+            var entryStart = _sb.Length;
+            VisitAnonymousObjectMemberDeclarator(initializers[i]);
+            TrimTrailingWhitespace(entryStart);
+
+            if (i < initializers.Count - 1)
+                _sb.Append(",");
+        }
+
+        Unindent();
+        WriteLine();
+        WriteRaw("}");
+    }
+
+    public override void VisitAnonymousObjectMemberDeclarator(AnonymousObjectMemberDeclaratorSyntax node)
+    {
+        if (node.NameEquals != null)
+        {
+            Visit(node.NameEquals.Name.WithoutTrivia());
+            WriteRaw(" = ");
+        }
+
+        Visit(node.Expression.WithoutLeadingTrivia());
+    }
+
     private static bool TryCollectFluentChain(
         InvocationExpressionSyntax node,
         out ExpressionSyntax root,
@@ -217,5 +272,63 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         root = current;
         calls = collectedCalls;
         return collectedCalls.Count > 1;
+    }
+
+    private static bool TryCollectLogicalChain(
+        BinaryExpressionSyntax node,
+        out IReadOnlyList<ExpressionSyntax> operands,
+        out string operatorText)
+    {
+        operands = [];
+        operatorText = node.OperatorToken.Text;
+        if (!IsLogicalChainOperator(node.Kind()) || !HasLineBreakInLogicalChain(node, node.Kind()))
+        {
+            return false;
+        }
+
+        var collectedOperands = new List<ExpressionSyntax>();
+        CollectLogicalOperands(node, node.Kind(), collectedOperands);
+        operands = collectedOperands;
+        return collectedOperands.Count > 1;
+    }
+
+    private static void CollectLogicalOperands(
+        ExpressionSyntax expression,
+        SyntaxKind chainKind,
+        List<ExpressionSyntax> operands)
+    {
+        if (expression is BinaryExpressionSyntax binaryExpression && binaryExpression.IsKind(chainKind))
+        {
+            CollectLogicalOperands(binaryExpression.Left, chainKind, operands);
+            CollectLogicalOperands(binaryExpression.Right, chainKind, operands);
+            return;
+        }
+
+        operands.Add(expression);
+    }
+
+    private static bool IsLogicalChainOperator(SyntaxKind kind)
+    {
+        return kind is SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression;
+    }
+
+    private static bool HasLineBreakInLogicalChain(ExpressionSyntax expression, SyntaxKind chainKind)
+    {
+        if (expression is not BinaryExpressionSyntax binaryExpression || !binaryExpression.IsKind(chainKind))
+        {
+            return false;
+        }
+
+        return ContainsLineBreak(binaryExpression.Left.GetTrailingTrivia()) ||
+               ContainsLineBreak(binaryExpression.OperatorToken.LeadingTrivia) ||
+               ContainsLineBreak(binaryExpression.OperatorToken.TrailingTrivia) ||
+               ContainsLineBreak(binaryExpression.Right.GetLeadingTrivia()) ||
+               HasLineBreakInLogicalChain(binaryExpression.Left, chainKind) ||
+               HasLineBreakInLogicalChain(binaryExpression.Right, chainKind);
+    }
+
+    private static bool ContainsLineBreak(SyntaxTriviaList trivia)
+    {
+        return trivia.Any(triviaItem => triviaItem.IsKind(SyntaxKind.EndOfLineTrivia));
     }
 }

@@ -18,7 +18,7 @@ partial class AddressLineMapper
     /// </remarks>
     public static Expression<Func<AddressLine, AddressLineDto>> MapToDtoExpression() => 
         sourceAddressLine1 => sourceAddressLine1 == null
-            ? null 
+            ? null
             : new AddressLineDto
             {
                 Street = sourceAddressLine1.Street,

@@ -19,6 +19,6 @@ partial class NullableDisabledMapper
     /// </remarks>
     public static Expression<Func<Person, string>> GetNameExpression() => 
         person => (person != null
-            ? (person.Name) 
+            ? (person.Name)
             : (string)null);
 }

@@ -27,9 +27,9 @@ partial class NestedExt_PersonMapper_Rewrite
                         {
                             Street = p.Friend.HomeAddress.Street,
                             City = p.Friend.HomeAddress.City
-                        }) 
-                        : (NestedExt_AddressDto)null)) 
-                    : (NestedExt_AddressDto)null)) 
+                        })
+                        : (NestedExt_AddressDto)null))
+                    : (NestedExt_AddressDto)null))
                 : (NestedExt_AddressDto)null)
         };
 }

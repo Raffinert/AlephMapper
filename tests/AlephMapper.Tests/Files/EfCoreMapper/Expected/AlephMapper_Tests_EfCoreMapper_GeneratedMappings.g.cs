@@ -23,17 +23,17 @@ partial class EfCoreMapper
             Name = p.Name,
             Email = p.Email,
             Age = (p.BirthInfo != null
-                ? (p.BirthInfo.Age) 
+                ? (p.BirthInfo.Age)
                 : (int?)null),
             BirthPlace = (p.BirthInfo != null
-                ? (p.BirthInfo.BirthPlace) 
+                ? (p.BirthInfo.BirthPlace)
                 : (string)null) ?? "Unknown",
             BirthAddress = (p.BirthInfo != null
-                ? (p.BirthInfo.Address) 
+                ? (p.BirthInfo.Address)
                 : (string)null) ?? "Not specified",
             HasBirthInfo = p.BirthInfo != null,
             IsAdult = (p.BirthInfo != null
-                ? (p.BirthInfo.Age) 
+                ? (p.BirthInfo.Age)
                 : (int?)null) >= 18,
             AddressCount = p.Addresses.Count,
             OrderCount = p.Orders.Count,
@@ -46,7 +46,7 @@ partial class EfCoreMapper
                         ? "Adult"
                         : "Senior",
             Summary = p.BirthInfo != null
-                ? p.Name + " (" + p.BirthInfo.Age + " years old) from " + (p.BirthInfo.BirthPlace ?? "Unknown") 
+                ? p.Name + " (" + p.BirthInfo.Age + " years old) from " + (p.BirthInfo.BirthPlace ?? "Unknown")
                 : p.Name + " (unknown age) from Unknown"
         };
 
@@ -82,7 +82,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, int?>> GetPersonAgeExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.Age) 
+            ? (person.BirthInfo.Age)
             : (int?)null);
 
     /// <summary>
@@ -95,7 +95,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, bool>> IsOlderThan30Expression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.Age) 
+            ? (person.BirthInfo.Age)
             : (int?)null) > 30;
 
     /// <summary>
@@ -108,7 +108,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, string>> GetBirthPlaceExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.BirthPlace) 
+            ? (person.BirthInfo.BirthPlace)
             : (string)null) ?? "Unknown";
 
     /// <summary>
@@ -121,7 +121,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, string>> GetBirthAddressExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.Address) 
+            ? (person.BirthInfo.Address)
             : (string)null) ?? "Not specified";
 
     /// <summary>
@@ -145,7 +145,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, bool>> IsAdultExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.Age) 
+            ? (person.BirthInfo.Age)
             : (int?)null) >= 18;
 
     /// <summary>
@@ -158,7 +158,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, bool>> BornInUkraineExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.Address) 
+            ? (person.BirthInfo.Address)
             : (string)null) != null && person.BirthInfo.Address.Contains("Ukraine");
 
     /// <summary>
@@ -215,7 +215,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, string>> GetFirstActiveAddressCityExpression() => 
         person => (person.Addresses.FirstOrDefault(a => a.IsActive) != null
-            ? (person.Addresses.FirstOrDefault(a => a.IsActive).City) 
+            ? (person.Addresses.FirstOrDefault(a => a.IsActive).City)
             : (string)null) ?? "No active address";
 
     /// <summary>
@@ -245,7 +245,7 @@ partial class EfCoreMapper
             .FirstOrDefault() != null
             ? (person.Orders
                 .OrderByDescending(o => o.OrderDate)
-                .FirstOrDefault().OrderNumber) 
+                .FirstOrDefault().OrderNumber)
             : (string)null) ?? "No orders";
 
     /// <summary>
@@ -258,7 +258,7 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, string>> GetPersonSummaryExpression() => 
         person => person.BirthInfo != null
-            ? person.Name + " (" + person.BirthInfo.Age + " years old) from " + (person.BirthInfo.BirthPlace ?? "Unknown") 
+            ? person.Name + " (" + person.BirthInfo.Age + " years old) from " + (person.BirthInfo.BirthPlace ?? "Unknown")
             : person.Name + " (unknown age) from Unknown";
 
     /// <summary>
@@ -271,8 +271,9 @@ partial class EfCoreMapper
     /// </remarks>
     public static Expression<Func<Person, bool>> LivesInSamePlaceAsBornExpression() => 
         person => (person.BirthInfo != null
-            ? (person.BirthInfo.BirthPlace) 
-            : (string)null) != null && person.Addresses.Any(a => a.IsActive && a.City == person.BirthInfo.BirthPlace);
+            ? (person.BirthInfo.BirthPlace)
+            : (string)null) != null
+            && person.Addresses.Any(a => a.IsActive && a.City == person.BirthInfo.BirthPlace);
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetPersonCategory(Person)"/>.
