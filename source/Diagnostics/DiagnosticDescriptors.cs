@@ -134,4 +134,22 @@ public static class DiagnosticDescriptors
         "AlephMapper",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsafeNullConditionalReceiver = new(
+        "AM0016",
+        "Null-conditional receiver cannot be safely rewritten",
+        "Expression generation for '{0}' was skipped because null-conditional receiver '{1}' may be evaluated more than once",
+        "AlephMapper",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Rewrite repeats the receiver in the null check and non-null branch. Use a stable member-access receiver to preserve C# evaluation semantics.");
+
+    public static readonly DiagnosticDescriptor UnsupportedNullConditionalExpression = new(
+        "AM0017",
+        "Null-conditional access is unsupported in expression trees",
+        "Expression generation for '{0}' was skipped because NullConditionalRewrite.None preserves unsupported null-conditional expression '{1}'",
+        "AlephMapper",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Select NullConditionalRewrite.Ignore or NullConditionalRewrite.Rewrite to generate an expression-tree-compatible companion.");
 }

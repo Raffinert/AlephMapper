@@ -28,6 +28,26 @@ internal static class ExpressiveMemberEmitter
             return;
         }
 
+        if (inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
+        {
+            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsafeNullConditionalReceiver,
+                unsafeReceiver.Location,
+                mapping.MethodSymbol.Name,
+                unsafeReceiver.Expression.ToString()));
+            return;
+        }
+
+        if (inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
+        {
+            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsupportedNullConditionalExpression,
+                unsupportedConditional.Location,
+                mapping.MethodSymbol.Name,
+                unsupportedConditional.Expression.ToString()));
+            return;
+        }
+
         var expressionMethodName = mapping.Name + "Expression";
         context.GeneratedMemberSignatures.Add(MethodSignature.Build(expressionMethodName, details.ExtraExpressionParameterTypeNames));
         var nullStrategyDescription = mapping.NullStrategy switch

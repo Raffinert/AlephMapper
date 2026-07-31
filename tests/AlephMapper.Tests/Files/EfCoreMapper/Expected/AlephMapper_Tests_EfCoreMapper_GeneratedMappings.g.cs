@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.6.0")]
+[GeneratedCode("AlephMapper", "0.6.1")]
 partial class EfCoreMapper
 {
     /// <summary>
@@ -206,19 +206,6 @@ partial class EfCoreMapper
         person => person.Orders.Any(o => o.IsCompleted);
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetFirstActiveAddressCity(Person)"/>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
-    /// </para>
-    /// </remarks>
-    public static Expression<Func<Person, string>> GetFirstActiveAddressCityExpression() => 
-        person => (person.Addresses.FirstOrDefault(a => a.IsActive) != null
-            ? (person.Addresses.FirstOrDefault(a => a.IsActive).City)
-            : (string)null) ?? "No active address";
-
-    /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetTotalOrderAmount(Person)"/>.
     /// </summary>
     /// <remarks>
@@ -230,23 +217,6 @@ partial class EfCoreMapper
         person => person.Orders
             .Where(o => o.IsCompleted)
             .Sum(o => o.Amount);
-
-    /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetLatestOrderNumber(Person)"/>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
-    /// </para>
-    /// </remarks>
-    public static Expression<Func<Person, string>> GetLatestOrderNumberExpression() => 
-        person => (person.Orders
-            .OrderByDescending(o => o.OrderDate)
-            .FirstOrDefault() != null
-            ? (person.Orders
-                .OrderByDescending(o => o.OrderDate)
-                .FirstOrDefault().OrderNumber)
-            : (string)null) ?? "No orders";
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetPersonSummary(Person)"/>.

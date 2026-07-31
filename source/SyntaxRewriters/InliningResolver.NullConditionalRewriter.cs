@@ -22,6 +22,11 @@ internal partial class InliningResolver
         {
             if (rewriteSupport == NullConditionalRewrite.None)
             {
+                if (!forUpdateMethod)
+                {
+                    _unsupportedNullConditionals.Add(new UnsupportedNullConditionalInfo(node));
+                }
+
                 _conditionalAccessExpressionsStack.Push(node.Expression);
                 var rewritten = (ExpressionSyntax)base.VisitConditionalAccessExpression(node)!;
                 var annotated = rewritten.GetAnnotatedNodes(InlinedConditionalAnnotation).ToArray();
@@ -30,6 +35,12 @@ internal partial class InliningResolver
             }
 
             var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+            if (rewriteSupport == NullConditionalRewrite.Rewrite &&
+                !CanSafelyRepeat(targetExpression))
+            {
+                _unsafeConditionalReceivers.Add(new UnsafeConditionalReceiverInfo(node.Expression));
+            }
+
             _conditionalAccessExpressionsStack.Push(targetExpression);
 
             var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
@@ -76,6 +87,27 @@ internal partial class InliningResolver
         {
             _conditionalAccessExpressionsStack.Pop();
         }
+    }
+
+    private static bool CanSafelyRepeat(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax => true,
+            ThisExpressionSyntax => true,
+            BaseExpressionSyntax => true,
+            MemberAccessExpressionSyntax memberAccess => CanSafelyRepeat(memberAccess.Expression),
+            MemberBindingExpressionSyntax => true,
+            ParenthesizedExpressionSyntax parenthesized => CanSafelyRepeat(parenthesized.Expression),
+            CastExpressionSyntax cast => CanSafelyRepeat(cast.Expression),
+            PostfixUnaryExpressionSyntax postfix
+                when postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
+                    CanSafelyRepeat(postfix.Operand),
+            ConditionalAccessExpressionSyntax conditional =>
+                CanSafelyRepeat(conditional.Expression) &&
+                CanSafelyRepeat(conditional.WhenNotNull),
+            _ => false
+        };
     }
 
     /// <summary>
