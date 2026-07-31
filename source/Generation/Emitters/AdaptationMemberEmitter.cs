@@ -65,6 +65,28 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
+            if ((generateMap || generateExpression) &&
+                inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
+            {
+                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UnsafeNullConditionalReceiver,
+                    unsafeReceiver.Location,
+                    mapping.MethodSymbol.Name,
+                    unsafeReceiver.Expression.ToString()));
+                continue;
+            }
+
+            if (generateExpression &&
+                inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
+            {
+                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UnsupportedNullConditionalExpression,
+                    unsupportedConditional.Location,
+                    mapping.MethodSymbol.Name,
+                    unsupportedConditional.Expression.ToString()));
+                continue;
+            }
+
             if (!AdaptationValidator.Validate(context.SourceProductionContext, mapping, adaptation, inlinedBody))
             {
                 continue;

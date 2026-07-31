@@ -24,9 +24,13 @@ internal sealed partial class InliningResolver(
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
     private List<CircularReferenceInfo> _circularReferences = [];
     private Dictionary<IMethodSymbol, MappingModel> _inlinedMethods = new(SymbolEqualityComparer.Default);
+    private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
+    private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     public IEnumerable<string> UsingDirectives => _inlinedMethods.SelectMany(il => il.Value.UsingDirectives).Distinct();
 
     public IReadOnlyList<CircularReferenceInfo> CircularReferences => _circularReferences;
+    public IReadOnlyList<UnsafeConditionalReceiverInfo> UnsafeConditionalReceivers => _unsafeConditionalReceivers;
+    public IReadOnlyList<UnsupportedNullConditionalInfo> UnsupportedNullConditionals => _unsupportedNullConditionals;
 
     private IMethodSymbol ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
@@ -101,7 +105,9 @@ internal sealed partial class InliningResolver(
                                 {
                                     _callStack = _callStack,
                                     _circularReferences = _circularReferences,
-                                    _inlinedMethods = _inlinedMethods
+                                    _inlinedMethods = _inlinedMethods,
+                                    _unsafeConditionalReceivers = _unsafeConditionalReceivers,
+                                    _unsupportedNullConditionals = _unsupportedNullConditionals
                                 }.Visit(callee.BodySyntax.Expression);
 
                             var substitutions = callee.Parameters.ToDictionary(
@@ -145,6 +151,13 @@ internal sealed partial class InliningResolver(
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
 
+        // NullConditionalRewrite.None must leave the original conditional call intact.
+        // Inlining it would detach the body from the ?. operator and change null semantics.
+        if (isConditionalAccess && rewriteSupport == NullConditionalRewrite.None)
+        {
+            return node.WithArgumentList((ArgumentListSyntax)Visit(node.ArgumentList)!);
+        }
+
         if (!TryBuildParameterSubstitutions(node, invokedMethod, args, out var substitutionsMap, out var conditionalAccessExpression))
         {
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
@@ -167,7 +180,9 @@ internal sealed partial class InliningResolver(
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,
-                _inlinedMethods = _inlinedMethods
+                _inlinedMethods = _inlinedMethods,
+                _unsafeConditionalReceivers = _unsafeConditionalReceivers,
+                _unsupportedNullConditionals = _unsupportedNullConditionals
             }.Visit(callee2.BodySyntax.Expression);
 
             var substituted = new ParameterSubstitutionRewriter(substitutionsMap)
@@ -285,4 +300,28 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
 {
     public IMethodSymbol Method { get; } = method;
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
+}
+
+internal sealed class UnsafeConditionalReceiverInfo
+{
+    public UnsafeConditionalReceiverInfo(ExpressionSyntax expression)
+    {
+        Expression = expression;
+        Location = expression.GetLocation();
+    }
+
+    public ExpressionSyntax Expression { get; }
+    public Location Location { get; }
+}
+
+internal sealed class UnsupportedNullConditionalInfo
+{
+    public UnsupportedNullConditionalInfo(ConditionalAccessExpressionSyntax expression)
+    {
+        Expression = expression;
+        Location = expression.GetLocation();
+    }
+
+    public ConditionalAccessExpressionSyntax Expression { get; }
+    public Location Location { get; }
 }

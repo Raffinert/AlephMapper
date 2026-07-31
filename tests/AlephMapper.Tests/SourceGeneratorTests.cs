@@ -663,6 +663,105 @@ public class SourceGeneratorTests
         }
     }
 
+    [Test]
+    public async Task UnsafeNullConditionalReceiverReportsDiagnosticAndSkipsExpression()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public sealed class Address
+            {
+                public string Street { get; set; } = string.Empty;
+                public Address? GetNested() => this;
+            }
+
+            public sealed class AddressDto
+            {
+                public string Street { get; set; } = string.Empty;
+            }
+
+            public static class AddressMapper
+            {
+                public static AddressDto ToDto(this Address source) =>
+                    new() { Street = source.Street };
+            }
+
+            public static partial class Mapper
+            {
+                [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static AddressDto? Map(Address source) =>
+                    source.GetNested()?.ToDto();
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "UnsafeNullConditionalReceiver",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Id == "AM0016")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task NonePolicyConditionalExtensionReportsDiagnosticAndSkipsExpression()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public sealed class Address
+            {
+                public string Street { get; set; } = string.Empty;
+            }
+
+            public sealed class AddressDto
+            {
+                public string Street { get; set; } = string.Empty;
+            }
+
+            public static class AddressMapper
+            {
+                public static AddressDto ToDto(this Address source) =>
+                    new() { Street = source.Street };
+            }
+
+            public static partial class Mapper
+            {
+                [Expressive(NullConditionalRewrite = NullConditionalRewrite.None)]
+                public static AddressDto? Map(Address? source) =>
+                    source?.ToDto();
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "NonePolicyConditionalExtension",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Id == "AM0017")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(outputCompilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
     private async Task AssertAdaptationDiagnostic(string source, string diagnosticId)
     {
         var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
