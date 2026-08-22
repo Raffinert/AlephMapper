@@ -6,7 +6,7 @@ using TUnit.Core;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.6.1")]
+[GeneratedCode("AlephMapper", "0.6.2")]
 partial class MixedTypeMapper
 {
     /// <summary>

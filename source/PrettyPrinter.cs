@@ -89,7 +89,7 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         if (text.Length == 0)
             return;
 
-        _sb.Append(text);
+        WriteRaw(text);
 
         _atLineStart = token.TrailingTrivia.Any(tr =>
             tr == SyntaxFactory.CarriageReturn ||
@@ -175,6 +175,33 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
         }
 
         Unindent();
+    }
+
+    public override void VisitArgumentList(ArgumentListSyntax node)
+    {
+        if (node.Arguments.Count <= 1 || !ContainsLineBreak(node.ToFullString()))
+        {
+            base.VisitArgumentList(node);
+            return;
+        }
+
+        WriteRaw("(");
+        Indent();
+
+        for (var i = 0; i < node.Arguments.Count; i++)
+        {
+            WriteLine();
+            Visit(node.Arguments[i].WithoutTrivia());
+
+            if (i < node.Arguments.Count - 1)
+            {
+                WriteRaw(",");
+            }
+        }
+
+        Unindent();
+        WriteLine();
+        WriteRaw(")");
     }
 
     // -------- the only special case: object creation --------
@@ -330,5 +357,10 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
     private static bool ContainsLineBreak(SyntaxTriviaList trivia)
     {
         return trivia.Any(triviaItem => triviaItem.IsKind(SyntaxKind.EndOfLineTrivia));
+    }
+
+    private static bool ContainsLineBreak(string text)
+    {
+        return text.Contains('\n') || text.Contains('\r');
     }
 }
