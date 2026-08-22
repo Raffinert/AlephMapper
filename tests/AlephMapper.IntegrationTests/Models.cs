@@ -2,6 +2,39 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AlephMapper.IntegrationTests;
 
+public class ArticleOrder
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = "";
+    public int CustomerId { get; set; }
+    public ArticleCustomer Customer { get; set; } = null!;
+    public List<ArticleOrderLine> Lines { get; set; } = new();
+}
+
+public class ArticleCustomer
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+    public List<ArticleOrder> Orders { get; set; } = new();
+}
+
+public class ArticleOrderLine
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public ArticleOrder Order { get; set; } = null!;
+    public string ProductName { get; set; } = "";
+    public decimal Price { get; set; }
+    public int Quantity { get; set; }
+}
+
+public record ArticleOrderDto(
+    int Id,
+    string Number,
+    string CustomerName,
+    decimal Total);
+
 // Core domain models for comprehensive testing
 public class Employee
 {

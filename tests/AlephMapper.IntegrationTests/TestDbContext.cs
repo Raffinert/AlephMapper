@@ -12,6 +12,9 @@ public class ComprehensiveTestDbContext(DbContextOptions<ComprehensiveTestDbCont
     public DbSet<Project> Projects { get; set; }
     public DbSet<EmployeeProject> EmployeeProjects { get; set; }
     public DbSet<Timesheet> Timesheets { get; set; }
+    public DbSet<ArticleOrder> ArticleOrders { get; set; }
+    public DbSet<ArticleCustomer> ArticleCustomers { get; set; }
+    public DbSet<ArticleOrderLine> ArticleOrderLines { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -100,6 +103,32 @@ public class ComprehensiveTestDbContext(DbContextOptions<ComprehensiveTestDbCont
             entity.Property(e => e.EmergencyContactPhone).HasMaxLength(20);
             entity.Property(e => e.LinkedInUrl).HasMaxLength(500);
             entity.Property(e => e.GitHubUrl).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<ArticleOrder>(entity =>
+        {
+            entity.HasKey(order => order.Id);
+            entity.Property(order => order.Number).HasMaxLength(50);
+            entity.HasOne(order => order.Customer)
+                .WithMany(customer => customer.Orders)
+                .HasForeignKey(order => order.CustomerId);
+            entity.HasMany(order => order.Lines)
+                .WithOne(line => line.Order)
+                .HasForeignKey(line => line.OrderId);
+        });
+
+        modelBuilder.Entity<ArticleCustomer>(entity =>
+        {
+            entity.HasKey(customer => customer.Id);
+            entity.Property(customer => customer.FirstName).HasMaxLength(50);
+            entity.Property(customer => customer.LastName).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<ArticleOrderLine>(entity =>
+        {
+            entity.HasKey(line => line.Id);
+            entity.Property(line => line.ProductName).HasMaxLength(100);
+            entity.Property(line => line.Price).HasPrecision(18, 2);
         });
 
         // Configure EmployeeAddress entity
