@@ -5,9 +5,12 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace AlephMapper.Models;
 
-internal sealed class AdaptationModel
+/// <summary>
+/// Compiler-bound adaptation analysis state used only while rendering output.
+/// </summary>
+internal sealed class AdaptationAnalysis
 {
-    public AdaptationModel(
+    public AdaptationAnalysis(
         INamedTypeSymbol sourceType,
         INamedTypeSymbol destinationType,
         string? generatedName,

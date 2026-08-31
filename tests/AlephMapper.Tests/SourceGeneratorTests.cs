@@ -1,7 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.EntityFrameworkCore;
+using AlephMapper.Generation;
 
 namespace AlephMapper.Tests;
 
@@ -15,6 +17,153 @@ public class SourceGeneratorTests
         _parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
         var generator = new AlephSourceGenerator().AsSourceGenerator();
         _driver = CSharpGeneratorDriver.Create(generators: [generator], parseOptions: _parseOptions);
+    }
+
+    [Test]
+    public async Task UnrelatedMethodsAreRejectedBySyntaxCandidateFilter()
+    {
+        var tree = CSharpSyntaxTree.ParseText(
+            "public class Unrelated { public int Add(int left, int right) => left + right; }",
+            _parseOptions);
+        var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+
+        await Assert.That(MappingMethodCandidate.IsCandidate(method, CancellationToken.None)).IsFalse();
+    }
+
+    [Test]
+    public async Task MapperHelpersRemainCandidatesForInlining()
+    {
+        var tree = CSharpSyntaxTree.ParseText(
+            "using AlephMapper; public static partial class Mapper { [Expressive] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
+            _parseOptions);
+        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+
+        await Assert.That(methods).Count().IsEqualTo(2);
+        await Assert.That(MappingMethodCandidate.IsCandidate(methods.Single(method => method.Identifier.ValueText == "Helper"), CancellationToken.None)).IsTrue();
+    }
+
+    [Test]
+    public async Task ClassLevelConfigurationAcrossPartialDeclarationsGeneratesOnce()
+    {
+        const string configuration = """
+            using AlephMapper;
+            namespace Fixture;
+            [Expressive]
+            public static partial class Mapper { }
+            """;
+        const string mapping = """
+            namespace Fixture;
+            public static partial class Mapper
+            {
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "PartialMapper",
+            [
+                CSharpSyntaxTree.ParseText(configuration, _parseOptions, "Configuration.cs"),
+                CSharpSyntaxTree.ParseText(mapping, _parseOptions, "Mapping.cs")
+            ],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        var updatedDriver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var generatorResult = updatedDriver.GetRunResult().Results.Single();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generatorResult.Exception).IsNull();
+        await Assert.That(generatorResult.GeneratedSources
+            .Count(source => source.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task GeneratedConfigurationTypesAreNotPublic()
+    {
+        var assembly = typeof(AlephSourceGenerator).Assembly;
+        var typeNames = new[]
+        {
+            "ExpressiveAttribute",
+            "UpdatableAttribute",
+            "AdaptAttribute",
+            "NullConditionalRewrite",
+            "CollectionPropertiesPolicy",
+            "AdaptGeneration"
+        };
+
+        foreach (var typeName in typeNames)
+        {
+            var type = assembly.GetType("AlephMapper." + typeName);
+            await Assert.That(type).IsNotNull();
+            await Assert.That(type!.IsPublic).IsFalse();
+        }
+    }
+
+    [Test]
+    public async Task GeneratedConfigurationTypesDoNotConflictAcrossConsumerAssemblies()
+    {
+        const string projectASource = """
+            using AlephMapper;
+            namespace ProjectA;
+            public static partial class Mapper
+            {
+                [Expressive]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """;
+        const string projectBSource = """
+            using AlephMapper;
+            using ProjectA;
+            namespace ProjectB;
+            public static partial class Mapper
+            {
+                [Expressive]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var projectA = CSharpCompilation.Create(
+            "ProjectA",
+            [CSharpSyntaxTree.ParseText(projectASource, _parseOptions, "ProjectA.cs")],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var projectADriver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        projectADriver.RunGeneratorsAndUpdateCompilation(projectA, out var projectAOutput, out var projectADiagnostics);
+        await Assert.That(projectADiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectAOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+
+        using var projectAImage = new MemoryStream();
+        var emitResult = projectAOutput.Emit(projectAImage);
+        await Assert.That(emitResult.Success).IsTrue();
+
+        var projectB = CSharpCompilation.Create(
+            "ProjectB",
+            [CSharpSyntaxTree.ParseText(projectBSource, _parseOptions, "ProjectB.cs")],
+            references.Add(MetadataReference.CreateFromImage(projectAImage.ToArray())),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var projectBDriver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        projectBDriver.RunGeneratorsAndUpdateCompilation(projectB, out var projectBOutput, out var projectBDiagnostics);
+
+        await Assert.That(projectBDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectBOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ExpressiveAttribute")!.DeclaredAccessibility)
+            .IsEqualTo(Accessibility.Internal);
     }
 
     public static IEnumerable<object[]> GetTestCases()

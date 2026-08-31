@@ -9,7 +9,7 @@ namespace AlephMapper.Generation;
 /// </summary>
 internal sealed class MappingMethodDetails
 {
-    public MappingMethodDetails(MappingModel mapping)
+    public MappingMethodDetails(MappingAnalysis mapping)
     {
         Mapping = mapping;
         var nullableContextPosition = mapping.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
@@ -34,7 +34,7 @@ internal sealed class MappingMethodDetails
         NullableContext = nullableContext;
     }
 
-    public MappingModel Mapping { get; }
+    public MappingAnalysis Mapping { get; }
     public string[] ParameterTypeNames { get; }
     public string DestinationTypeName { get; }
     public string SourceTypeName { get; }

@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 using AlephMapper.Diagnostics;
 using AlephMapper.Models;
@@ -18,8 +18,8 @@ internal static class AdaptationValidator
 {
     public static bool Validate(
         SourceProductionContext context,
-        MappingModel mapping,
-        AdaptationModel adaptation,
+        MappingAnalysis mapping,
+        AdaptationAnalysis adaptation,
         ExpressionSyntax inlinedBody)
     {
         var location = adaptation.Location?.ToLocation()

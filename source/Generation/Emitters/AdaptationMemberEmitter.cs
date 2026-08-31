@@ -268,7 +268,7 @@ internal static class AdaptationMemberEmitter
         });
     }
 
-    private static Location? GetLocation(MappingModel mapping, AdaptationModel adaptation)
+    private static Location? GetLocation(MappingAnalysis mapping, AdaptationAnalysis adaptation)
     {
         return adaptation.Location?.ToLocation() ??
                mapping.MethodSymbol.Locations.FirstOrDefault();

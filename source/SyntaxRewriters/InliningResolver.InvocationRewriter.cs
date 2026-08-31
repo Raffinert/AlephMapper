@@ -1,4 +1,5 @@
 using AlephMapper.Helpers;
+using AlephMapper.Generation;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,7 +13,7 @@ namespace AlephMapper.SyntaxRewriters;
 
 internal sealed partial class InliningResolver(
     SemanticModel model,
-    IDictionary<IMethodSymbol, MappingModel> catalog,
+    MappingCatalog catalog,
     bool forUpdateMethod,
     NullConditionalRewrite rewriteSupport,
     ITypeSymbol returnTypeToAnnotate = null)
@@ -23,7 +24,7 @@ internal sealed partial class InliningResolver(
 
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
     private List<CircularReferenceInfo> _circularReferences = [];
-    private Dictionary<IMethodSymbol, MappingModel> _inlinedMethods = new(SymbolEqualityComparer.Default);
+    private Dictionary<IMethodSymbol, MappingAnalysis> _inlinedMethods = new(SymbolEqualityComparer.Default);
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     public IEnumerable<string> UsingDirectives => _inlinedMethods.SelectMany(il => il.Value.UsingDirectives).Distinct();

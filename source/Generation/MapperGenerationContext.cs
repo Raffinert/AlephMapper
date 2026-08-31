@@ -17,7 +17,7 @@ internal sealed class MapperGenerationContext
 
     public MapperGenerationContext(
         INamedTypeSymbol mapperType,
-        IDictionary<IMethodSymbol, MappingModel> mappingsByMethod,
+        MappingCatalog mappingsByMethod,
         SourceProductionContext sourceProductionContext)
     {
         MapperType = mapperType;
@@ -27,7 +27,7 @@ internal sealed class MapperGenerationContext
     }
 
     public INamedTypeSymbol MapperType { get; }
-    public IDictionary<IMethodSymbol, MappingModel> MappingsByMethod { get; }
+    public MappingCatalog MappingsByMethod { get; }
     public SourceProductionContext SourceProductionContext { get; }
     public AdaptationMemberPlanner AdaptationMembers { get; }
     public HashSet<string> UsingDirectives { get; } = new(StringComparer.Ordinal);

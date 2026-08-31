@@ -14,11 +14,13 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
     {
         context.RegisterPostInitializationOutput(AttributeSourceEmitter.AddAttributes);
 
-        var mappings = context.SyntaxProvider
-            .CreateSyntaxProvider(MappingMethodCandidate.IsCandidate, MappingModelFactory.Create)
-            .Where(static mapping => mapping != null)
-            .Select(static (mapping, _) => mapping!);
+        var mapperCandidates = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                MapperCandidate.IsCandidate,
+                static (syntaxContext, cancellationToken) => MapperCandidate.Create(syntaxContext.Node, cancellationToken));
 
-        context.RegisterSourceOutput(mappings.Collect(), MapperSourceOutput.Generate);
+        context.RegisterSourceOutput(
+            mapperCandidates.Combine(context.CompilationProvider),
+            MapperSourceOutput.Generate);
     }
 }
