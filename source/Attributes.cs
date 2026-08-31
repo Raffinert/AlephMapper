@@ -5,7 +5,7 @@ namespace AlephMapper;
 /// <summary>
 /// Configures how null-conditional operators are handled
 /// </summary>
-public enum NullConditionalRewrite
+internal enum NullConditionalRewrite
 {
     /// <summary>
     /// Don't rewrite null conditional operators (Default behavior).
@@ -34,7 +34,7 @@ public enum NullConditionalRewrite
 /// Marks a class to generate expressive companion methods.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class ExpressiveAttribute : Attribute
+internal sealed class ExpressiveAttribute : Attribute
 {
     /// <summary>
     /// Get or set how null-conditional operators are handled
@@ -46,7 +46,7 @@ public sealed class ExpressiveAttribute : Attribute
 /// Marks a class to generate update companion methods.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class UpdatableAttribute : Attribute
+internal sealed class UpdatableAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets the policy for handling collection updates during mapping operations
@@ -58,7 +58,7 @@ public sealed class UpdatableAttribute : Attribute
 /// Defines which adapted companions are generated for an <see cref="AdaptAttribute"/> declaration.
 /// </summary>
 [Flags]
-public enum AdaptGeneration
+internal enum AdaptGeneration
 {
     /// <summary>
     /// Generate a regular mapping method.
@@ -80,7 +80,7 @@ public enum AdaptGeneration
 /// Reuses a mapping method as a compile-time template for one explicitly specified source/destination pair.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
-public sealed class AdaptAttribute : Attribute
+internal sealed class AdaptAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new adaptation from the template method to the specified source and destination types.
@@ -121,7 +121,7 @@ public sealed class AdaptAttribute : Attribute
 /// <summary>
 /// Defines the policy for handling collection updates during mapping operations
 /// </summary>
-public enum CollectionPropertiesPolicy
+internal enum CollectionPropertiesPolicy
 {
     /// <summary>
     /// Skip collection updates - collections will not be modified during mapping

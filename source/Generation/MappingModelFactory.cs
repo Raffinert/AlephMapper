@@ -91,7 +91,13 @@ internal static class MappingModelFactory
                 }
             }
 
-            adaptations.Add(new AdaptationModel(sourceType, destinationType, name, generation, nullStrategy, attribute));
+            adaptations.Add(new AdaptationModel(
+                sourceType,
+                destinationType,
+                name,
+                generation,
+                nullStrategy,
+                SourceLocationModel.FromSyntax(attribute.ApplicationSyntaxReference)));
         }
 
         return adaptations;

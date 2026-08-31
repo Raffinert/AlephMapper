@@ -270,7 +270,7 @@ internal static class AdaptationMemberEmitter
 
     private static Location? GetLocation(MappingModel mapping, AdaptationModel adaptation)
     {
-        return adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ??
+        return adaptation.Location?.ToLocation() ??
                mapping.MethodSymbol.Locations.FirstOrDefault();
     }
 }

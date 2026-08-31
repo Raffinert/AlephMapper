@@ -22,7 +22,7 @@ internal static class AdaptationValidator
         AdaptationModel adaptation,
         ExpressionSyntax inlinedBody)
     {
-        var location = adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+        var location = adaptation.Location?.ToLocation()
             ?? mapping.MethodSymbol.Locations.FirstOrDefault();
         var isValid = true;
 
