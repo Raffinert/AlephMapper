@@ -3,11 +3,14 @@
 
 using System;
 
+using Microsoft.CodeAnalysis;
+
 namespace AlephMapper;
 
 /// <summary>
 /// Configures how null-conditional operators are handled
 /// </summary>
+[Embedded]
 internal enum NullConditionalRewrite
 {
     /// <summary>
@@ -36,6 +39,7 @@ internal enum NullConditionalRewrite
 /// <summary>
 /// Marks a class to generate expressive companion methods.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 internal sealed class ExpressiveAttribute : Attribute
 {
@@ -48,6 +52,7 @@ internal sealed class ExpressiveAttribute : Attribute
 /// <summary>
 /// Marks a class to generate update companion methods.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 internal sealed class UpdatableAttribute : Attribute
 {
@@ -60,6 +65,7 @@ internal sealed class UpdatableAttribute : Attribute
 /// <summary>
 /// Defines which adapted companions are generated for an <see cref="AdaptAttribute"/> declaration.
 /// </summary>
+[Embedded]
 [Flags]
 internal enum AdaptGeneration
 {
@@ -82,6 +88,7 @@ internal enum AdaptGeneration
 /// <summary>
 /// Reuses a mapping method as a compile-time template for one explicitly specified source/destination pair.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 internal sealed class AdaptAttribute : Attribute
 {
@@ -124,6 +131,7 @@ internal sealed class AdaptAttribute : Attribute
 /// <summary>
 /// Defines the policy for handling collection updates during mapping operations
 /// </summary>
+[Embedded]
 internal enum CollectionPropertiesPolicy
 {
     /// <summary>

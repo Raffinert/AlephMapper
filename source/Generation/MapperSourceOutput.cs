@@ -35,7 +35,7 @@ internal static class MapperSourceOutput
                 return;
             }
 
-            if (!IsPrimaryMapperDeclaration(mapperType, mapperDeclaration, context.CancellationToken))
+            if (!IsPrimaryMapperCandidate(input.Right, mapperType, input.Left, context.CancellationToken))
             {
                 return;
             }
@@ -124,21 +124,25 @@ internal static class MapperSourceOutput
         return null;
     }
 
-    private static bool IsPrimaryMapperDeclaration(
+    private static bool IsPrimaryMapperCandidate(
+        Compilation compilation,
         INamedTypeSymbol mapperType,
-        ClassDeclarationSyntax mapperDeclaration,
+        MapperCandidate candidate,
         CancellationToken cancellationToken)
     {
-        var primaryDeclaration = mapperType.DeclaringSyntaxReferences
+        var primaryCandidate = mapperType.DeclaringSyntaxReferences
             .OrderBy(static reference => reference.SyntaxTree.FilePath, StringComparer.Ordinal)
             .ThenBy(static reference => reference.Span.Start)
             .Select(reference => reference.GetSyntax(cancellationToken) as ClassDeclarationSyntax)
-            .FirstOrDefault(static declaration => declaration is not null &&
-                MapperCandidate.IsCandidate(declaration, CancellationToken.None));
+            .Where(static declaration => declaration is not null)
+            .SelectMany(declaration => GetMapperCandidates(compilation, declaration!, cancellationToken))
+            .OrderBy(static current => current.FilePath, StringComparer.Ordinal)
+            .ThenBy(static current => current.Start)
+            .ThenBy(static current => current.Length)
+            .ThenBy(static current => current.AttributeKind)
+            .FirstOrDefault();
 
-        return primaryDeclaration is not null &&
-               primaryDeclaration.SyntaxTree == mapperDeclaration.SyntaxTree &&
-               primaryDeclaration.Span == mapperDeclaration.Span;
+        return primaryCandidate is not null && primaryCandidate.Equals(candidate);
     }
 
     private static ClassDeclarationSyntax? FindMapperDeclaration(
@@ -160,14 +164,81 @@ internal static class MapperSourceOutput
                 continue;
             }
 
-            if (root.FindNode(span, getInnermostNodeForTie: true) is ClassDeclarationSyntax declaration &&
-                declaration.Span == span)
+            var target = root.FindNode(span, getInnermostNodeForTie: true);
+            if (target.Span != span)
+            {
+                continue;
+            }
+
+            if (target is ClassDeclarationSyntax declaration)
             {
                 return declaration;
+            }
+
+            if (target.FirstAncestorOrSelf<ClassDeclarationSyntax>() is { } containingClass)
+            {
+                return containingClass;
             }
         }
 
         return null;
+    }
+
+    private static IEnumerable<MapperCandidate> GetMapperCandidates(
+        Compilation compilation,
+        ClassDeclarationSyntax mapperDeclaration,
+        CancellationToken cancellationToken)
+    {
+        var semanticModel = compilation.GetSemanticModel(mapperDeclaration.SyntaxTree);
+
+        if (ContainsAlephMapperAttribute(mapperDeclaration.AttributeLists, semanticModel, cancellationToken, out var classKind))
+        {
+            yield return CreateCandidate(mapperDeclaration, classKind);
+        }
+
+        foreach (var method in mapperDeclaration.Members.OfType<MethodDeclarationSyntax>())
+        {
+            if (ContainsAlephMapperAttribute(method.AttributeLists, semanticModel, cancellationToken, out var methodKind))
+            {
+                yield return CreateCandidate(method, methodKind);
+            }
+        }
+    }
+
+    private static bool ContainsAlephMapperAttribute(
+        SyntaxList<AttributeListSyntax> attributeLists,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken,
+        out MapperAttributeKind attributeKind)
+    {
+        attributeKind = MapperAttributeKind.Adapt;
+        foreach (var attribute in attributeLists.SelectMany(static list => list.Attributes))
+        {
+            var type = semanticModel.GetTypeInfo(attribute, cancellationToken).Type;
+            switch (type?.ToDisplayString())
+            {
+                case "AlephMapper.ExpressiveAttribute":
+                    attributeKind = MapperAttributeKind.Expressive;
+                    return true;
+                case "AlephMapper.UpdatableAttribute":
+                    attributeKind = MapperAttributeKind.Updatable;
+                    return true;
+                case "AlephMapper.AdaptAttribute":
+                    attributeKind = MapperAttributeKind.Adapt;
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static MapperCandidate CreateCandidate(SyntaxNode targetNode, MapperAttributeKind attributeKind)
+    {
+        return new MapperCandidate(
+            targetNode.SyntaxTree.FilePath,
+            targetNode.SpanStart,
+            targetNode.Span.Length,
+            attributeKind);
     }
 
     private static void GenerateMapper(

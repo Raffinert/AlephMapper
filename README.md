@@ -101,6 +101,10 @@ When referencing the generator directly from source:
 
 `PrivateAssets="all"` prevents AlephMapper from flowing transitively to consumers of your library. `IncludeAssets` makes its analyzer and source-generator assets available during compilation.
 
+### Compiler compatibility
+
+AlephMapper 0.6.2 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+
 ## Quick start
 
 Mapping methods must be `static`, expression-bodied, and declared in a `static partial` class.
