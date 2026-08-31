@@ -10,20 +10,6 @@ internal static class CrashDiagnosticsReporter
 {
     private const int MaxCrashDiagnosticLength = 2_000;
 
-    internal static void Report(
-        in SourceProductionContext sourceProductionContext,
-        Exception exception
-    )
-    {
-        sourceProductionContext.ReportDiagnostic(
-            Diagnostic.Create(
-                DiagnosticDescriptors.GeneratorCrash,
-                Location.None,
-                FormatCrashDiagnostic(exception)
-            )
-        );
-    }
-
     internal static GenerationDiagnostic CreateDiagnostic(Exception exception)
     {
         return Generation.GenerationDiagnostic.From(Diagnostic.Create(

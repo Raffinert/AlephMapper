@@ -6,7 +6,6 @@ using AlephMapper.Helpers;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -166,45 +165,6 @@ internal static class MapperSourceOutput
             .FirstOrDefault();
 
         return primaryCandidate is not null && primaryCandidate.Equals(candidate);
-    }
-
-    private static ClassDeclarationSyntax? FindMapperDeclaration(
-        Compilation compilation,
-        MapperCandidate candidate,
-        CancellationToken cancellationToken)
-    {
-        var span = new TextSpan(candidate.Start, candidate.Length);
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            if (!string.Equals(tree.FilePath, candidate.FilePath, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var root = tree.GetRoot(cancellationToken);
-            if (span.End > root.FullSpan.End)
-            {
-                continue;
-            }
-
-            var target = root.FindNode(span, getInnermostNodeForTie: true);
-            if (target.Span != span)
-            {
-                continue;
-            }
-
-            if (target is ClassDeclarationSyntax declaration)
-            {
-                return declaration;
-            }
-
-            if (target.FirstAncestorOrSelf<ClassDeclarationSyntax>() is { } containingClass)
-            {
-                return containingClass;
-            }
-        }
-
-        return null;
     }
 
     private static IEnumerable<MapperCandidate> GetMapperCandidates(
