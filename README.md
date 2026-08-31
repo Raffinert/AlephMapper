@@ -72,7 +72,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.6.2">
+<PackageReference Include="AlephMapper" Version="0.7.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -82,7 +82,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.6.2" />
+<PackageVersion Include="AlephMapper" Version="0.7.0" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
@@ -103,7 +103,7 @@ When referencing the generator directly from source:
 
 ### Compiler compatibility
 
-AlephMapper 0.6.2 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+AlephMapper 0.7.0 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
 
 ## Quick start
 

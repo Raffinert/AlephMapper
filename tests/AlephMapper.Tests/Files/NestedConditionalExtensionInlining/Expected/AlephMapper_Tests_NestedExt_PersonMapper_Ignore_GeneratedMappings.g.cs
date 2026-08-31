@@ -9,7 +9,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.6.2")]
+[GeneratedCode("AlephMapper", "0.7.0")]
 partial class NestedExt_PersonMapper_Ignore
 {
     /// <summary>
