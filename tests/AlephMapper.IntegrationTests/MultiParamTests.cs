@@ -1,4 +1,4 @@
-﻿using AgileObjects.ReadableExpressions;
+using AgileObjects.ReadableExpressions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +30,7 @@ public class MultiParamIntegrationTests
         await _connection.DisposeAsync();
     }
 
-    #region Multi-Param Expressive Tests
+    #region Multi-Param Projectable Tests
 
     [Test]
     public async Task MultiParam_FormatName_Expression_Should_Work_In_EFCore_Query()
@@ -226,13 +226,13 @@ public class MultiParamIntegrationTests
 
     #endregion
 
-    #region Multi-Param Expressive Method (method itself takes multiple params)
+    #region Multi-Param Projectable Method (method itself takes multiple params)
 
     [Test]
-    public async Task MultiParam_Expressive_Method_Should_Generate_Correct_Expression()
+    public async Task MultiParam_Projectable_Method_Should_Generate_Correct_Expression()
     {
         // Arrange — MapWithYear takes (Employee, int) and generates a single-parameter projection factory
-        var expression = MultiParamExpressiveMapper.MapWithYearExpression(2026);
+        var expression = MultiParamProjectableMapper.MapWithYearExpression(2026);
 
         // Act
         var result = await _context.Employees
@@ -250,11 +250,11 @@ public class MultiParamIntegrationTests
     }
 
     [Test]
-    public async Task MultiParam_Expressive_Method_Should_Have_Correct_Expression_Structure()
+    public async Task MultiParam_Projectable_Method_Should_Have_Correct_Expression_Structure()
     {
         // Arrange
         var currentYear = 2026;
-        var expression = MultiParamExpressiveMapper.MapWithYearExpression(currentYear);
+        var expression = MultiParamProjectableMapper.MapWithYearExpression(currentYear);
         var readable = expression.ToReadableString();
 
         // Assert — the expression should reference both parameters

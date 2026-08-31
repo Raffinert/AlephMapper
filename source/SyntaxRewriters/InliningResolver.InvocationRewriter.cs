@@ -1,3 +1,5 @@
+#nullable enable
+
 using AlephMapper.Helpers;
 using AlephMapper.Generation;
 using AlephMapper.Models;
@@ -16,7 +18,7 @@ internal sealed partial class InliningResolver(
     MappingCatalog catalog,
     bool forUpdateMethod,
     NullConditionalRewrite rewriteSupport,
-    ITypeSymbol returnTypeToAnnotate = null)
+    ITypeSymbol? returnTypeToAnnotate = null)
     : CSharpSyntaxRewriter
 {
     internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
@@ -33,14 +35,14 @@ internal sealed partial class InliningResolver(
     public IReadOnlyList<UnsafeConditionalReceiverInfo> UnsafeConditionalReceivers => _unsafeConditionalReceivers;
     public IReadOnlyList<UnsupportedNullConditionalInfo> UnsupportedNullConditionals => _unsupportedNullConditionals;
 
-    private IMethodSymbol ResolveMethodGroupSymbol(ExpressionSyntax expr)
+    private IMethodSymbol? ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
         var si = model.GetSymbolInfo(expr);
         if (si.Symbol is IMethodSymbol ms) return ms;
         return null;
     }
 
-    private static IMethodSymbol TryGetDelegateInvoke(IMethodSymbol invokedMethod, int argIndex)
+    private static IMethodSymbol? TryGetDelegateInvoke(IMethodSymbol invokedMethod, int argIndex)
     {
         if (argIndex < 0 || argIndex >= invokedMethod.Parameters.Length) return null;
         var p = invokedMethod.Parameters[argIndex].Type as INamedTypeSymbol;
@@ -58,7 +60,7 @@ internal sealed partial class InliningResolver(
         _circularReferences.Add(circularRef);
     }
 
-    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         if (node.Parent == null || model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
         {
@@ -109,7 +111,7 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals
-                                }.Visit(callee.BodySyntax.Expression);
+                                }.Visit(callee.BodySyntax.Expression)!;
 
                             var substitutions = callee.Parameters.ToDictionary(
                                 p => p.Name,
@@ -184,10 +186,10 @@ internal sealed partial class InliningResolver(
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals
-            }.Visit(callee2.BodySyntax.Expression);
+            }.Visit(callee2.BodySyntax.Expression)!;
 
-            var substituted = new ParameterSubstitutionRewriter(substitutionsMap)
-                .Visit(inlinedBody2)
+            var substituted = ((ExpressionSyntax)new ParameterSubstitutionRewriter(substitutionsMap)
+                .Visit(inlinedBody2)!)
                 .WithoutTrivia();
 
             if (conditionalAccessExpression)
@@ -219,7 +221,7 @@ internal sealed partial class InliningResolver(
         // We need the original definition's parameters (which include 'this') for correct substitution.
         var isReducedExtension = invokedMethod.IsExtensionMethod && invokedMethod.ReducedFrom != null;
         var parameters = isReducedExtension
-            ? invokedMethod.ReducedFrom.Parameters
+            ? invokedMethod.ReducedFrom!.Parameters
             : invokedMethod.Parameters;
 
         if (parameters.Length == 0)
@@ -237,18 +239,18 @@ internal sealed partial class InliningResolver(
                 conditionalAccessExpression = true;
                 if (node.Expression is MemberAccessExpressionSyntax memberAccess)
                 {
-                    receiver = (ExpressionSyntax?)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
+                    receiver = (ExpressionSyntax)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
                 }
                 else
                 {
                     receiver = rewriteSupport != NullConditionalRewrite.None
-                        ? _conditionalAccessExpressionsStack.Peek()
-                        : (ExpressionSyntax?)(Visit(caExpr.Expression) ?? caExpr.Expression);
+                        ? _conditionalAccessExpressionsStack.Peek()!
+                        : (ExpressionSyntax)(Visit(caExpr.Expression) ?? caExpr.Expression);
                 }
             }
             else if (node.Expression is MemberAccessExpressionSyntax memberAccess)
             {
-                receiver = (ExpressionSyntax?)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
+                receiver = (ExpressionSyntax)(Visit(memberAccess.Expression) ?? memberAccess.Expression);
             }
             else
             {
@@ -261,14 +263,10 @@ internal sealed partial class InliningResolver(
 
         foreach (var arg in args)
         {
-            IParameterSymbol targetParam;
+            IParameterSymbol? targetParam;
             if (arg.NameColon != null)
             {
                 targetParam = parameters.FirstOrDefault(p => p.Name == arg.NameColon.Name.Identifier.Text);
-                if (targetParam == null)
-                {
-                    return false;
-                }
             }
             else
             {
@@ -280,7 +278,12 @@ internal sealed partial class InliningResolver(
                 targetParam = parameters[nextParamIndex++];
             }
 
-            var rewrittenArg = (ExpressionSyntax?)(Visit(arg.Expression) ?? arg.Expression);
+            if (targetParam == null)
+            {
+                return false;
+            }
+
+            var rewrittenArg = (ExpressionSyntax)(Visit(arg.Expression) ?? arg.Expression);
             substitutions[targetParam.Name] = rewrittenArg;
         }
 
@@ -326,3 +329,5 @@ internal sealed class UnsupportedNullConditionalInfo
     public ConditionalAccessExpressionSyntax Expression { get; }
     public Location Location { get; }
 }
+
+#nullable restore

@@ -155,11 +155,11 @@ public static partial class EmployeeUpdateMapper
     };
 }
 
-// Test both Expressive and Updatable on the same class
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+// Test both Projectable and Updatable on the same class
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class EmployeeCombinedMapper
 {
-    // Expressive methods
+    // Projectable methods
     public static string GetFullName(Employee employee) => 
         $"{employee.FirstName} {employee.LastName}";
 

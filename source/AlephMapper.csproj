@@ -18,6 +18,7 @@
     <PackageTags>Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Title>Aleph Mapper</Title>
   </PropertyGroup>
@@ -33,6 +34,7 @@
   <ItemGroup>
     <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers\dotnet\cs\$(AssemblyName).dll" Visible="false" />
     <None Include="../README.md" pack="true" PackagePath="." />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 
     <ItemGroup>

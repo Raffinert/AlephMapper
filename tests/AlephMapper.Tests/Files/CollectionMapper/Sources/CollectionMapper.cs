@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace AlephMapper.Tests;
 
@@ -30,7 +30,7 @@ public class NestedModel
 }
 
 // Mapper with collection properties to test skipping behavior
-[Expressive]
+[Projectable]
 internal static partial class CollectionMapper
 {
     [Updatable]

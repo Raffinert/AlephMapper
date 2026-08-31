@@ -37,11 +37,11 @@ internal enum NullConditionalRewrite
 }
 
 /// <summary>
-/// Marks a class to generate expressive companion methods.
+/// Marks a class to generate projectable companion methods.
 /// </summary>
 [Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-internal sealed class ExpressiveAttribute : Attribute
+internal sealed class ProjectableAttribute : Attribute
 {
     /// <summary>
     /// Get or set how null-conditional operators are handled
@@ -115,7 +115,7 @@ internal sealed class AdaptAttribute : Attribute
     /// Gets or sets the generated method base name.
     /// Required when expression generation is requested.
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets which adapted companions are generated.

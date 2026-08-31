@@ -48,7 +48,7 @@ internal static class MapperSourceOutput
 
             var mappings = CreateMapperAnalyses(compilation, mapperType, cancellationToken);
             if (mappings.Count == 0 || !mappings.Any(static mapping =>
-                    (mapping.IsExpressive || mapping.IsUpdatable || mapping.Adaptations.Count > 0) && mapping.IsClassPartial))
+                    (mapping.IsProjectable || mapping.IsUpdatable || mapping.Adaptations.Count > 0) && mapping.IsClassPartial))
             {
                 return MapperGenerationResult.Empty;
             }
@@ -200,8 +200,8 @@ internal static class MapperSourceOutput
             var type = semanticModel.GetTypeInfo(attribute, cancellationToken).Type;
             switch (type?.ToDisplayString())
             {
-                case "AlephMapper.ExpressiveAttribute":
-                    attributeKind = MapperAttributeKind.Expressive;
+                case "AlephMapper.ProjectableAttribute":
+                    attributeKind = MapperAttributeKind.Projectable;
                     return true;
                 case "AlephMapper.UpdatableAttribute":
                     attributeKind = MapperAttributeKind.Updatable;
@@ -232,13 +232,13 @@ internal static class MapperSourceOutput
         var context = new MapperGenerationContext(mapperType, catalog);
         foreach (var mapping in mappings)
         {
-            if (!mapping.IsExpressive && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
+            if (!mapping.IsProjectable && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
             {
                 continue;
             }
 
             var details = new MappingMethodDetails(mapping);
-            ExpressiveMemberEmitter.Emit(details, context);
+            ProjectableMemberEmitter.Emit(details, context);
             AdaptationMemberEmitter.Emit(details, context);
             UpdatableMemberEmitter.Emit(details, context);
         }

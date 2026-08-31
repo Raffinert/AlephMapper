@@ -95,7 +95,7 @@ internal sealed class MapperCandidate : IEquatable<MapperCandidate>
 
 internal enum MapperAttributeKind
 {
-    Expressive,
+    Projectable,
     Updatable,
     Adapt
 }

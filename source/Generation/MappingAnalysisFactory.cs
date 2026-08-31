@@ -45,7 +45,7 @@ internal static class MappingAnalysisFactory
             methodSymbol.ReturnType,
             bodyExpression,
             semanticModel,
-            HasAttribute(classSymbol, methodSymbol, typeof(ExpressiveAttribute).FullName),
+            HasAttribute(classSymbol, methodSymbol, typeof(ProjectableAttribute).FullName),
             HasAttribute(classSymbol, methodSymbol, typeof(UpdatableAttribute).FullName),
             classDeclaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword)),
             GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore,
@@ -108,8 +108,8 @@ internal static class MappingAnalysisFactory
     {
         var value = SymbolHelpers.GetAttributeArgumentValue(
             symbol,
-            typeof(ExpressiveAttribute).FullName,
-            nameof(ExpressiveAttribute.NullConditionalRewrite));
+            typeof(ProjectableAttribute).FullName,
+            nameof(ProjectableAttribute.NullConditionalRewrite));
         return value is int intValue ? (NullConditionalRewrite)intValue : null;
     }
 
@@ -137,17 +137,25 @@ internal static class MappingAnalysisFactory
         var usings = new HashSet<string>();
         foreach (var usingDirective in compilationUnit.Usings)
         {
-            usings.Add(usingDirective.Name.ToString());
+            AddUsing(usings, usingDirective);
         }
 
         foreach (var namespaceDeclaration in compilationUnit.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
         {
             foreach (var usingDirective in namespaceDeclaration.Usings)
             {
-                usings.Add(usingDirective.Name.ToString());
+                AddUsing(usings, usingDirective);
             }
         }
 
         return usings.OrderBy(static value => value).ToList();
+    }
+
+    private static void AddUsing(ISet<string> usings, UsingDirectiveSyntax usingDirective)
+    {
+        if (usingDirective.Name is { } name)
+        {
+            usings.Add(name.ToString());
+        }
     }
 }

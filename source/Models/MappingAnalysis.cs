@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 
@@ -16,7 +16,7 @@ internal sealed class MappingAnalysis(
     ITypeSymbol returnType,
     ArrowExpressionClauseSyntax bodySyntax,
     SemanticModel semanticModel,
-    bool isExpressive,
+    bool isProjectable,
     bool isUpdatable,
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
@@ -33,7 +33,7 @@ internal sealed class MappingAnalysis(
     public readonly ArrowExpressionClauseSyntax BodySyntax = bodySyntax;
     public readonly SemanticModel SemanticModel = semanticModel;
 
-    public readonly bool IsExpressive = isExpressive;
+    public readonly bool IsProjectable = isProjectable;
     public readonly bool IsUpdatable = isUpdatable;
     public readonly bool IsClassPartial = classIsStaticAndPartial;
 

@@ -30,7 +30,7 @@ public class SimpleIntegrationTests
         await _connection.DisposeAsync();
     }
 
-    #region Expressive Tests
+    #region Projectable Tests
 
     [Test]
     public async Task Simple_Property_Expressions_Should_Work()

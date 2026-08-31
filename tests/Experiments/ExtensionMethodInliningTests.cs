@@ -1,4 +1,4 @@
-﻿using AgileObjects.ReadableExpressions;
+using AgileObjects.ReadableExpressions;
 using AlephMapper;
 
 namespace Experiments;
@@ -42,7 +42,7 @@ public class ExtensionTestPersonDto
 
 public static partial class ExtensionTestAddressMapper
 {
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static ExtensionTestAddressDto ToDto(this ExtensionTestAddress address) => new()
     {
         Street = address.Street,
@@ -55,7 +55,7 @@ public static partial class ExtensionTestAddressMapper
 // Main mapper that uses conditional access extension method
 public static partial class ConditionalExtensionTestPersonMapper
 {
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     [Updatable]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
@@ -65,7 +65,7 @@ public static partial class ConditionalExtensionTestPersonMapper
         MyProperty = person?.MyProperty ?? 0
     };
 
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static ExtensionTestPersonDto ToDto1(ExtensionTestPerson person) => new()
     {
         Name = person?.Name,

@@ -10,7 +10,7 @@ using System.Linq.Expressions;
 namespace AlephMapper.Tests.MultiParameterInlining;
 
 [GeneratedCode("AlephMapper", "0.7.0")]
-partial class MultiParamExpressiveMapper
+partial class MultiParamProjectableMapper
 {
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="Map(Person, int)"/>.

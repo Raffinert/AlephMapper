@@ -5,12 +5,12 @@ using System.Linq;
 
 namespace AlephMapper.Generation.Emitters;
 
-internal static class ExpressiveMemberEmitter
+internal static class ProjectableMemberEmitter
 {
     public static void Emit(MappingMethodDetails details, MapperGenerationContext context)
     {
         var mapping = details.Mapping;
-        if (!mapping.IsExpressive)
+        if (!mapping.IsProjectable)
         {
             return;
         }
@@ -24,7 +24,7 @@ internal static class ExpressiveMemberEmitter
         if (inliner.CircularReferences.Any())
         {
             context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.ExpressiveCircularReferences,
+                DiagnosticDescriptors.ProjectableCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
             return;

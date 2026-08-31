@@ -1,4 +1,4 @@
-﻿using AgileObjects.ReadableExpressions;
+using AgileObjects.ReadableExpressions;
 
 namespace AlephMapper.Tests;
 
@@ -19,7 +19,7 @@ internal class SimpleDto
 
 internal static partial class SimpleObjectMapper
 {
-    [Expressive]
+    [Projectable]
     public static SimpleDto MapToDto(SimpleObject so) => new SimpleDto
     {
         Attributes = so.Attributes?.Select(MapFromAttribute).ToList() ?? []

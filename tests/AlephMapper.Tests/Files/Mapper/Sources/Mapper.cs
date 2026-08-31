@@ -1,11 +1,11 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 internal static class Mapper1
 {
     public static bool Older35(BirthInfo? source) => source?.Age > 35;
 }
 
-[Expressive]
+[Projectable]
 internal static partial class Mapper
 {
     public static bool BornInKyivAndOlder35(SourceDto source) => BornInKyiv(source.BirthInfo) && Mapper1.Older35(source.BirthInfo) && Younger65(source.BirthInfo);

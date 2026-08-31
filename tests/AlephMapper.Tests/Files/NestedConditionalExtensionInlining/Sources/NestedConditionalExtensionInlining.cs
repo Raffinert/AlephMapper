@@ -27,7 +27,7 @@ public class NestedExt_PersonDto
 
 public static partial class NestedExt_AddressMapper
 {
-    [Expressive]
+    [Projectable]
     public static NestedExt_AddressDto ToDto(this NestedExt_Address a) => new()
     {
         Street = a.Street,
@@ -37,20 +37,20 @@ public static partial class NestedExt_AddressMapper
 
 // Mapper using nested conditional access chains
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class NestedExt_PersonMapper_Ignore
 {
-    [Expressive]
+    [Projectable]
     public static NestedExt_PersonDto ToDto(NestedExt_Person p) => new()
     {
         HomeAddress = p?.Friend?.HomeAddress?.ToDto()
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class NestedExt_PersonMapper_Rewrite
 {
-    [Expressive]
+    [Projectable]
     public static NestedExt_PersonDto ToDto(NestedExt_Person p) => new()
     {
         HomeAddress = p?.Friend?.HomeAddress?.ToDto()

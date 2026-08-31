@@ -98,7 +98,7 @@ internal static class AdaptationValidator
 
             if (TryGetDirectSourcePath(assignment.Expression, mapping.SemanticModel, mapping.Parameters[0], out var path) &&
                 TryResolveReadablePath(adaptation.SourceType, path, out var sourceMember) &&
-                !IsImplicitlyConvertible(mapping.SemanticModel.Compilation, GetMemberType(sourceMember), GetMemberType(destinationMember)))
+                !IsImplicitlyConvertible(mapping.SemanticModel.Compilation, GetMemberType(sourceMember!), GetMemberType(destinationMember)))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptIncompatibleType,

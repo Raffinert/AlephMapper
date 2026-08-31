@@ -368,10 +368,10 @@ public class UpdatableTests
 
     #endregion
 
-    #region Combined Expressive and Updatable Tests
+    #region Combined Projectable and Updatable Tests
 
     [Test]
-    public async Task Combined_Mapper_Expressive_Methods_Should_Work()
+    public async Task Combined_Mapper_Projectable_Methods_Should_Work()
     {
         // Arrange
         var fullNameExpression = EmployeeCombinedMapper.GetFullNameExpression();

@@ -34,7 +34,7 @@ public static class PhoneMapper
 
 public static partial class PersonMapper
 {
-    [Expressive]
+    [Projectable]
     public static Person ToEntity(PersonDto dto) => new()
     {
         ContactNumbers = dto.PhoneNumbers.Select(PhoneMapper.ToEntity).ToList()

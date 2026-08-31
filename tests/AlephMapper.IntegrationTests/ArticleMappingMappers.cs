@@ -2,7 +2,7 @@ namespace AlephMapper.IntegrationTests;
 
 public static partial class ArticleOrderMapper
 {
-    [Expressive]
+    [Projectable]
     public static ArticleOrderDto Map(ArticleOrder order) =>
         new(
             order.Id,

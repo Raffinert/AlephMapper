@@ -1,6 +1,6 @@
 namespace AlephMapper.IntegrationTests;
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class SimpleEmployeeMapper
 {
     // Basic property mapping
@@ -41,7 +41,7 @@ public static partial class SimpleEmployeeMapper
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class SimpleIgnoreMapper
 {
     public static string GetFullName(Employee employee) => 

@@ -18,12 +18,12 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
             AttributeSourceEmitter.AddAttributes(postInitializationContext);
         });
 
-        var expressiveMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
-            typeof(ExpressiveAttribute).FullName,
+        var projectableMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
+            typeof(ProjectableAttribute).FullName,
             MapperCandidate.IsAttributeTarget,
             static (attributeContext, cancellationToken) => MapperSourceOutput.Create(
                 attributeContext,
-                MapperAttributeKind.Expressive,
+                MapperAttributeKind.Projectable,
                 cancellationToken));
 
         var updatableMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
@@ -42,7 +42,7 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
                 MapperAttributeKind.Adapt,
                 cancellationToken));
 
-        RegisterMapperOutput(context, expressiveMappers, "Expressive");
+        RegisterMapperOutput(context, projectableMappers, "Projectable");
         RegisterMapperOutput(context, updatableMappers, "Updatable");
         RegisterMapperOutput(context, adaptableMappers, "Adapt");
     }

@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -37,7 +37,7 @@ public class SourceGeneratorTests
     public async Task MapperHelpersRemainCandidatesForInlining()
     {
         var tree = CSharpSyntaxTree.ParseText(
-            "using AlephMapper; public static partial class Mapper { [Expressive] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
+            "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
             _parseOptions);
         var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
 
@@ -51,7 +51,7 @@ public class SourceGeneratorTests
         const string configuration = """
             using AlephMapper;
             namespace Fixture;
-            [Expressive]
+            [Projectable]
             public static partial class Mapper { }
             """;
         const string mapping = """
@@ -93,7 +93,7 @@ public class SourceGeneratorTests
         var assembly = typeof(AlephSourceGenerator).Assembly;
         var typeNames = new[]
         {
-            "ExpressiveAttribute",
+            "ProjectableAttribute",
             "UpdatableAttribute",
             "AdaptAttribute",
             "NullConditionalRewrite",
@@ -107,6 +107,8 @@ public class SourceGeneratorTests
             await Assert.That(type).IsNotNull();
             await Assert.That(type!.IsPublic).IsFalse();
         }
+
+        await Assert.That(assembly.GetType("AlephMapper.ExpressiveAttribute")).IsNull();
     }
 
     [Test]
@@ -118,7 +120,7 @@ public class SourceGeneratorTests
             namespace ProjectA;
             public static partial class Mapper
             {
-                [Expressive]
+                [Projectable]
                 public static Target Map(Source source) => new() { Value = source.Value };
             }
             public sealed class Source { public int Value { get; set; } }
@@ -130,7 +132,7 @@ public class SourceGeneratorTests
             namespace ProjectB;
             public static partial class Mapper
             {
-                [Expressive]
+                [Projectable]
                 public static Target Map(Source source) => new() { Value = source.Value };
             }
             """;
@@ -166,9 +168,9 @@ public class SourceGeneratorTests
 
         await Assert.That(projectBDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(projectBOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ExpressiveAttribute")!.DeclaredAccessibility)
+        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ProjectableAttribute")!.DeclaredAccessibility)
             .IsEqualTo(Accessibility.Internal);
-        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ExpressiveAttribute")!.GetAttributes()
+        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ProjectableAttribute")!.GetAttributes()
             .Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Microsoft.CodeAnalysis.EmbeddedAttribute"))
             .IsTrue();
     }
@@ -181,7 +183,7 @@ public class SourceGeneratorTests
             namespace Fixture;
             public static partial class Mapper
             {
-                [Expressive]
+                [Projectable]
                 [Updatable]
                 [Adapt(typeof(AdaptedSource), typeof(AdaptedTarget), Name = "MapAdapted")]
                 public static Target Map(Source source) => new() { Value = source.Value };
@@ -217,7 +219,7 @@ public class SourceGeneratorTests
             namespace Fixture;
             public static partial class MapperA
             {
-                [Expressive]
+                [Projectable]
                 public static Target Map(Source source) => new() { Value = source.Value };
             }
             public sealed class Source { public int Value { get; set; } }
@@ -228,7 +230,7 @@ public class SourceGeneratorTests
             namespace Fixture;
             public static partial class MapperB
             {
-                [Expressive]
+                [Projectable]
                 public static Target Map(Source source) => new() { Value = source.Value };
             }
             """;
@@ -251,7 +253,7 @@ public class SourceGeneratorTests
         driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
 
         var trackedSteps = driver.GetRunResult().Results.Single().TrackedSteps;
-        var candidateOutputs = trackedSteps["AlephMapper.ExpressiveGenerationResult"]
+        var candidateOutputs = trackedSteps["AlephMapper.ProjectableGenerationResult"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 
@@ -272,7 +274,7 @@ public class SourceGeneratorTests
         for (var index = 0; index < 10; index++)
         {
             source.Append("public static partial class Mapper").Append(index)
-                .Append(" { [Expressive] public static Target Map(Source source) => new() { Value = source.Value }; }");
+                .Append(" { [Projectable] public static Target Map(Source source) => new() { Value = source.Value }; }");
         }
 
         var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
@@ -287,7 +289,7 @@ public class SourceGeneratorTests
         stopwatch.Stop();
 
         var result = driver.GetRunResult().Results.Single();
-        var candidateOutputs = result.TrackedSteps["AlephMapper.ExpressiveGenerationResult"]
+        var candidateOutputs = result.TrackedSteps["AlephMapper.ProjectableGenerationResult"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 
@@ -865,13 +867,13 @@ public class SourceGeneratorTests
 
             public static partial class Criteria
             {
-                [Expressive]
+                [Projectable]
                 public static bool HasCategoryLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
                     line.Invoice.DataSetId == dataSetId &&
                     line.Invoice.InvoiceIdReference == invoiceId &&
                     line.CategoryId != null;
 
-                [Expressive]
+                [Projectable]
                 public static bool HasCategoryLineSingleLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
                     line.Invoice.DataSetId == dataSetId && line.Invoice.InvoiceIdReference == invoiceId && line.CategoryId != null;
             }
@@ -908,19 +910,19 @@ public class SourceGeneratorTests
 
             public static partial class Mapper
             {
-                [Expressive]
+                [Projectable]
                 public static string SingleConditional(bool condition) => condition ? "yes" : "no";
 
-                [Expressive]
+                [Projectable]
                 public static string MultilineConditional(bool condition) =>
                     condition
                         ? "yes"
                         : "no";
 
-                [Expressive]
+                [Projectable]
                 public static string SingleSwitch(int value) => value switch { 1 => "one", _ => "other" };
 
-                [Expressive]
+                [Projectable]
                 public static string MultilineSwitch(int value) =>
                     value switch
                     {
@@ -1025,7 +1027,7 @@ public class SourceGeneratorTests
 
             public static partial class Mapper
             {
-                [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
                 public static AddressDto? Map(Address source) =>
                     source.GetNested()?.ToDto();
             }
@@ -1073,7 +1075,7 @@ public class SourceGeneratorTests
 
             public static partial class Mapper
             {
-                [Expressive(NullConditionalRewrite = NullConditionalRewrite.None)]
+                [Projectable(NullConditionalRewrite = NullConditionalRewrite.None)]
                 public static AddressDto? Map(Address? source) =>
                     source?.ToDto();
             }

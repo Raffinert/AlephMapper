@@ -1,4 +1,4 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 internal class TestModel1
 {
@@ -42,7 +42,7 @@ internal class AddressLineDto
 
 }
 
-[Expressive]
+[Projectable]
 internal static partial class TestModel1Mapper
 {
     [Updatable]
@@ -55,7 +55,7 @@ internal static partial class TestModel1Mapper
         };
 }
 
-[Expressive]
+[Projectable]
 internal static partial class Address1Mapper
 {
     public static Address1Dto MapToDto(Address1 sourceAddress)
@@ -66,7 +66,7 @@ internal static partial class Address1Mapper
         };
 }
 
-[Expressive]
+[Projectable]
 internal static partial class AddressLineMapper
 {
     public static AddressLineDto? MapToDto(AddressLine? sourceAddressLine1)

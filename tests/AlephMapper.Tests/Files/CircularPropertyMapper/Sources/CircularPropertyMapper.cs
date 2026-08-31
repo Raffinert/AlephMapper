@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 
 namespace AlephMapper.Tests;
 
-[Expressive]
+[Projectable]
 internal static partial class CircularPropertyMapper
 {
     [Updatable]

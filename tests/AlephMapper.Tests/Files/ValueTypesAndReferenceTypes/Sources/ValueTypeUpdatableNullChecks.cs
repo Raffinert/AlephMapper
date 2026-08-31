@@ -17,7 +17,7 @@ internal class ValueTypeOnlyDestination
     public decimal DecimalProperty { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class ValueTypeOnlyMapper
 {
     [Updatable]
@@ -49,7 +49,7 @@ internal class SimpleReferenceObject
     public string Name { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class ReferenceTypeOnlyMapper
 {
     [Updatable]
@@ -79,7 +79,7 @@ internal class NullableValueTypeDestination
     public DateTime? NullableDateTimeProperty { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class NullableValueTypeMapper
 {
     [Updatable]
