@@ -899,6 +899,49 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task ExpressionOutputPreservesConditionalLayoutIncludingLoweredSwitches()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Expressive]
+                public static string SingleConditional(bool condition) => condition ? "yes" : "no";
+
+                [Expressive]
+                public static string MultilineConditional(bool condition) =>
+                    condition
+                        ? "yes"
+                        : "no";
+
+                [Expressive]
+                public static string SingleSwitch(int value) => value switch { 1 => "one", _ => "other" };
+
+                [Expressive]
+                public static string MultilineSwitch(int value) =>
+                    value switch
+                    {
+                        1 => "one",
+                        _ => "other"
+                    };
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "ConditionalExpressionFormatting");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("SingleConditionalExpression"));
+
+        await Assert.That(generatedSource).Contains("condition => condition ? \"yes\" : \"no\";");
+        await Assert.That(generatedSource).Contains(
+            $"condition => condition{Environment.NewLine}            ? \"yes\"{Environment.NewLine}            : \"no\";");
+        await Assert.That(generatedSource).Contains("value => value == 1 ? \"one\" : \"other\";");
+        await Assert.That(generatedSource).Contains(
+            $"value => value == 1{Environment.NewLine}            ? \"one\"{Environment.NewLine}            : \"other\";");
+    }
+
+    [Test]
     public async Task AdaptReportsIncompatibleDirectMemberAssignment()
     {
         const string source = """

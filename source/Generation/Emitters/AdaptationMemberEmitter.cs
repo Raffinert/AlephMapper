@@ -54,7 +54,9 @@ internal static class AdaptationMemberEmitter
             }
 
             var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, adaptation.NullStrategy);
-            var inlinedBody = (ExpressionSyntax)inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
+            var inlinedBody = ((ExpressionSyntax)inliner.Visit(mapping.BodySyntax.Expression)!)
+                .WithoutLeadingTrivia()
+                .WithoutTrailingTrivia();
             context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
             if (inliner.CircularReferences.Any())
             {

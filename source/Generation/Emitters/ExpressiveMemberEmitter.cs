@@ -16,7 +16,9 @@ internal static class ExpressiveMemberEmitter
         }
 
         var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, mapping.NullStrategy);
-        var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
+        var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!
+            .WithoutLeadingTrivia()
+            .WithoutTrailingTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
 
         if (inliner.CircularReferences.Any())
