@@ -21,7 +21,7 @@ internal static class ExpressiveMemberEmitter
 
         if (inliner.CircularReferences.Any())
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.ExpressiveCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
@@ -30,7 +30,7 @@ internal static class ExpressiveMemberEmitter
 
         if (inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsafeNullConditionalReceiver,
                 unsafeReceiver.Location,
                 mapping.MethodSymbol.Name,
@@ -40,7 +40,7 @@ internal static class ExpressiveMemberEmitter
 
         if (inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsupportedNullConditionalExpression,
                 unsupportedConditional.Location,
                 mapping.MethodSymbol.Name,

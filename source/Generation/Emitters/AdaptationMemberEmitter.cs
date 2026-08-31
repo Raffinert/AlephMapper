@@ -26,7 +26,7 @@ internal static class AdaptationMemberEmitter
             var generateUpdate = (adaptation.Generation & AdaptGeneration.Update) == AdaptGeneration.Update;
             if (generateExpression && string.IsNullOrWhiteSpace(adaptation.GeneratedName))
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptExpressionWithoutName,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name));
@@ -44,7 +44,7 @@ internal static class AdaptationMemberEmitter
             var pairSignature = MethodSignature.Build("", [sourceTypeName, destinationTypeName]);
             if (!adaptationPairs.Add(pairSignature))
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptDuplicatePair,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name,
@@ -58,7 +58,7 @@ internal static class AdaptationMemberEmitter
             context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
             if (inliner.CircularReferences.Any())
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptCircularHelper,
                     mapping.MethodSymbol.Locations.FirstOrDefault(),
                     mapping.MethodSymbol.Name));
@@ -68,7 +68,7 @@ internal static class AdaptationMemberEmitter
             if ((generateMap || generateExpression) &&
                 inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsafeNullConditionalReceiver,
                     unsafeReceiver.Location,
                     mapping.MethodSymbol.Name,
@@ -79,7 +79,7 @@ internal static class AdaptationMemberEmitter
             if (generateExpression &&
                 inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsupportedNullConditionalExpression,
                     unsupportedConditional.Location,
                     mapping.MethodSymbol.Name,
@@ -87,7 +87,7 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            if (!AdaptationValidator.Validate(context.SourceProductionContext, mapping, adaptation, inlinedBody))
+            if (!AdaptationValidator.Validate(context, mapping, adaptation, inlinedBody))
             {
                 continue;
             }
@@ -122,7 +122,7 @@ internal static class AdaptationMemberEmitter
                 out var conflict);
             if (generatedConflict || plannerConflict)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptNameConflict,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name,
@@ -153,7 +153,7 @@ internal static class AdaptationMemberEmitter
             {
                 if (adaptation.DestinationType.IsValueType && !SymbolHelpers.CanBeNull(adaptation.DestinationType))
                 {
-                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.UpdatableValueTypeReturn,
                         GetLocation(mapping, adaptation),
                         adaptationName,
@@ -166,7 +166,7 @@ internal static class AdaptationMemberEmitter
                 context.AddUsings(updateInliner.UsingDirectives.Concat(mapping.UsingDirectives));
                 if (updateInliner.CircularReferences.Any())
                 {
-                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.UpdatableCircularReferences,
                         GetLocation(mapping, adaptation),
                         adaptationName));

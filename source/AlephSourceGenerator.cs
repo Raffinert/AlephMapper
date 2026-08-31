@@ -21,7 +21,7 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         var expressiveMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
             typeof(ExpressiveAttribute).FullName,
             MapperCandidate.IsAttributeTarget,
-            static (attributeContext, cancellationToken) => MapperCandidate.Create(
+            static (attributeContext, cancellationToken) => MapperSourceOutput.Create(
                 attributeContext,
                 MapperAttributeKind.Expressive,
                 cancellationToken));
@@ -29,7 +29,7 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         var updatableMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
             typeof(UpdatableAttribute).FullName,
             MapperCandidate.IsAttributeTarget,
-            static (attributeContext, cancellationToken) => MapperCandidate.Create(
+            static (attributeContext, cancellationToken) => MapperSourceOutput.Create(
                 attributeContext,
                 MapperAttributeKind.Updatable,
                 cancellationToken));
@@ -37,7 +37,7 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         var adaptableMappers = context.SyntaxProvider.ForAttributeWithMetadataName(
             typeof(AdaptAttribute).FullName,
             MapperCandidate.IsAttributeTarget,
-            static (attributeContext, cancellationToken) => MapperCandidate.Create(
+            static (attributeContext, cancellationToken) => MapperSourceOutput.Create(
                 attributeContext,
                 MapperAttributeKind.Adapt,
                 cancellationToken));
@@ -49,14 +49,13 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
 
     private static void RegisterMapperOutput(
         IncrementalGeneratorInitializationContext context,
-        IncrementalValuesProvider<MapperCandidate> mapperCandidates,
+        IncrementalValuesProvider<MapperGenerationResult> mapperResults,
         string configurationKind)
     {
         context.RegisterSourceOutput(
-            mapperCandidates
+            mapperResults
                 .WithTrackingName($"AlephMapper.{configurationKind}Candidates")
-                .Combine(context.CompilationProvider)
-                .WithTrackingName($"AlephMapper.{configurationKind}GenerationInput"),
-            MapperSourceOutput.Generate);
+                .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult"),
+            MapperSourceOutput.Emit);
     }
 }

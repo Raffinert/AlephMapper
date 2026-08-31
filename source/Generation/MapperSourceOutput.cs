@@ -16,35 +16,42 @@ namespace AlephMapper.Generation;
 
 internal static class MapperSourceOutput
 {
-    public static void Generate(
-        SourceProductionContext context,
-        (MapperCandidate Left, Compilation Right) input)
+    public static MapperGenerationResult Create(
+        GeneratorAttributeSyntaxContext attributeContext,
+        MapperAttributeKind attributeKind,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var mapperDeclaration = FindMapperDeclaration(input.Right, input.Left, context.CancellationToken);
-            if (mapperDeclaration is null)
+            var mapperDeclaration = attributeContext.TargetNode switch
             {
-                return;
+                ClassDeclarationSyntax classDeclaration => classDeclaration,
+                MethodDeclarationSyntax { Parent: ClassDeclarationSyntax classDeclaration } => classDeclaration,
+                _ => null
+            };
+            var mapperType = attributeContext.TargetSymbol switch
+            {
+                INamedTypeSymbol classSymbol => classSymbol,
+                IMethodSymbol methodSymbol => methodSymbol.ContainingType,
+                _ => null
+            };
+            if (mapperDeclaration is null || mapperType is null)
+            {
+                return MapperGenerationResult.Empty;
             }
 
-            var mapperSemanticModel = input.Right.GetSemanticModel(mapperDeclaration.SyntaxTree);
-            var mapperType = mapperSemanticModel.GetDeclaredSymbol(mapperDeclaration, context.CancellationToken) as INamedTypeSymbol;
-            if (mapperType is null)
+            var compilation = attributeContext.SemanticModel.Compilation;
+            var candidate = MapperCandidate.Create(attributeContext, attributeKind, cancellationToken);
+            if (!IsPrimaryMapperCandidate(compilation, mapperType, candidate, cancellationToken))
             {
-                return;
+                return MapperGenerationResult.Empty;
             }
 
-            if (!IsPrimaryMapperCandidate(input.Right, mapperType, input.Left, context.CancellationToken))
-            {
-                return;
-            }
-
-            var mappings = CreateMapperAnalyses(input.Right, mapperType, context.CancellationToken);
+            var mappings = CreateMapperAnalyses(compilation, mapperType, cancellationToken);
             if (mappings.Count == 0 || !mappings.Any(static mapping =>
                     (mapping.IsExpressive || mapping.IsUpdatable || mapping.Adaptations.Count > 0) && mapping.IsClassPartial))
             {
-                return;
+                return MapperGenerationResult.Empty;
             }
 
             var mappingsByMethod = new Dictionary<IMethodSymbol, MappingAnalysis>(SymbolHelpers.MethodComparer.Instance);
@@ -55,15 +62,31 @@ internal static class MapperSourceOutput
 
             var catalog = new MappingCatalog(
                 mappingsByMethod,
-                method => CreateExternalAnalysis(input.Right, method, context.CancellationToken));
-            GenerateMapper(context, mapperType, mappings, catalog);
+                method => CreateExternalAnalysis(compilation, method, cancellationToken));
+            return GenerateMapper(mapperType, mappings, catalog);
         }
         catch (Exception exception)
         {
-            CrashDiagnosticsReporter.Report(context, exception);
+            return new MapperGenerationResult(
+                null,
+                null,
+                [CrashDiagnosticsReporter.CreateDiagnostic(exception)]);
 #if DEBUG
             throw;
 #endif
+        }
+    }
+
+    public static void Emit(SourceProductionContext context, MapperGenerationResult result)
+    {
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+
+        if (result.HintName is not null && result.Source is not null)
+        {
+            context.AddSource(result.HintName, result.Source);
         }
     }
 
@@ -241,13 +264,12 @@ internal static class MapperSourceOutput
             attributeKind);
     }
 
-    private static void GenerateMapper(
-        SourceProductionContext sourceProductionContext,
+    private static MapperGenerationResult GenerateMapper(
         INamedTypeSymbol mapperType,
         IReadOnlyList<MappingAnalysis> mappings,
         MappingCatalog catalog)
     {
-        var context = new MapperGenerationContext(mapperType, catalog, sourceProductionContext);
+        var context = new MapperGenerationContext(mapperType, catalog);
         foreach (var mapping in mappings)
         {
             if (!mapping.IsExpressive && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
@@ -262,6 +284,6 @@ internal static class MapperSourceOutput
         }
 
         var generatedFile = MapperFileEmitter.Render(context);
-        sourceProductionContext.AddSource(generatedFile.HintName, generatedFile.Source);
+        return new MapperGenerationResult(generatedFile.HintName, generatedFile.Source, context.GetDiagnostics());
     }
 }

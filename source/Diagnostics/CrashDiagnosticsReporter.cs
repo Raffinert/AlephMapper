@@ -1,4 +1,5 @@
 using System;
+using AlephMapper.Generation;
 using Microsoft.CodeAnalysis;
 
 namespace AlephMapper.Diagnostics;
@@ -21,6 +22,14 @@ internal static class CrashDiagnosticsReporter
                 FormatCrashDiagnostic(exception)
             )
         );
+    }
+
+    internal static GenerationDiagnostic CreateDiagnostic(Exception exception)
+    {
+        return Generation.GenerationDiagnostic.From(Diagnostic.Create(
+            DiagnosticDescriptors.GeneratorCrash,
+            Location.None,
+            FormatCrashDiagnostic(exception)));
     }
 
     private static string FormatCrashDiagnostic(Exception exception)

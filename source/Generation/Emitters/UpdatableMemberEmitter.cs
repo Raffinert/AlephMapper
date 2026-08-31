@@ -22,7 +22,7 @@ internal static class UpdatableMemberEmitter
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
         if (inliner.CircularReferences.Any())
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
@@ -31,7 +31,7 @@ internal static class UpdatableMemberEmitter
 
         if (mapping.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mapping.ReturnType))
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableValueTypeReturn,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name,

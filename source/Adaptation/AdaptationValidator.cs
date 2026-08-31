@@ -1,6 +1,7 @@
 #nullable enable
 
 using AlephMapper.Diagnostics;
+using AlephMapper.Generation;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -17,7 +18,7 @@ namespace AlephMapper.Adaptation;
 internal static class AdaptationValidator
 {
     public static bool Validate(
-        SourceProductionContext context,
+        MapperGenerationContext context,
         MappingAnalysis mapping,
         AdaptationAnalysis adaptation,
         ExpressionSyntax inlinedBody)

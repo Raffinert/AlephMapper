@@ -251,7 +251,7 @@ public class SourceGeneratorTests
         driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
 
         var trackedSteps = driver.GetRunResult().Results.Single().TrackedSteps;
-        var candidateOutputs = trackedSteps["AlephMapper.ExpressiveCandidates"]
+        var candidateOutputs = trackedSteps["AlephMapper.ExpressiveGenerationResult"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 
@@ -287,7 +287,7 @@ public class SourceGeneratorTests
         stopwatch.Stop();
 
         var result = driver.GetRunResult().Results.Single();
-        var candidateOutputs = result.TrackedSteps["AlephMapper.ExpressiveCandidates"]
+        var candidateOutputs = result.TrackedSteps["AlephMapper.ExpressiveGenerationResult"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 

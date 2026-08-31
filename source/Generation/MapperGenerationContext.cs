@@ -3,6 +3,7 @@ using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Text;
 
 namespace AlephMapper.Generation;
@@ -17,22 +18,24 @@ internal sealed class MapperGenerationContext
 
     public MapperGenerationContext(
         INamedTypeSymbol mapperType,
-        MappingCatalog mappingsByMethod,
-        SourceProductionContext sourceProductionContext)
+        MappingCatalog mappingsByMethod)
     {
         MapperType = mapperType;
         MappingsByMethod = mappingsByMethod;
-        SourceProductionContext = sourceProductionContext;
         AdaptationMembers = new AdaptationMemberPlanner(mapperType);
     }
 
     public INamedTypeSymbol MapperType { get; }
     public MappingCatalog MappingsByMethod { get; }
-    public SourceProductionContext SourceProductionContext { get; }
     public AdaptationMemberPlanner AdaptationMembers { get; }
     public HashSet<string> UsingDirectives { get; } = new(StringComparer.Ordinal);
     public HashSet<string> GeneratedMemberSignatures { get; } = new(StringComparer.Ordinal);
     public StringBuilder Members { get; } = new();
+    private List<GenerationDiagnostic> Diagnostics { get; } = new();
+
+    public ImmutableArray<GenerationDiagnostic> GetDiagnostics() => [.. Diagnostics];
+
+    public void ReportDiagnostic(Diagnostic diagnostic) => Diagnostics.Add(GenerationDiagnostic.From(diagnostic));
 
     public void AddUsings(IEnumerable<string> usingDirectives)
     {
