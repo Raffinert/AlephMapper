@@ -27,6 +27,6 @@ internal static class CrashDiagnosticsReporter
             return details;
         }
 
-        return $"{details.Substring(MaxCrashDiagnosticLength)}...";
+        return $"{details[..MaxCrashDiagnosticLength]}...";
     }
 }
