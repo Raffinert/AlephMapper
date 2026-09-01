@@ -82,7 +82,7 @@ internal static class MapperSourceOutput
 
     public static void EmitSource(
         SourceProductionContext context,
-        MapperGenerationResult result)
+        MapperSourceResult result)
     {
         if (result.HintName is not null && result.Source is not null)
         {

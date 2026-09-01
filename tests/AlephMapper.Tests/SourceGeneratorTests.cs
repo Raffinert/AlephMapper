@@ -455,8 +455,67 @@ public class SourceGeneratorTests
             .ToArray();
 
         await Assert.That(sourceOutputs).Count().IsEqualTo(2);
-        // Unchanged means the step reran but produced an equal value; it is not a cache hit.
-        await Assert.That(sourceOutputs.All(static output => output.Item2 == IncrementalStepRunReason.Unchanged)).IsTrue();
+        await Assert.That(sourceOutputs.All(static output =>
+            output.Item2 is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged)).IsTrue();
+    }
+
+    [Test]
+    public async Task SourceOutputRemainsUnchangedWhenOnlyDiagnosticLocationChanges()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource { string Name { get; } }
+            public interface IDestination { string Name { get; set; } }
+            public sealed class AdaptedSource : ISource { public string Name { get; set; } = string.Empty; }
+            public sealed class AdaptedDestination : IDestination { public string Name { get; set; } = string.Empty; }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new() { Name = source.Name };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, _parseOptions, "Mapper.cs");
+        var compilation = CSharpCompilation.Create(
+            "DiagnosticOnlyChange",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CreateTrackingDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var initialResult = driver.GetRunResult().Results.Single();
+        var generatedSource = initialResult.GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var initialDiagnostic = initialResult.Diagnostics.Single(static diagnostic => diagnostic.Id == "AM0018");
+        var updatedSyntaxTree = syntaxTree.WithChangedText(SourceText.From("\n" + source));
+        var updatedCompilation = compilation.ReplaceSyntaxTree(syntaxTree, updatedSyntaxTree);
+        driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
+
+        var result = driver.GetRunResult().Results.Single();
+        var updatedGeneratedSource = result.GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var sourceOutputs = result.TrackedSteps["AlephMapper.ProjectableSourceOutput"]
+            .SelectMany(static step => step.Outputs)
+            .ToArray();
+        var diagnostic = result.Diagnostics.Single(static diagnostic => diagnostic.Id == "AM0018");
+
+        await Assert.That(updatedGeneratedSource).IsEqualTo(generatedSource);
+        await Assert.That(diagnostic.Location.GetLineSpan().StartLinePosition.Line)
+            .IsEqualTo(initialDiagnostic.Location.GetLineSpan().StartLinePosition.Line + 1);
+        await Assert.That(sourceOutputs).Count().IsEqualTo(1);
+        await Assert.That(sourceOutputs.Single().Item2).IsEqualTo(IncrementalStepRunReason.Unchanged);
     }
 
     [Test]

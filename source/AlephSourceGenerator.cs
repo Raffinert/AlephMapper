@@ -55,8 +55,12 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         var results = mapperResults
             .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult");
 
+        var sources = results
+            .Select(static (result, _) => new MapperSourceResult(result.HintName, result.Source))
+            .WithTrackingName($"AlephMapper.{configurationKind}SourceOutput");
+
         context.RegisterSourceOutput(
-            results.WithTrackingName($"AlephMapper.{configurationKind}SourceOutput"),
+            sources,
             MapperSourceOutput.EmitSource);
 
         context.RegisterSourceOutput(
