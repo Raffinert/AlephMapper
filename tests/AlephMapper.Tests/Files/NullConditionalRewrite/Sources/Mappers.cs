@@ -1,5 +1,3 @@
-using System.CodeDom.Compiler;
-
 namespace AlephMapper.Tests;
 
 // Test mapper with Ignore policy (now default, but being explicit)

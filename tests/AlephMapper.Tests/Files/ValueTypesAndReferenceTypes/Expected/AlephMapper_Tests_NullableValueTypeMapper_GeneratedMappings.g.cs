@@ -2,25 +2,24 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class NullableValueTypeMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDestination(NullableValueTypeSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDestination(global::AlephMapper.Tests.NullableValueTypeSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<NullableValueTypeSource, NullableValueTypeDestination>> MapToDestinationExpression() => 
-        source => new NullableValueTypeDestination
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.NullableValueTypeSource, global::AlephMapper.Tests.NullableValueTypeDestination>> MapToDestinationExpression() =>
+        source => new global::AlephMapper.Tests.NullableValueTypeDestination
         {
             NullableIntProperty = source.NullableIntProperty,
             NullableBoolProperty = source.NullableBoolProperty,
@@ -28,16 +27,16 @@ partial class NullableValueTypeMapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="MapToDestination(NullableValueTypeSource)"/>.
+    /// This is an auto-generated update method for <see cref="MapToDestination(global::AlephMapper.Tests.NullableValueTypeSource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static NullableValueTypeDestination MapToDestination(NullableValueTypeSource source, NullableValueTypeDestination dest)
+    public static global::AlephMapper.Tests.NullableValueTypeDestination MapToDestination(global::AlephMapper.Tests.NullableValueTypeSource source, global::AlephMapper.Tests.NullableValueTypeDestination dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new NullableValueTypeDestination();
+            dest = new global::AlephMapper.Tests.NullableValueTypeDestination();
         dest.NullableIntProperty = source.NullableIntProperty;
         dest.NullableBoolProperty = source.NullableBoolProperty;
         dest.NullableDateTimeProperty = source.NullableDateTimeProperty;

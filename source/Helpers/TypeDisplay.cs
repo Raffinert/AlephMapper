@@ -9,13 +9,13 @@ namespace AlephMapper.Helpers;
 internal static class TypeDisplay
 {
     private static readonly SymbolDisplayFormat NullableFormat =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     private static readonly SymbolDisplayFormat NonNullableFormat =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
@@ -29,11 +29,13 @@ internal static class TypeDisplay
             or NullableContext.AnnotationsContextInherited;
 
         var format = annotationsEnabled ? NullableFormat : NonNullableFormat;
-        var display = symbol.ToDisplayString(format);
-
         var effectiveAnnotation = annotationOverride != NullableAnnotation.None
             ? annotationOverride
             : symbol.NullableAnnotation;
+        var displaySymbol = annotationOverride != NullableAnnotation.None
+            ? symbol.WithNullableAnnotation(annotationOverride)
+            : symbol;
+        var display = displaySymbol.ToDisplayString(format);
 
         if (annotationsEnabled &&
             effectiveAnnotation == NullableAnnotation.Annotated &&

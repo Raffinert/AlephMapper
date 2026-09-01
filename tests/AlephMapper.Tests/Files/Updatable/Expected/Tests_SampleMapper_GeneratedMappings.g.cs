@@ -3,26 +3,25 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class SampleMapper
 {
     /// <summary>
-    /// This is an auto-generated update method for <see cref="Map(Source)"/>.
+    /// This is an auto-generated update method for <see cref="Map(global::Tests.Source)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static Destination Map(Source source, Destination dest)
+    public static global::Tests.Destination Map(global::Tests.Source source, global::Tests.Destination dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new Destination();
+            dest = new global::Tests.Destination();
         dest.Name = source.Name;
         dest.Age = source.Age;
         return dest;

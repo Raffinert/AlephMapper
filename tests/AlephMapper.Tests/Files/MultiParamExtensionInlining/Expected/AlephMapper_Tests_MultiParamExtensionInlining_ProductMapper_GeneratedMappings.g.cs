@@ -3,25 +3,24 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParamExtensionInlining;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ProductMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ToDto(Product)"/>.
+    /// This is an auto-generated expression companion for <see cref="ToDto(global::AlephMapper.Tests.MultiParamExtensionInlining.Product)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Product, ProductDto>> ToDtoExpression() => 
-        product => new ProductDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.MultiParamExtensionInlining.Product, global::AlephMapper.Tests.MultiParamExtensionInlining.ProductDto>> ToDtoExpression() =>
+        product => new global::AlephMapper.Tests.MultiParamExtensionInlining.ProductDto
         {
             Label = product.Name,
             PriceTag = "$" + product.Price,

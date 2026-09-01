@@ -3,25 +3,24 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParameterInlining;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class MultiParamProjectableMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="Map(Person, int)"/>.
+    /// This is an auto-generated expression companion for <see cref="Map(global::AlephMapper.Tests.MultiParameterInlining.Person, int)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, PersonDto>> MapExpression(int currentYear) => 
-        person => new PersonDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.MultiParameterInlining.Person, global::AlephMapper.Tests.MultiParameterInlining.PersonDto>> MapExpression(int currentYear) =>
+        person => new global::AlephMapper.Tests.MultiParameterInlining.PersonDto
         {
             FullName = person.First + " " + person.Last,
             BirthYear = currentYear - person.Age

@@ -3,25 +3,24 @@
 
 using AgileObjects.ReadableExpressions;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ExtensionTestAddressMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ToDto(ExtensionTestAddress)"/>.
+    /// This is an auto-generated expression companion for <see cref="ToDto(global::AlephMapper.Tests.ExtensionTestAddress)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<ExtensionTestAddress, ExtensionTestAddressDto>> ToDtoExpression() => 
-        address => new ExtensionTestAddressDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.ExtensionTestAddress, global::AlephMapper.Tests.ExtensionTestAddressDto>> ToDtoExpression() =>
+        address => new global::AlephMapper.Tests.ExtensionTestAddressDto
         {
             Street = address.Street,
             City = address.City,

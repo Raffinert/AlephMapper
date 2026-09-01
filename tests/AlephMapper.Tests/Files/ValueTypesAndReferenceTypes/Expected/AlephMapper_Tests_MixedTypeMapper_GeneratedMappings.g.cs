@@ -2,26 +2,25 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 using TUnit.Core;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class MixedTypeMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDestination(MixedTypeSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDestination(global::AlephMapper.Tests.MixedTypeSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<MixedTypeSource, MixedTypeDestination>> MapToDestinationExpression() => 
-        source => new MixedTypeDestination
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.MixedTypeSource, global::AlephMapper.Tests.MixedTypeDestination>> MapToDestinationExpression() =>
+        source => new global::AlephMapper.Tests.MixedTypeDestination
         {
             IntValue = source.IntValue,
             StringValue = source.StringValue,
@@ -30,7 +29,7 @@ partial class MixedTypeMapper
             DateTimeValue = source.DateTimeValue,
             NullableIntValue = source.NullableIntValue,
             ReferenceObject = source.ReferenceObject != null
-                ? new TestObject
+                ? new global::AlephMapper.Tests.TestObject
                 {
                     Name = source.ReferenceObject.Name,
                     Value = source.ReferenceObject.Value
@@ -39,16 +38,16 @@ partial class MixedTypeMapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="MapToDestination(MixedTypeSource)"/>.
+    /// This is an auto-generated update method for <see cref="MapToDestination(global::AlephMapper.Tests.MixedTypeSource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static MixedTypeDestination MapToDestination(MixedTypeSource source, MixedTypeDestination dest)
+    public static global::AlephMapper.Tests.MixedTypeDestination MapToDestination(global::AlephMapper.Tests.MixedTypeSource source, global::AlephMapper.Tests.MixedTypeDestination dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new MixedTypeDestination();
+            dest = new global::AlephMapper.Tests.MixedTypeDestination();
         dest.IntValue = source.IntValue;
         dest.StringValue = source.StringValue;
         dest.BoolValue = source.BoolValue;
@@ -58,7 +57,7 @@ partial class MixedTypeMapper
         if (source.ReferenceObject != null)
         {
             if (dest.ReferenceObject == null)
-                dest.ReferenceObject = new TestObject();
+                dest.ReferenceObject = new global::AlephMapper.Tests.TestObject();
             dest.ReferenceObject.Name = source.ReferenceObject.Name;
             dest.ReferenceObject.Value = source.ReferenceObject.Value;
         }

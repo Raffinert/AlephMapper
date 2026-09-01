@@ -235,58 +235,36 @@ internal sealed partial class InliningResolver
         }
 
         // Ultimate fallback - create a generic empty list with string type for common scenarios
-        return ObjectCreationExpression(
-            GenericName(Identifier("List"))
-                .WithTypeArgumentList(
-                    TypeArgumentList(
-                        SingletonSeparatedList<TypeSyntax>(
-                            PredefinedType(Token(SyntaxKind.StringKeyword))
-                        )
-                    )
-                ).WithLeadingTrivia(Space)
-        ).WithArgumentList(ArgumentList())
-        .WithLeadingTrivia(originalExpression.GetLeadingTrivia())
-        .WithTrailingTrivia(originalExpression.GetTrailingTrivia());
+        return ParseExpression("new global::System.Collections.Generic.List<string>()")
+            .WithLeadingTrivia(originalExpression.GetLeadingTrivia())
+            .WithTrailingTrivia(originalExpression.GetTrailingTrivia());
     }
 
     private static ExpressionSyntax CreateListConstructor(ITypeSymbol elementType)
     {
-        var elementTypeSyntax = IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
-
-        return ObjectCreationExpression(
-            GenericName(Identifier("List"))
-                .WithTypeArgumentList(
-                    TypeArgumentList(
-                        SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
-                    )
-                )
-                .WithLeadingTrivia(Space)
-        ).WithArgumentList(ArgumentList())
-         .WithNewKeyword(Token(SyntaxKind.NewKeyword).WithTrailingTrivia(Space));
+        var elementTypeName = TypeDisplay.ForSymbol(
+            elementType,
+            elementType.NullableAnnotation,
+            NullableContext.Enabled);
+        return ParseExpression($"new global::System.Collections.Generic.List<{elementTypeName}>()");
     }
 
     private static ExpressionSyntax CreateArrayExpression(ITypeSymbol elementType)
     {
         // Create Array.Empty<T>() for better performance
-        var elementTypeSyntax = IdentifierName(elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
-
-        return InvocationExpression(
-            MemberAccessExpression(
-                SyntaxKind.SimpleMemberAccessExpression,
-                IdentifierName("Array"),
-                GenericName(Identifier("Empty"))
-                    .WithTypeArgumentList(
-                        TypeArgumentList(
-                            SingletonSeparatedList<TypeSyntax>(elementTypeSyntax)
-                        )
-                    )
-            )
-        ).WithArgumentList(ArgumentList());
+        var elementTypeName = TypeDisplay.ForSymbol(
+            elementType,
+            elementType.NullableAnnotation,
+            NullableContext.Enabled);
+        return ParseExpression($"global::System.Array.Empty<{elementTypeName}>()");
     }
 
     private static ExpressionSyntax CreateGenericConstructor(INamedTypeSymbol namedType)
     {
-        var typeSyntax = IdentifierName(namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        var typeSyntax = ParseTypeName(TypeDisplay.ForSymbol(
+            namedType,
+            NullableAnnotation.NotAnnotated,
+            NullableContext.Enabled));
 
         return ObjectCreationExpression(typeSyntax.WithLeadingTrivia(Space))
             .WithArgumentList(ArgumentList());

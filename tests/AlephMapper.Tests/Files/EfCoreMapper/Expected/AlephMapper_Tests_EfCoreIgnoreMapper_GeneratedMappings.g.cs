@@ -2,56 +2,55 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class EfCoreIgnoreMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetPersonName(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetPersonName(global::AlephMapper.Tests.Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, string>> GetPersonNameExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.Person, string>> GetPersonNameExpression() =>
         person => person.Name;
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetPersonEmail(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetPersonEmail(global::AlephMapper.Tests.Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, string>> GetPersonEmailExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.Person, string>> GetPersonEmailExpression() =>
         person => person.Email;
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetPersonAge(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetPersonAge(global::AlephMapper.Tests.Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, int?>> GetPersonAgeExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.Person, int?>> GetPersonAgeExpression() =>
         person => person.BirthInfo.Age;
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetBirthPlace(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetBirthPlace(global::AlephMapper.Tests.Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, string>> GetBirthPlaceExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.Person, string>> GetBirthPlaceExpression() =>
         person => person.BirthInfo.BirthPlace ?? "Unknown";
 }

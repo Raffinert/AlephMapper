@@ -3,23 +3,22 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class SampleMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ProjectName(SampleSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="ProjectName(global::Tests.SampleSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SampleSource, string>> ProjectNameExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::Tests.SampleSource, string>> ProjectNameExpression() =>
         source => source.Name;
 }

@@ -2,30 +2,29 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ComplexPropertyMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="Map(ComplexPropertyTestSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="Map(global::AlephMapper.Tests.ComplexPropertyTestSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<ComplexPropertyTestSource, ComplexPropertyTestDestination>> MapExpression() => 
-        source => new ComplexPropertyTestDestination
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.ComplexPropertyTestSource, global::AlephMapper.Tests.ComplexPropertyTestDestination>> MapExpression() =>
+        source => new global::AlephMapper.Tests.ComplexPropertyTestDestination
         {
-            NestedClass = new NestedReferenceType
+            NestedClass = new global::AlephMapper.Tests.NestedReferenceType
             {
                 InnerValue = source.NestedStruct.InnerValue,
-                InnerClass = new DeeplyNestedReferenceType
+                InnerClass = new global::AlephMapper.Tests.DeeplyNestedReferenceType
                 {
                     DeepValue = source.NestedStruct.InnerStruct.DeepValue
                 }
@@ -33,20 +32,20 @@ partial class ComplexPropertyMapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="Map(ComplexPropertyTestSource)"/>.
+    /// This is an auto-generated update method for <see cref="Map(global::AlephMapper.Tests.ComplexPropertyTestSource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static ComplexPropertyTestDestination Map(ComplexPropertyTestSource source, ComplexPropertyTestDestination dest)
+    public static global::AlephMapper.Tests.ComplexPropertyTestDestination Map(global::AlephMapper.Tests.ComplexPropertyTestSource source, global::AlephMapper.Tests.ComplexPropertyTestDestination dest)
     {
         if (dest == null)
-            dest = new ComplexPropertyTestDestination();
+            dest = new global::AlephMapper.Tests.ComplexPropertyTestDestination();
         if (dest.NestedClass == null)
-            dest.NestedClass = new NestedReferenceType();
+            dest.NestedClass = new global::AlephMapper.Tests.NestedReferenceType();
         dest.NestedClass.InnerValue = source.NestedStruct.InnerValue;
         if (dest.NestedClass.InnerClass == null)
-            dest.NestedClass.InnerClass = new DeeplyNestedReferenceType();
+            dest.NestedClass.InnerClass = new global::AlephMapper.Tests.DeeplyNestedReferenceType();
         dest.NestedClass.InnerClass.DeepValue = source.NestedStruct.InnerStruct.DeepValue;
         return dest;
     }

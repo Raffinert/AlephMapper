@@ -2,31 +2,30 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class EdgeCaseMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="Map(EdgeCaseValueTypeSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="Map(global::AlephMapper.Tests.EdgeCaseValueTypeSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<EdgeCaseValueTypeSource, EdgeCaseReferenceTypeDestination>> MapExpression() => 
-        source => new EdgeCaseReferenceTypeDestination
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.EdgeCaseValueTypeSource, global::AlephMapper.Tests.EdgeCaseReferenceTypeDestination>> MapExpression() =>
+        source => new global::AlephMapper.Tests.EdgeCaseReferenceTypeDestination
         {
             SimpleValue = source.SimpleValue,
-            ComplexValue = new EdgeCaseReferenceTypeClass
+            ComplexValue = new global::AlephMapper.Tests.EdgeCaseReferenceTypeClass
             {
                 StructValue = source.ComplexValue.StructValue,
-                NestedClass = new NestedEdgeCaseClass
+                NestedClass = new global::AlephMapper.Tests.NestedEdgeCaseClass
                 {
                     Value = source.ComplexValue.NestedStruct.Value
                 }
@@ -34,21 +33,21 @@ partial class EdgeCaseMapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="Map(EdgeCaseValueTypeSource)"/>.
+    /// This is an auto-generated update method for <see cref="Map(global::AlephMapper.Tests.EdgeCaseValueTypeSource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static EdgeCaseReferenceTypeDestination Map(EdgeCaseValueTypeSource source, EdgeCaseReferenceTypeDestination dest)
+    public static global::AlephMapper.Tests.EdgeCaseReferenceTypeDestination Map(global::AlephMapper.Tests.EdgeCaseValueTypeSource source, global::AlephMapper.Tests.EdgeCaseReferenceTypeDestination dest)
     {
         if (dest == null)
-            dest = new EdgeCaseReferenceTypeDestination();
+            dest = new global::AlephMapper.Tests.EdgeCaseReferenceTypeDestination();
         dest.SimpleValue = source.SimpleValue;
         if (dest.ComplexValue == null)
-            dest.ComplexValue = new EdgeCaseReferenceTypeClass();
+            dest.ComplexValue = new global::AlephMapper.Tests.EdgeCaseReferenceTypeClass();
         dest.ComplexValue.StructValue = source.ComplexValue.StructValue;
         if (dest.ComplexValue.NestedClass == null)
-            dest.ComplexValue.NestedClass = new NestedEdgeCaseClass();
+            dest.ComplexValue.NestedClass = new global::AlephMapper.Tests.NestedEdgeCaseClass();
         dest.ComplexValue.NestedClass.Value = source.ComplexValue.NestedStruct.Value;
         return dest;
     }

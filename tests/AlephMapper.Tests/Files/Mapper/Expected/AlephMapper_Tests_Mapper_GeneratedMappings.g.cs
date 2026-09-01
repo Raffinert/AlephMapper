@@ -2,73 +2,72 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class Mapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="BornInKyivAndOlder35(SourceDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="BornInKyivAndOlder35(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SourceDto, bool>> BornInKyivAndOlder35Expression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.SourceDto, bool>> BornInKyivAndOlder35Expression() =>
         source => source.BirthInfo.Address == "Kyiv" && Mapper1.Older35(source.BirthInfo) && source.BirthInfo.Age < 65;
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="BornInKyiv(BirthInfo)"/>.
+    /// This is an auto-generated expression companion for <see cref="BornInKyiv(global::AlephMapper.Tests.BirthInfo)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<BirthInfo, bool>> BornInKyivExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.BirthInfo, bool>> BornInKyivExpression() =>
         source => source.Address == "Kyiv";
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="Younger65(BirthInfo)"/>.
+    /// This is an auto-generated expression companion for <see cref="Younger65(global::AlephMapper.Tests.BirthInfo)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<BirthInfo, bool>> Younger65Expression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.BirthInfo, bool>> Younger65Expression() =>
         source => source.Age < 65;
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="LivesIn(BirthInfo)"/>.
+    /// This is an auto-generated expression companion for <see cref="LivesIn(global::AlephMapper.Tests.BirthInfo)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<BirthInfo, bool>> LivesInExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.BirthInfo, bool>> LivesInExpression() =>
         source => source.Address == "Kyiv";
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDestDto(SourceDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDestDto(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SourceDto, DestDto>> MapToDestDtoExpression() => 
-        source => new DestDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.SourceDto, global::AlephMapper.Tests.DestDto>> MapToDestDtoExpression() =>
+        source => new global::AlephMapper.Tests.DestDto
         {
             Name = source.Name,
             BirthInfo = source.BirthInfo != null
-                ? new BirthInfoDto
+                ? new global::AlephMapper.Tests.BirthInfoDto
                 {
                     Age = source.BirthInfo.Age,
                     Address = source.BirthInfo.Address
@@ -78,21 +77,21 @@ partial class Mapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="MapToDestDto(SourceDto)"/>.
+    /// This is an auto-generated update method for <see cref="MapToDestDto(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestDto MapToDestDto(SourceDto source, DestDto dest)
+    public static global::AlephMapper.Tests.DestDto MapToDestDto(global::AlephMapper.Tests.SourceDto source, global::AlephMapper.Tests.DestDto dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestDto();
+            dest = new global::AlephMapper.Tests.DestDto();
         dest.Name = source.Name;
         if (source.BirthInfo != null)
         {
             if (dest.BirthInfo == null)
-                dest.BirthInfo = new BirthInfoDto();
+                dest.BirthInfo = new global::AlephMapper.Tests.BirthInfoDto();
             dest.BirthInfo.Age = source.BirthInfo.Age;
             dest.BirthInfo.Address = source.BirthInfo.Address;
         }
@@ -105,20 +104,20 @@ partial class Mapper
     }
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDestDto1(SourceDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDestDto1(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SourceDto, DestDto>> MapToDestDto1Expression() => 
-        source => new DestDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.SourceDto, global::AlephMapper.Tests.DestDto>> MapToDestDto1Expression() =>
+        source => new global::AlephMapper.Tests.DestDto
         {
             Name = source.Name,
             BirthInfo = source.BirthInfo == null
                 ? null
-                : new BirthInfoDto
+                : new global::AlephMapper.Tests.BirthInfoDto
                 {
                     Age = source.BirthInfo.Age,
                     Address = source.BirthInfo.Address
@@ -127,16 +126,16 @@ partial class Mapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="MapToDestDto1(SourceDto)"/>.
+    /// This is an auto-generated update method for <see cref="MapToDestDto1(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestDto MapToDestDto1(SourceDto source, DestDto dest)
+    public static global::AlephMapper.Tests.DestDto MapToDestDto1(global::AlephMapper.Tests.SourceDto source, global::AlephMapper.Tests.DestDto dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestDto();
+            dest = new global::AlephMapper.Tests.DestDto();
         dest.Name = source.Name;
         if (source.BirthInfo == null)
         {
@@ -145,7 +144,7 @@ partial class Mapper
         else
         {
             if (dest.BirthInfo == null)
-                dest.BirthInfo = new BirthInfoDto();
+                dest.BirthInfo = new global::AlephMapper.Tests.BirthInfoDto();
             dest.BirthInfo.Age = source.BirthInfo.Age;
             dest.BirthInfo.Address = source.BirthInfo.Address;
         }
@@ -154,15 +153,15 @@ partial class Mapper
     }
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToBirthInfoDto(BirthInfo)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToBirthInfoDto(global::AlephMapper.Tests.BirthInfo)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<BirthInfo, BirthInfoDto>> MapToBirthInfoDtoExpression() => 
-        bi => new BirthInfoDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.BirthInfo, global::AlephMapper.Tests.BirthInfoDto>> MapToBirthInfoDtoExpression() =>
+        bi => new global::AlephMapper.Tests.BirthInfoDto
         {
             Age = bi.Age,
             Address = bi.Address

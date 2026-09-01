@@ -254,7 +254,7 @@ internal static class AdaptationMemberEmitter
             var expressionMethodParameters = string.IsNullOrEmpty(details.ExtraExpressionParameterListWithNames)
                 ? "()"
                 : "(" + details.ExtraExpressionParameterListWithNames + ")";
-            members.AppendLine("    public static Expression<Func<" + functionArguments + ">> " + expressionName + expressionMethodParameters + " => ");
+            members.AppendLine("    public static global::System.Linq.Expressions.Expression<global::System.Func<" + functionArguments + ">> " + expressionName + expressionMethodParameters + " =>");
             members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(adaptedBodyText + ";");
         });

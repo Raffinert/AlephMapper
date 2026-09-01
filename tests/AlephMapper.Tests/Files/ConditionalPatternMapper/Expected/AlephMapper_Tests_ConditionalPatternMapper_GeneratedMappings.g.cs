@@ -2,38 +2,37 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ConditionalPatternMapper
 {
     /// <summary>
-    /// This is an auto-generated update method for <see cref="BothSidesObjects(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="BothSidesObjects(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel BothSidesObjects(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel BothSidesObjects(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Value == null)
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = "Default";
             dest.Nested.Number = 0;
         }
         else
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Name;
             dest.Nested.Number = source.Value.Value;
         }
@@ -41,21 +40,21 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="ObjectThenNull(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="ObjectThenNull(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel ObjectThenNull(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel ObjectThenNull(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Name != null)
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Name;
             dest.Nested.Number = 42;
         }
@@ -67,16 +66,16 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="NullThenObject(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="NullThenObject(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel NullThenObject(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel NullThenObject(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Name == null)
         {
@@ -85,7 +84,7 @@ partial class ConditionalPatternMapper
         else
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Name;
             dest.Nested.Number = 42;
         }
@@ -93,28 +92,28 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="NestedBothSides(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="NestedBothSides(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel NestedBothSides(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel NestedBothSides(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Nested?.Content == null)
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = "Fallback";
             dest.Nested.Number = -1;
         }
         else
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Nested.Content;
             dest.Nested.Number = source.Nested.Number;
         }
@@ -122,51 +121,51 @@ partial class ConditionalPatternMapper
     }
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="ObjectThenThrow(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="ObjectThenThrow(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel ObjectThenThrow(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel ObjectThenThrow(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Name != null)
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Name;
             dest.Nested.Number = 42;
         }
         else
         {
-            throw new ArgumentNullException(nameof(source.Name));
+            throw new global::System.ArgumentNullException(nameof(source.Name));
         }
         return dest;
     }
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="ThrowThenObject(SourceModel)"/>.
+    /// This is an auto-generated update method for <see cref="ThrowThenObject(global::AlephMapper.Tests.SourceModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static DestModel ThrowThenObject(SourceModel source, DestModel dest)
+    public static global::AlephMapper.Tests.DestModel ThrowThenObject(global::AlephMapper.Tests.SourceModel source, global::AlephMapper.Tests.DestModel dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new DestModel();
+            dest = new global::AlephMapper.Tests.DestModel();
         dest.Name = source.Name;
         if (source.Name == null)
         {
-            throw new ArgumentNullException(nameof(source.Name));
+            throw new global::System.ArgumentNullException(nameof(source.Name));
         }
         else
         {
             if (dest.Nested == null)
-                dest.Nested = new NestedDest();
+                dest.Nested = new global::AlephMapper.Tests.NestedDest();
             dest.Nested.Content = source.Name;
             dest.Nested.Number = 42;
         }

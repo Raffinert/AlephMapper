@@ -290,10 +290,12 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
 
     private static HashSet<string> GetTypeTextCandidates(ITypeSymbol type)
     {
+        var fullyQualifiedName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var candidates = new HashSet<string>(System.StringComparer.Ordinal)
         {
             type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-            type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)
+            fullyQualifiedName,
+            fullyQualifiedName.Replace("global::", string.Empty)
         };
 
         if (type is INamedTypeSymbol { TypeArguments.Length: 0 } namedType)
@@ -303,7 +305,8 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         }
 
         candidates.Add(type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) + "?");
-        candidates.Add(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty) + "?");
+        candidates.Add(fullyQualifiedName + "?");
+        candidates.Add(fullyQualifiedName.Replace("global::", string.Empty) + "?");
 
         return candidates;
     }

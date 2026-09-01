@@ -2,27 +2,26 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class AddressLineMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDto(AddressLine)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDto(global::AlephMapper.Tests.AddressLine)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<AddressLine, AddressLineDto>> MapToDtoExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.AddressLine, global::AlephMapper.Tests.AddressLineDto>> MapToDtoExpression() =>
         sourceAddressLine1 => sourceAddressLine1 == null
             ? null
-            : new AddressLineDto
+            : new global::AlephMapper.Tests.AddressLineDto
             {
                 Street = sourceAddressLine1.Street,
                 HouseNumber = sourceAddressLine1.HouseNumber

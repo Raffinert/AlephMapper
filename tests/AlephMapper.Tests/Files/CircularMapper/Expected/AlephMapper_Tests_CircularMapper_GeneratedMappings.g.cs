@@ -2,51 +2,50 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class CircularMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ProcessValue(CircularTestModel)"/>.
+    /// This is an auto-generated expression companion for <see cref="ProcessValue(global::AlephMapper.Tests.CircularTestModel)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<CircularTestModel, string>> ProcessValueExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.CircularTestModel, string>> ProcessValueExpression() =>
         source => source.Value.ToUpper() ?? "";
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="UpdateSimpleDto(CircularTestModel)"/>.
+    /// This is an auto-generated expression companion for <see cref="UpdateSimpleDto(global::AlephMapper.Tests.CircularTestModel)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<CircularTestModel, CircularDto>> UpdateSimpleDtoExpression() => 
-        source => new CircularDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.CircularTestModel, global::AlephMapper.Tests.CircularDto>> UpdateSimpleDtoExpression() =>
+        source => new global::AlephMapper.Tests.CircularDto
         {
             ProcessedValue = source.Value.ToUpper() ?? "" // Direct assignment without method call
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="UpdateSimpleDto(CircularTestModel)"/>.
+    /// This is an auto-generated update method for <see cref="UpdateSimpleDto(global::AlephMapper.Tests.CircularTestModel)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static CircularDto UpdateSimpleDto(CircularTestModel source, CircularDto dest)
+    public static global::AlephMapper.Tests.CircularDto UpdateSimpleDto(global::AlephMapper.Tests.CircularTestModel source, global::AlephMapper.Tests.CircularDto dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new CircularDto();
+            dest = new global::AlephMapper.Tests.CircularDto();
         dest.ProcessedValue = source?.Value?.ToUpper() ?? "";
         return dest;
     }

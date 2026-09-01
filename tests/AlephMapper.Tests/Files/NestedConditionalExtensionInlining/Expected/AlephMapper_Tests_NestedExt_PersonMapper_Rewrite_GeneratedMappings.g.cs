@@ -3,36 +3,35 @@
 
 using AgileObjects.ReadableExpressions;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class NestedExt_PersonMapper_Rewrite
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ToDto(NestedExt_Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="ToDto(global::AlephMapper.Tests.NestedExt_Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
     /// </para>
     /// </remarks>
-    public static Expression<Func<NestedExt_Person, NestedExt_PersonDto>> ToDtoExpression() => 
-        p => new NestedExt_PersonDto
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.NestedExt_Person, global::AlephMapper.Tests.NestedExt_PersonDto>> ToDtoExpression() =>
+        p => new global::AlephMapper.Tests.NestedExt_PersonDto
         {
             HomeAddress = (p != null
                 ? ((p.Friend != null
                     ? ((p.Friend.HomeAddress != null
-                        ? (new NestedExt_AddressDto
+                        ? (new global::AlephMapper.Tests.NestedExt_AddressDto
                         {
                             Street = p.Friend.HomeAddress.Street,
                             City = p.Friend.HomeAddress.City
                         })
-                        : (NestedExt_AddressDto?)null))
-                    : (NestedExt_AddressDto?)null))
-                : (NestedExt_AddressDto?)null)
+                        : (global::AlephMapper.Tests.NestedExt_AddressDto?)null))
+                    : (global::AlephMapper.Tests.NestedExt_AddressDto?)null))
+                : (global::AlephMapper.Tests.NestedExt_AddressDto?)null)
         };
 }

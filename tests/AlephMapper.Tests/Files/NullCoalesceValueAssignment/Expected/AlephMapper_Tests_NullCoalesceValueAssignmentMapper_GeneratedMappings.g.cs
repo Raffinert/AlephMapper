@@ -4,25 +4,24 @@
 using AgileObjects.ReadableExpressions;
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class NullCoalesceValueAssignmentMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="Map(ValueSource)"/>.
+    /// This is an auto-generated expression companion for <see cref="Map(global::AlephMapper.Tests.ValueSource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<ValueSource, ValueDest>> MapExpression() => 
-        s => new ValueDest
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.ValueSource, global::AlephMapper.Tests.ValueDest>> MapExpression() =>
+        s => new global::AlephMapper.Tests.ValueDest
         {
             Must = s.Maybe ?? 42
         };

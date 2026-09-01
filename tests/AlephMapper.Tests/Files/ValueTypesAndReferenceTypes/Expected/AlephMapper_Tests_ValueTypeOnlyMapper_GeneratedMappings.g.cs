@@ -2,25 +2,24 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ValueTypeOnlyMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="MapToDestination(ValueTypeOnlySource)"/>.
+    /// This is an auto-generated expression companion for <see cref="MapToDestination(global::AlephMapper.Tests.ValueTypeOnlySource)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<ValueTypeOnlySource, ValueTypeOnlyDestination>> MapToDestinationExpression() => 
-        source => new ValueTypeOnlyDestination
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.ValueTypeOnlySource, global::AlephMapper.Tests.ValueTypeOnlyDestination>> MapToDestinationExpression() =>
+        source => new global::AlephMapper.Tests.ValueTypeOnlyDestination
         {
             IntProperty = source.IntProperty,
             BoolProperty = source.BoolProperty,
@@ -29,16 +28,16 @@ partial class ValueTypeOnlyMapper
         };
 
     /// <summary>
-    /// This is an auto-generated update method for <see cref="MapToDestination(ValueTypeOnlySource)"/>.
+    /// This is an auto-generated update method for <see cref="MapToDestination(global::AlephMapper.Tests.ValueTypeOnlySource)"/>.
     /// </summary>
     /// <param name="source">The source object to map values from. If null, no updates are performed.</param>
     /// <param name="dest">The destination object to update. If null, the new instance is created.</param>
     /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>
-    public static ValueTypeOnlyDestination MapToDestination(ValueTypeOnlySource source, ValueTypeOnlyDestination dest)
+    public static global::AlephMapper.Tests.ValueTypeOnlyDestination MapToDestination(global::AlephMapper.Tests.ValueTypeOnlySource source, global::AlephMapper.Tests.ValueTypeOnlyDestination dest)
     {
         if (source == null) return dest;
         if (dest == null)
-            dest = new ValueTypeOnlyDestination();
+            dest = new global::AlephMapper.Tests.ValueTypeOnlyDestination();
         dest.IntProperty = source.IntProperty;
         dest.BoolProperty = source.BoolProperty;
         dest.DateTimeProperty = source.DateTimeProperty;

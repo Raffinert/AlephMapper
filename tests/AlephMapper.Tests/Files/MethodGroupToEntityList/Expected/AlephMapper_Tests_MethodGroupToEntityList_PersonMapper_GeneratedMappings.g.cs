@@ -3,26 +3,25 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MethodGroupToEntityList;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class PersonMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="ToEntity(PersonDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="ToEntity(global::AlephMapper.Tests.MethodGroupToEntityList.PersonDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are ignored and treated as regular member access.
     /// </para>
     /// </remarks>
-    public static Expression<Func<PersonDto, Person>> ToEntityExpression() => 
-        dto => new Person
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.MethodGroupToEntityList.PersonDto, global::AlephMapper.Tests.MethodGroupToEntityList.Person>> ToEntityExpression() =>
+        dto => new global::AlephMapper.Tests.MethodGroupToEntityList.Person
         {
             ContactNumbers = dto.PhoneNumbers
                 .Select(PhoneMapper.ToEntity)

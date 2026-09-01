@@ -112,6 +112,47 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task GeneratedTypeReferencesAreGloballyQualified()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Collision;
+
+            public sealed class Func { }
+            public sealed class Expression { }
+            public sealed class Source { public string Name { get; set; } = ""; }
+            public sealed class Destination { public string Name { get; set; } = ""; }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Updatable]
+                public static Destination Map(Source source) => new() { Name = source.Name };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "GloballyQualifiedTypes",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var generated = driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(result => result.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated).Contains("global::System.Linq.Expressions.Expression<global::System.Func<global::Collision.Source, global::Collision.Destination>>");
+        await Assert.That(generated).Contains("new global::Collision.Destination");
+        await Assert.That(generated).Contains("dest = new global::Collision.Destination();");
+    }
+
+    [Test]
     public async Task EmbeddedConfigurationTypesDoNotConflictAcrossConsumerAssemblies()
     {
         const string projectASource = """
@@ -298,8 +339,8 @@ public class SourceGeneratorTests
 
         await Assert.That(generatedSource).Contains("MapExpression<TSource, TResult>()");
         await Assert.That(generatedSource).Contains("Map<TSource, TResult>(TSource source, TResult dest)");
-        await Assert.That(generatedSource).Contains("where TSource : ISource");
-        await Assert.That(generatedSource).Contains("where TResult : IDestination, new()");
+        await Assert.That(generatedSource).Contains("where TSource : global::Fixture.ISource");
+        await Assert.That(generatedSource).Contains("where TResult : global::Fixture.IDestination, new()");
     }
 
     [Test]
@@ -743,8 +784,8 @@ public class SourceGeneratorTests
         await Assert.That(generatedSource).DoesNotContain("?.");
         await Assert.That(generatedSource).DoesNotContain("MapNonNullPerson");
         await Assert.That(generatedSource).Contains("source != null");
-        await Assert.That(generatedSource).Contains("new EmployeeDto");
-        await Assert.That(generatedSource).Contains("Tax = new EmployeeTaxInfo");
+        await Assert.That(generatedSource).Contains("new global::Fixture.EmployeeDto");
+        await Assert.That(generatedSource).Contains("Tax = new global::Fixture.EmployeeTaxInfo");
     }
 
     [Test]
@@ -856,8 +897,8 @@ public class SourceGeneratorTests
         await Assert.That(generatedSource).DoesNotContain("?.");
         await Assert.That(generatedSource).DoesNotContain("MapNonNullInputToItem");
         await Assert.That(generatedSource).Contains("source != null");
-        await Assert.That(generatedSource).Contains("new ReadOnlyOrderItem");
-        await Assert.That(generatedSource).Contains("Tax = new ReadOnlyTaxInfo");
+        await Assert.That(generatedSource).Contains("new global::Fixture.ReadOnlyOrderItem");
+        await Assert.That(generatedSource).Contains("Tax = new global::Fixture.ReadOnlyTaxInfo");
         await Assert.That(generatedSource).Contains("TotalAmount = decimal.Round((source.Subtotal * (1m + source.TaxRate / 100m)), 2)");
     }
 
@@ -913,7 +954,7 @@ public class SourceGeneratorTests
         var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
 
         await Assert.That(generatedSource).DoesNotContain("new string");
-        await Assert.That(generatedSource).Contains("new DescriptionWithOrder");
+        await Assert.That(generatedSource).Contains("new global::Fixture.Mapper.DescriptionWithOrder");
     }
 
     [Test]

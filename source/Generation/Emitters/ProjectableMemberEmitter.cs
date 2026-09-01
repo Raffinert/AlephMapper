@@ -78,11 +78,11 @@ internal static class ProjectableMemberEmitter
             members.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
             members.AppendLine("    /// </para>");
             members.AppendLine("    /// </remarks>");
-            var declaration = "    public static Expression<Func<" + funcTypeArguments + ">> " +
+            var declaration = "    public static global::System.Linq.Expressions.Expression<global::System.Func<" + funcTypeArguments + ">> " +
                               expressionMethodName + details.MethodTypeParameterList + expressionMethodParameters;
             if (details.MethodConstraintClauses.Count == 0)
             {
-                members.AppendLine(declaration + " => ");
+                members.AppendLine(declaration + " =>");
             }
             else
             {

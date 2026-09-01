@@ -3,24 +3,23 @@
 
 using AlephMapper;
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class NullableEnabledMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetName(Person)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetName(global::Tests.Person)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
     /// </para>
     /// </remarks>
-    public static Expression<Func<Person, string?>> GetNameExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::Tests.Person, string?>> GetNameExpression() =>
         person => (person != null
             ? (person.Name)
             : (string?)null);

@@ -11,8 +11,7 @@ internal static class MapperFileEmitter
     [
         "System",
         "System.Linq",
-        "System.Linq.Expressions",
-        "System.CodeDom.Compiler"
+        "System.Linq.Expressions"
     ];
 
     public static GeneratedMapperFile Render(MapperGenerationContext context)
@@ -42,7 +41,7 @@ internal static class MapperFileEmitter
             output.AppendLine();
         }
 
-        output.AppendLine($"[GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]" );
+        output.AppendLine($"[global::System.CodeDom.Compiler.GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]" );
         var containingTypes = GetContainingTypes(mapperType);
         foreach (var containingType in containingTypes)
         {

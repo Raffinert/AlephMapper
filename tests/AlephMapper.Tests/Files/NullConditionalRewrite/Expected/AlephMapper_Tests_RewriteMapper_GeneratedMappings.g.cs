@@ -2,37 +2,36 @@
 #nullable enable
 
 using System;
-using System.CodeDom.Compiler;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class RewriteMapper
 {
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="GetAddress(SourceDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="GetAddress(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SourceDto, string>> GetAddressExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.SourceDto, string>> GetAddressExpression() =>
         dto => (dto.BirthInfo != null
             ? (dto.BirthInfo.Address)
             : (string?)null) ?? "Unknown";
 
     /// <summary>
-    /// This is an auto-generated expression companion for <see cref="HasAddress(SourceDto)"/>.
+    /// This is an auto-generated expression companion for <see cref="HasAddress(global::AlephMapper.Tests.SourceDto)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Null handling strategy: Null-conditional operators are rewritten as explicit null checks for better compatibility.
     /// </para>
     /// </remarks>
-    public static Expression<Func<SourceDto, bool>> HasAddressExpression() => 
+    public static global::System.Linq.Expressions.Expression<global::System.Func<global::AlephMapper.Tests.SourceDto, bool>> HasAddressExpression() =>
         source => (source.BirthInfo != null
             ? (source.BirthInfo.Address)
             : (string?)null) != null;
