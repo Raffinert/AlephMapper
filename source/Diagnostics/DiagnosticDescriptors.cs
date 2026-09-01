@@ -9,7 +9,7 @@ namespace AlephMapper.Diagnostics;
 public static class DiagnosticDescriptors
 {
     private const string CrashIssueUrl =
-        "https://github.com/Raffinert/AlephMapper/issues/new?labels=bug&title=Generator%20crash:%20IMP005";
+        "https://github.com/Raffinert/AlephMapper/issues/new?labels=bug&title=Generator%20crash:%20AM0004";
 
     public static readonly DiagnosticDescriptor UpdatableValueTypeReturn = new(
         "AM0001",

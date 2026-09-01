@@ -101,20 +101,44 @@ internal readonly struct GenerationDiagnostic : IEquatable<GenerationDiagnostic>
             location == Location.None ? 0 : lineSpan.EndLinePosition.Character);
     }
 
-    public Diagnostic ToDiagnostic()
+    public Diagnostic ToDiagnostic(Compilation compilation)
     {
-        var descriptor = DiagnosticDescriptors.GetById(Id) ??
-            new DiagnosticDescriptor(Id, Title, Message, Category, Severity, isEnabledByDefault: true);
+        var descriptor = CreateDescriptor();
         if (string.IsNullOrEmpty(FilePath))
         {
             return Diagnostic.Create(descriptor, Location.None);
         }
 
         var span = new TextSpan(Start, Length);
+        var filePath = FilePath;
+        var sourceTree = compilation.SyntaxTrees.FirstOrDefault(tree =>
+            string.Equals(tree.FilePath, filePath, StringComparison.Ordinal));
+        if (sourceTree is not null && span.End <= sourceTree.GetText().Length)
+        {
+            return Diagnostic.Create(descriptor, Location.Create(sourceTree, span));
+        }
+
         var lineSpan = new LinePositionSpan(
             new LinePosition(StartLine, StartCharacter),
             new LinePosition(EndLine, EndCharacter));
         return Diagnostic.Create(descriptor, Location.Create(FilePath!, span, lineSpan));
+    }
+
+    private DiagnosticDescriptor CreateDescriptor()
+    {
+        var original = DiagnosticDescriptors.GetById(Id);
+        return original is null
+            ? new DiagnosticDescriptor(Id, Title, Message, Category, Severity, isEnabledByDefault: true)
+            : new DiagnosticDescriptor(
+                original.Id,
+                original.Title,
+                Message,
+                original.Category,
+                original.DefaultSeverity,
+                original.IsEnabledByDefault,
+                original.Description,
+                original.HelpLinkUri,
+                original.CustomTags.ToArray());
     }
 
     public bool Equals(GenerationDiagnostic other)

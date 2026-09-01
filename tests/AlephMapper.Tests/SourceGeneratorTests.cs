@@ -37,13 +37,30 @@ public class SourceGeneratorTests
     [Test]
     public async Task GenerationDiagnosticsPreserveDescriptorMetadata()
     {
+        var compilation = CSharpCompilation.Create("DiagnosticMetadata");
         var original = Diagnostic.Create(DiagnosticDescriptors.GeneratorCrash, Location.None, "boom");
-        var roundTripped = GenerationDiagnostic.From(original).ToDiagnostic();
+        var roundTripped = GenerationDiagnostic.From(original).ToDiagnostic(compilation);
 
         await Assert.That(roundTripped.Descriptor.Description.ToString())
             .IsEqualTo(original.Descriptor.Description.ToString());
         await Assert.That(roundTripped.Descriptor.HelpLinkUri)
             .IsEqualTo(original.Descriptor.HelpLinkUri);
+        await Assert.That(DiagnosticDescriptors.GeneratorCrash.HelpLinkUri).Contains("AM0004");
+        await Assert.That(DiagnosticDescriptors.GeneratorCrash.HelpLinkUri).DoesNotContain("IMP005");
+    }
+
+    [Test]
+    public async Task DiagnosticRoundTripPreservesFormattedMessage()
+    {
+        var compilation = CSharpCompilation.Create("DiagnosticMessage");
+        var original = Diagnostic.Create(
+            DiagnosticDescriptors.AdaptIncompatibleType,
+            Location.None,
+            "Map",
+            "Name");
+        var roundTripped = GenerationDiagnostic.From(original).ToDiagnostic(compilation);
+
+        await Assert.That(roundTripped.GetMessage()).IsEqualTo(original.GetMessage());
     }
 
     [Test]
@@ -538,6 +555,47 @@ public class SourceGeneratorTests
             generated.SourceText.ToString().Contains("MapAdapted", StringComparison.Ordinal))).IsFalse();
         await Assert.That(outputCompilation.GetDiagnostics()
             .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task PragmaCanSuppressGenericAdaptationDiagnostic()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource { string Name { get; } }
+            public interface IDestination { string Name { get; set; } }
+            public sealed class AdaptedSource : ISource { public string Name { get; set; } = string.Empty; }
+            public sealed class AdaptedDestination : IDestination { public string Name { get; set; } = string.Empty; }
+
+            public static partial class Mapper
+            {
+            #pragma warning disable AM0018
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new() { Name = source.Name };
+            #pragma warning restore AM0018
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, _parseOptions, "PragmaSuppression.cs");
+        var compilation = CSharpCompilation.Create(
+            "PragmaSuppression",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(generatorDiagnostics.Any(diagnostic =>
+            diagnostic.Id == "AM0018" && !diagnostic.IsSuppressed)).IsFalse();
+        await Assert.That(result.Diagnostics.Any(diagnostic =>
+            diagnostic.Id == "AM0018" && !diagnostic.IsSuppressed)).IsFalse();
     }
 
     [Test]
@@ -1333,6 +1391,7 @@ public class SourceGeneratorTests
         var lineSpan = diagnostic.Location.GetLineSpan();
 
         await Assert.That(diagnostic.Location).IsNotEqualTo(Location.None);
+        await Assert.That(diagnostic.Location.SourceTree).IsEqualTo(syntaxTree);
         await Assert.That(lineSpan.Path).IsEqualTo("AdaptLocation.cs");
         await Assert.That(lineSpan.StartLinePosition.Line).IsEqualTo(7);
     }

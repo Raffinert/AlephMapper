@@ -55,7 +55,8 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(
             mapperResults
                 .WithTrackingName($"AlephMapper.{configurationKind}Candidates")
-                .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult"),
+                .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult")
+                .Combine(context.CompilationProvider),
             MapperSourceOutput.Emit);
     }
 }
