@@ -262,6 +262,104 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task GenericMethodsGenerateProjectableAndUpdatableCompanions()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource
+            {
+                string Name { get; }
+            }
+
+            public interface IDestination
+            {
+                string Name { get; set; }
+            }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Updatable]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new()
+                    {
+                        Name = source.Name
+                    };
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "GenericMethodMappings");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapExpression"));
+
+        await Assert.That(generatedSource).Contains("MapExpression<TSource, TResult>()");
+        await Assert.That(generatedSource).Contains("Map<TSource, TResult>(TSource source, TResult dest)");
+        await Assert.That(generatedSource).Contains("where TSource : ISource");
+        await Assert.That(generatedSource).Contains("where TResult : IDestination, new()");
+    }
+
+    [Test]
+    public async Task GenericMethodsDoNotGenerateAdaptedCompanions()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource
+            {
+                string Name { get; }
+            }
+
+            public interface IDestination
+            {
+                string Name { get; set; }
+            }
+
+            public sealed class AdaptedSource : ISource
+            {
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public sealed class AdaptedDestination : IDestination
+            {
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new()
+                    {
+                        Name = source.Name
+                    };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "GenericAdaptation",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Id == "AM0018")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapAdapted", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(outputCompilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     public async Task LargeCompilationDiscoversOnlyAttributedMappers()
     {
         var source = new StringBuilder("using AlephMapper; namespace Fixture; public sealed class Source { public int Value { get; set; } } public sealed class Target { public int Value { get; set; } } public sealed class Unrelated {");

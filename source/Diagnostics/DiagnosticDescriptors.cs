@@ -152,4 +152,12 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Select NullConditionalRewrite.Ignore or NullConditionalRewrite.Rewrite to generate an expression-tree-compatible companion.");
+
+    public static readonly DiagnosticDescriptor AdaptGenericMethodUnsupported = new(
+        "AM0018",
+        "Adaptation of generic mapping methods is unsupported",
+        "Cannot adapt '{0}': Adapt does not support generic mapping methods. Use the generic Projectable or Updatable companion directly.",
+        "AlephMapper",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

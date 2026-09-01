@@ -18,6 +18,19 @@ internal static class AdaptationMemberEmitter
     public static void Emit(MappingMethodDetails details, MapperGenerationContext context)
     {
         var mapping = details.Mapping;
+        if (mapping.MethodSymbol.TypeParameters.Length != 0)
+        {
+            foreach (var adaptation in mapping.Adaptations)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.AdaptGenericMethodUnsupported,
+                    GetLocation(mapping, adaptation),
+                    mapping.MethodSymbol.Name));
+            }
+
+            return;
+        }
+
         var adaptationPairs = new HashSet<string>(StringComparer.Ordinal);
         foreach (var adaptation in mapping.Adaptations)
         {

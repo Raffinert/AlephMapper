@@ -65,7 +65,11 @@ internal static class UpdatableMemberEmitter
             }
             members.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, the new instance is created.</param>");
             members.AppendLine("    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>");
-            members.AppendLine("    public static " + details.DestinationTypeName + " " + mapping.Name + "(" + details.MethodParameterListWithNames + ", " + details.DestinationTypeName + " dest)");
+            members.AppendLine("    public static " + details.DestinationTypeName + " " + mapping.Name + details.MethodTypeParameterList + "(" + details.MethodParameterListWithNames + ", " + details.DestinationTypeName + " dest)");
+            foreach (var constraintClause in details.MethodConstraintClauses)
+            {
+                members.AppendLine("        " + constraintClause);
+            }
             members.AppendLine("    {");
             foreach (var line in lines)
             {

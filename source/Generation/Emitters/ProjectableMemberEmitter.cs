@@ -51,7 +51,10 @@ internal static class ProjectableMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
-        context.GeneratedMemberSignatures.Add(MethodSignature.Build(expressionMethodName, details.ExtraExpressionParameterTypeNames));
+        context.GeneratedMemberSignatures.Add(MethodSignature.Build(
+            expressionMethodName,
+            details.ExtraExpressionParameterTypeNames,
+            details.MethodTypeParameterCount));
         var nullStrategyDescription = mapping.NullStrategy switch
         {
             NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
@@ -75,7 +78,21 @@ internal static class ProjectableMemberEmitter
             members.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
             members.AppendLine("    /// </para>");
             members.AppendLine("    /// </remarks>");
-            members.AppendLine("    public static Expression<Func<" + funcTypeArguments + ">> " + expressionMethodName + expressionMethodParameters + " => ");
+            var declaration = "    public static Expression<Func<" + funcTypeArguments + ">> " +
+                              expressionMethodName + details.MethodTypeParameterList + expressionMethodParameters;
+            if (details.MethodConstraintClauses.Count == 0)
+            {
+                members.AppendLine(declaration + " => ");
+            }
+            else
+            {
+                members.AppendLine(declaration);
+                foreach (var constraintClause in details.MethodConstraintClauses)
+                {
+                    members.AppendLine("        " + constraintClause);
+                }
+                members.AppendLine("        => ");
+            }
             members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(prettyBody + ";");
         });

@@ -26,7 +26,8 @@ internal sealed class AdaptationMemberPlanner
                 .Where(m => m.MethodKind == MethodKind.Ordinary)
                 .Select(m => MethodSignature.Build(
                     m.Name,
-                    m.Parameters.Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, NullableContext.Disabled)))),
+                    m.Parameters.Select(p => TypeDisplay.ForSymbol(p.Type, p.NullableAnnotation, NullableContext.Disabled)),
+                    m.TypeParameters.Length)),
             StringComparer.Ordinal);
 
         _existingNonMethodNames = new HashSet<string>(
