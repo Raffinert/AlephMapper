@@ -10,6 +10,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
+#if !DEBUG
+using AlephMapper.Diagnostics;
+#endif
+
 namespace AlephMapper.Generation;
 
 internal static class MapperSourceOutput
