@@ -450,13 +450,13 @@ public class SourceGeneratorTests
         driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
 
         var trackedSteps = driver.GetRunResult().Results.Single().TrackedSteps;
-        var candidateOutputs = trackedSteps["AlephMapper.ProjectableGenerationResult"]
+        var sourceOutputs = trackedSteps["AlephMapper.ProjectableSourceOutput"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 
-        await Assert.That(candidateOutputs).Count().IsEqualTo(2);
+        await Assert.That(sourceOutputs).Count().IsEqualTo(2);
         // Unchanged means the step reran but produced an equal value; it is not a cache hit.
-        await Assert.That(candidateOutputs.All(static output => output.Item2 == IncrementalStepRunReason.Unchanged)).IsTrue();
+        await Assert.That(sourceOutputs.All(static output => output.Item2 == IncrementalStepRunReason.Unchanged)).IsTrue();
     }
 
     [Test]
@@ -626,7 +626,7 @@ public class SourceGeneratorTests
         stopwatch.Stop();
 
         var result = driver.GetRunResult().Results.Single();
-        var candidateOutputs = result.TrackedSteps["AlephMapper.ProjectableGenerationResult"]
+        var candidateOutputs = result.TrackedSteps["AlephMapper.ProjectableSourceOutput"]
             .SelectMany(static step => step.Outputs)
             .ToArray();
 

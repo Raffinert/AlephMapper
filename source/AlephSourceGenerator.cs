@@ -52,11 +52,21 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
         IncrementalValuesProvider<MapperGenerationResult> mapperResults,
         string configurationKind)
     {
+        var results = mapperResults
+            .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult");
+
         context.RegisterSourceOutput(
-            mapperResults
-                .WithTrackingName($"AlephMapper.{configurationKind}Candidates")
-                .WithTrackingName($"AlephMapper.{configurationKind}GenerationResult")
-                .Combine(context.CompilationProvider),
-            MapperSourceOutput.Emit);
+            results.WithTrackingName($"AlephMapper.{configurationKind}SourceOutput"),
+            MapperSourceOutput.EmitSource);
+
+        context.RegisterSourceOutput(
+            results
+                .Where(static result => !result.Diagnostics.IsDefaultOrEmpty)
+                .Combine(context.CompilationProvider)
+                .WithTrackingName($"AlephMapper.{configurationKind}Diagnostics"),
+            static (sourceProductionContext, output) => MapperSourceOutput.EmitDiagnostics(
+                sourceProductionContext,
+                output.Left,
+                output.Right));
     }
 }

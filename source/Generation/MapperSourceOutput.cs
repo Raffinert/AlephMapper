@@ -80,18 +80,24 @@ internal static class MapperSourceOutput
 #endif
     }
 
-    public static void Emit(
+    public static void EmitSource(
         SourceProductionContext context,
-        (MapperGenerationResult Result, Compilation Compilation) output)
+        MapperGenerationResult result)
     {
-        foreach (var diagnostic in output.Result.Diagnostics)
+        if (result.HintName is not null && result.Source is not null)
         {
-            context.ReportDiagnostic(diagnostic.ToDiagnostic(output.Compilation));
+            context.AddSource(result.HintName, result.Source);
         }
+    }
 
-        if (output.Result.HintName is not null && output.Result.Source is not null)
+    public static void EmitDiagnostics(
+        SourceProductionContext context,
+        MapperGenerationResult result,
+        Compilation compilation)
+    {
+        foreach (var diagnostic in result.Diagnostics)
         {
-            context.AddSource(output.Result.HintName, output.Result.Source);
+            context.ReportDiagnostic(diagnostic.ToDiagnostic(compilation));
         }
     }
 
