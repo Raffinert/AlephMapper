@@ -9,7 +9,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0")]
+[GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class PersonMapper
 {
     /// <summary>

@@ -463,7 +463,11 @@ public class SourceGeneratorTests
         var syntaxTrees = sourceTrees.Append(globalUsings).ToArray();
 
         var references = (await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None))
-            .Add(MetadataReference.CreateFromFile(typeof(DbContext).Assembly.Location));
+            .Add(MetadataReference.CreateFromFile(typeof(DbContext).Assembly.Location))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "AgileObjects.NetStandardPolyfills.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "AgileObjects.ReadableExpressions.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "TUnit.Assertions.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "TUnit.Core.dll")));
 
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
 
@@ -473,11 +477,17 @@ public class SourceGeneratorTests
             references,
             compilationOptions);
 
-        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-
         var result = driver.GetRunResult().Results.Single();
+        var generatedSyntaxTrees = outputCompilation.SyntaxTrees
+            .Where(tree => !syntaxTrees.Contains(tree))
+            .ToHashSet();
+        await Assert.That(outputCompilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error &&
+                                 diagnostic.Location.SourceTree is { } sourceTree &&
+                                 generatedSyntaxTrees.Contains(sourceTree))).IsEmpty();
 
         var actualSources = result.GeneratedSources.ToDictionary(
             source => Path.GetFileName(source.HintName),

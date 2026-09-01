@@ -8,7 +8,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests;
 
-[GeneratedCode("AlephMapper", "0.7.0")]
+[GeneratedCode("AlephMapper", "0.7.0.0")]
 partial class ValueTypeMapper
 {
 }

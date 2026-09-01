@@ -64,16 +64,20 @@ internal static class MapperSourceOutput
                 method => CreateExternalAnalysis(compilation, method, cancellationToken));
             return GenerateMapper(mapperType, mappings, catalog);
         }
+#if DEBUG
+        catch
+        {
+            throw;
+        }
+#else
         catch (Exception exception)
         {
             return new MapperGenerationResult(
                 null,
                 null,
                 [CrashDiagnosticsReporter.CreateDiagnostic(exception)]);
-#if DEBUG
-            throw;
-#endif
         }
+#endif
     }
 
     public static void Emit(SourceProductionContext context, MapperGenerationResult result)
