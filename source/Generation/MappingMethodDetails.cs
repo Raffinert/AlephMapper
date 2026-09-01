@@ -21,8 +21,8 @@ internal sealed class MappingMethodDetails
         ParameterTypeNames = mapping.Parameters
             .Select(parameter => TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext))
             .ToArray();
-        DestinationTypeName = TypeDisplay.ForSymbol(mapping.ReturnType, mapping.MethodSymbol.ReturnNullableAnnotation, nullableContext);
-        SourceTypeName = TypeDisplay.ForSymbol(mapping.ParamType, mapping.Parameters[0].NullableAnnotation, nullableContext);
+        DestinationTypeName = TypeDisplay.ForSymbol(mapping.ReturnType, mapping.ReturnType.NullableAnnotation, nullableContext);
+        SourceTypeName = TypeDisplay.ForSymbol(mapping.ParamType, mapping.ParamType.NullableAnnotation, nullableContext);
         SourceName = mapping.Parameters[0].Name;
         MethodParameterList = string.Join(", ", ParameterTypeNames);
         MethodParameterListWithNames = string.Join(", ", mapping.Parameters.Select(parameter =>

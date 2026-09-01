@@ -59,8 +59,8 @@ public static partial class ConditionalExtensionTestPersonMapper
     [Updatable]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
-        Name = person?.Name,
-        Addresses = person?.Addresses.Select(ExtensionTestAddressMapper.ToDto).ToList(),
+        Name = person.Name,
+        Addresses = person?.Addresses?.Select(ExtensionTestAddressMapper.ToDto).ToList(),
         HomeAddress = person?.HomeAddress?.ToDto(),
         MyProperty = person?.MyProperty ?? 0
     };
@@ -68,9 +68,9 @@ public static partial class ConditionalExtensionTestPersonMapper
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static ExtensionTestPersonDto ToDto1(ExtensionTestPerson person) => new()
     {
-        Name = person?.Name,
-        Addresses = person?.Addresses?.Select(a => a.ToDto()).ToList(),
-        HomeAddress = person?.HomeAddress.ToDto(),
+        Name = person.Name,
+        Addresses = person.Addresses!.Select(a => a.ToDto()).ToList(),
+        HomeAddress = person.HomeAddress!.ToDto(),
         MyProperty = person?.MyProperty ?? 0
     };
 }

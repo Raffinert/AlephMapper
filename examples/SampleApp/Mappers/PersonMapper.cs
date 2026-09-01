@@ -9,7 +9,7 @@ public static partial class PersonMapper
     // Main entity to DTO mapping with expression-bodied syntax
     [Projectable]
     [Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
-    public static PersonDto ToDto(Person entity) => entity == null ? null : new()
+    public static PersonDto ToDto(Person entity) => entity == null ? null! : new()
     {
         Id = entity.PersonId,
         FirstName = entity.FirstName,

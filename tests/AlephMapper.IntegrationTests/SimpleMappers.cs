@@ -48,7 +48,7 @@ public static partial class SimpleIgnoreMapper
         $"{employee.FirstName} {employee.LastName}";
 
     public static string GetDepartmentName(Employee employee) => 
-        employee.Department?.Name ?? "No Department";
+        employee.Department!.Name ?? "No Department";
 
     public static EmployeeSimpleDto MapToSimpleDto(Employee employee) => new()
     {
@@ -75,7 +75,7 @@ public static partial class SimpleUpdateMapper
     public static DepartmentUpdateDto MapToDepartmentDto(Department department) => new()
     {
         Id = department.Id,
-        Name = department.Name,
+        Name = department.Name ?? "",
         Description = department.Description,
         IsActive = department.IsActive
     };

@@ -468,7 +468,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee!, targetDto);
 
         // Assert
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -493,7 +493,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee!, targetDto);
 
         // Assert - When source is null, target should remain unchanged
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -523,7 +523,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment!, targetDto);
 
         // Assert
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -546,7 +546,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment!, targetDto);
 
         // Assert - When source is null, target should remain unchanged
         await Assert.That(result).IsSameReferenceAs(targetDto);
