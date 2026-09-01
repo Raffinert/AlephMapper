@@ -26,7 +26,7 @@ public class PersonDto
 /// </summary>
 public static partial class PersonMapper
 {
-    [Expressive]
+    [Projectable]
     public static PersonDto ToDto(Person person) => new()
     {
         FullName = Combine(person.First, person.Last),
@@ -52,7 +52,7 @@ public static partial class PersonMapper
 /// </summary>
 public static partial class NamedArgMapper
 {
-    [Expressive]
+    [Projectable]
     public static PersonDto ToDto(Person person) => new()
     {
         FullName = Combine(last: person.Last, first: person.First)
@@ -67,7 +67,7 @@ public static partial class NamedArgMapper
 /// </summary>
 public static partial class NestedMultiParamMapper
 {
-    [Expressive]
+    [Projectable]
     public static PersonDto ToDto(Person person) => new()
     {
         FullName = DescribeWithAge(person.First, person.Last, person.Age)
@@ -81,12 +81,12 @@ public static partial class NestedMultiParamMapper
 
 
 /// <summary>
-/// Tests that a multi-parameter [Expressive] mapping method itself
+/// Tests that a multi-parameter [Projectable] mapping method itself
 /// generates a single-parameter projection expression factory.
 /// </summary>
-public static partial class MultiParamExpressiveMapper
+public static partial class MultiParamProjectableMapper
 {
-    [Expressive]
+    [Projectable]
     public static PersonDto Map(Person person, int currentYear) => new()
     {
         FullName = person.First + " " + person.Last,
@@ -100,7 +100,7 @@ public static partial class MultiParamExpressiveMapper
 /// </summary>
 public static partial class UpdatableMultiParamMapper
 {
-    [Expressive]
+    [Projectable]
     [Updatable]
     public static PersonDto ToDto(Person person, int currentYear) => new()
     {

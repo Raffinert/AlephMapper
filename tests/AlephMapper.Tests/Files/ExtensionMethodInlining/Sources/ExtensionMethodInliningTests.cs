@@ -35,7 +35,7 @@ public class ExtensionTestPersonDto
 // Extension method mapper
 public static partial class ExtensionTestAddressMapper
 {
-    [Expressive]
+    [Projectable]
     public static ExtensionTestAddressDto ToDto(this ExtensionTestAddress address) => new()
     {
         Street = address.Street,
@@ -48,7 +48,7 @@ public static partial class ExtensionTestAddressMapper
 // Main mapper that uses the extension method
 public static partial class ExtensionTestPersonMapper
 {
-    [Expressive]
+    [Projectable]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
         Id = person.Id,
@@ -60,7 +60,7 @@ public static partial class ExtensionTestPersonMapper
 // Main mapper that uses conditional access extension method
 public static partial class ConditionalExtensionTestPersonMapper
 {
-    [Expressive]
+    [Projectable]
     public static ExtensionTestPersonDto ToDto(ExtensionTestPerson person) => new()
     {
         Id = person.Id,

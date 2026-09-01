@@ -29,16 +29,16 @@ public class TechDebtTestPersonDto
 // Extension method mapper that should trigger the tech debt
 public static partial class TechDebtAddressMapper
 {
-    [Expressive]
+    [Projectable]
     public static string FormatAddress(this TechDebtTestAddress address) => 
         address.FormattedAddress;
 }
 
 // Mapper with nested conditional access that triggers ParseExpression tech debt
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.None)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.None)]
 public static partial class TechDebtPersonMapperNone
 {
-    [Expressive] 
+    [Projectable]
     public static TechDebtTestPersonDto ToDto(TechDebtTestPerson person) => new()
     {
         Name = person.Name,
@@ -47,10 +47,10 @@ public static partial class TechDebtPersonMapperNone
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class TechDebtPersonMapperRewrite
 {
-    [Expressive]
+    [Projectable]
     public static TechDebtTestPersonDto ToDto(TechDebtTestPerson person) => new()
     {
         Name = person.Name,
@@ -61,10 +61,10 @@ public static partial class TechDebtPersonMapperRewrite
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class TechDebtPersonMapperIgnore
 {
-    [Expressive]
+    [Projectable]
     public static TechDebtTestPersonDto ToDto(TechDebtTestPerson person) => new()
     {
         Name = person.Name,

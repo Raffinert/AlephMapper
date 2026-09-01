@@ -9,33 +9,31 @@ namespace AlephMapper.Helpers;
 internal static class TypeDisplay
 {
     private static readonly SymbolDisplayFormat NullableFormat =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     private static readonly SymbolDisplayFormat NonNullableFormat =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
     public static string ForSymbol(ITypeSymbol symbol, SemanticModel model, int position)
-        => ForSymbol(symbol, symbol.NullableAnnotation, model.GetNullableContext(position));
+        => ForSymbol(symbol, symbol.NullableAnnotation, NullablePolicy.From(model, position));
 
-    public static string ForSymbol(ITypeSymbol symbol, NullableAnnotation annotationOverride, NullableContext nullableContext)
+    public static string ForSymbol(ITypeSymbol symbol, NullableAnnotation annotationOverride, NullablePolicy nullablePolicy)
     {
-        var annotationsEnabled = nullableContext is NullableContext.Enabled
-            or NullableContext.AnnotationsEnabled
-            or NullableContext.AnnotationsContextInherited;
-
-        var format = annotationsEnabled ? NullableFormat : NonNullableFormat;
-        var display = symbol.ToDisplayString(format);
-
+        var format = nullablePolicy.AnnotationsEnabled ? NullableFormat : NonNullableFormat;
         var effectiveAnnotation = annotationOverride != NullableAnnotation.None
             ? annotationOverride
             : symbol.NullableAnnotation;
+        var displaySymbol = annotationOverride != NullableAnnotation.None
+            ? symbol.WithNullableAnnotation(annotationOverride)
+            : symbol;
+        var display = displaySymbol.ToDisplayString(format);
 
-        if (annotationsEnabled &&
+        if (nullablePolicy.AnnotationsEnabled &&
             effectiveAnnotation == NullableAnnotation.Annotated &&
             !display.EndsWith("?", StringComparison.Ordinal))
         {

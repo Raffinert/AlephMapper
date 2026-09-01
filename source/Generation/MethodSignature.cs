@@ -6,9 +6,10 @@ namespace AlephMapper.Generation;
 
 internal static class MethodSignature
 {
-    public static string Build(string name, IEnumerable<string> parameterTypeNames)
+    public static string Build(string name, IEnumerable<string> parameterTypeNames, int typeParameterCount = 0)
     {
-        return name + "(" + string.Join(",", parameterTypeNames.Select(RemoveNullableMarker)) + ")";
+        return name + (typeParameterCount == 0 ? string.Empty : "`" + typeParameterCount) +
+               "(" + string.Join(",", parameterTypeNames.Select(RemoveNullableMarker)) + ")";
     }
 
     private static string RemoveNullableMarker(string typeName)

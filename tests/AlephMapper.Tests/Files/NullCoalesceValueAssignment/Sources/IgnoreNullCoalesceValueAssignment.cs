@@ -17,7 +17,7 @@ public static partial class NullCoalesceValueAssignmentMapper
 {
     // In Ignore mode the null-conditional operator is dropped, but the coalesce (??)
     // must be preserved so the assignment to a non-nullable value property still compiles.
-    [Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static ValueDest Map(ValueSource s) => new()
     {
         Must = s?.Maybe ?? 42

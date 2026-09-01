@@ -1,10 +1,14 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 
 namespace AlephMapper.Models;
 
-internal sealed class MappingModel(
+/// <summary>
+/// Compiler-bound analysis state used only within a source-output callback.
+/// It is intentionally not retained by the incremental pipeline.
+/// </summary>
+internal sealed class MappingAnalysis(
     INamedTypeSymbol containingType,
     IMethodSymbol methodSymbol,
     string name,
@@ -12,13 +16,13 @@ internal sealed class MappingModel(
     ITypeSymbol returnType,
     ArrowExpressionClauseSyntax bodySyntax,
     SemanticModel semanticModel,
-    bool isExpressive,
+    bool isProjectable,
     bool isUpdatable,
     bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
     CollectionPropertiesPolicy collectionPolicy,
     IReadOnlyList<string> usingDirectives,
-    IReadOnlyList<AdaptationModel> adaptations)
+    IReadOnlyList<AdaptationAnalysis> adaptations)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
@@ -29,26 +33,12 @@ internal sealed class MappingModel(
     public readonly ArrowExpressionClauseSyntax BodySyntax = bodySyntax;
     public readonly SemanticModel SemanticModel = semanticModel;
 
-    public readonly bool IsExpressive = isExpressive;
+    public readonly bool IsProjectable = isProjectable;
     public readonly bool IsUpdatable = isUpdatable;
     public readonly bool IsClassPartial = classIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
     public readonly CollectionPropertiesPolicy CollectionPolicy = collectionPolicy;
     public readonly IReadOnlyList<string> UsingDirectives = usingDirectives;
-    public readonly IReadOnlyList<AdaptationModel> Adaptations = adaptations;
-
-    public override bool Equals(object obj)
-    {
-        if (obj is MappingModel other)
-        {
-            return SymbolEqualityComparer.Default.Equals(MethodSymbol, other.MethodSymbol);
-        }
-        return false;
-    }
-
-    public override int GetHashCode()
-    {
-        return SymbolEqualityComparer.Default.GetHashCode(MethodSymbol);
-    }
+    public readonly IReadOnlyList<AdaptationAnalysis> Adaptations = adaptations;
 }

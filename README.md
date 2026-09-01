@@ -1,4 +1,4 @@
-﻿[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
+[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
 
 ## Terms of use<sup>[?](https://github.com/Tyrrrz/.github/blob/master/docs/why-so-political.md)</sup>
 
@@ -72,7 +72,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.6.2">
+<PackageReference Include="AlephMapper" Version="0.7.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -82,7 +82,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.6.2" />
+<PackageVersion Include="AlephMapper" Version="0.7.0" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
@@ -101,18 +101,36 @@ When referencing the generator directly from source:
 
 `PrivateAssets="all"` prevents AlephMapper from flowing transitively to consumers of your library. `IncludeAssets` makes its analyzer and source-generator assets available during compilation.
 
+### Compiler compatibility
+
+AlephMapper 0.7.0 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+
+### Migration: `[Expressive]` to `[Projectable]`
+
+`[Expressive]` has been renamed to `[Projectable]`. Replace every attribute use directly; no compatibility attribute is emitted.
+
+```csharp
+// Before
+[Expressive]
+public static PersonDto Map(Person person) => new();
+
+// After
+[Projectable]
+public static PersonDto Map(Person person) => new();
+```
+
 ## Quick start
 
 Mapping methods must be `static`, expression-bodied, and declared in a `static partial` class.
 
-Add `using AlephMapper;`, then apply `[Expressive]` to a mapping method or its containing class:
+Add `using AlephMapper;`, then apply `[Projectable]` to a mapping method or its containing class:
 
 ```csharp
 using AlephMapper;
 
 public static partial class PersonMapper
 {
-    [Expressive]
+    [Projectable]
     public static PersonDto MapPerson(Employee employee) => new()
     {
         Id = employee.EmployeeId,
@@ -163,7 +181,7 @@ Supported expression-bodied methods can call other mapping or helper methods. Al
 ```csharp
 public static partial class OrderMapper
 {
-    [Expressive]
+    [Projectable]
     public static OrderDto MapOrder(Order order) => new()
     {
         Id = order.Id,
@@ -185,12 +203,12 @@ public static partial class OrderMapper
 }
 ```
 
-`[Expressive]` is not limited to object projections. A method returning `bool` generates an `Expression<Func<TSource, bool>>`, allowing statically known conditions to be composed as ordinary methods:
+`[Projectable]` is not limited to object projections. A method returning `bool` generates an `Expression<Func<TSource, bool>>`, allowing statically known conditions to be composed as ordinary methods:
 
 ```csharp
 public static partial class EmployeeConditions
 {
-    [Expressive]
+    [Projectable]
     public static bool IsEligible(Employee employee) =>
         IsActive(employee) &&
         HasRequiredExperience(employee, 3);
@@ -220,7 +238,7 @@ A mapping may accept values after its source parameter. AlephMapper moves those 
 ```csharp
 public static partial class EmployeeMapper
 {
-    [Expressive]
+    [Projectable]
     public static EmployeeDto Map(
         Employee employee,
         int currentYear) => new()
@@ -266,7 +284,7 @@ public static class ProductExtensions
 
 public static partial class ProductMapper
 {
-    [Expressive]
+    [Projectable]
     public static ProductDto Map(Product product) => new()
     {
         Name = product.Name,
@@ -298,7 +316,7 @@ public static partial class AddressMapper
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class PersonMapper
 {
     public static PersonDto ToDto(Person person) => new()
@@ -347,7 +365,7 @@ Modern C# extension blocks are not currently supported.
 C# null-conditional access (`?.`) is not directly supported in expression trees. Configure its treatment with `NullConditionalRewrite`:
 
 ```csharp
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class PersonMapper
 {
     public static PersonDto Map(Person person) => new()
@@ -470,11 +488,11 @@ Adaptation is explicit: AlephMapper does not scan for compatible types. Invalid 
 
 | Attribute | Generated member |
 | --- | --- |
-| `[Expressive]` | `<MethodName>Expression(...)` returning `Expression<Func<TSource, TDestination>>` |
+| `[Projectable]` | `<MethodName>Expression(...)` returning `Expression<Func<TSource, TDestination>>` |
 | `[Updatable]` | An overload with a final destination parameter named `target` |
 | `[Adapt]` | The requested adapted map, expression, and/or update members |
 
-Attributes can be applied to individual methods. `[Expressive]` and `[Updatable]` can also be applied to the containing class.
+Attributes can be applied to individual methods. `[Projectable]` and `[Updatable]` can also be applied to the containing class.
 
 AlephMapper is best suited to object initializers, predicates, constructor calls, member access, conversions, LINQ operations, and small expression-bodied methods that it can inline. Not every valid C# construct can be represented in an expression tree, and not every expression-tree operation can be translated by every query provider.
 

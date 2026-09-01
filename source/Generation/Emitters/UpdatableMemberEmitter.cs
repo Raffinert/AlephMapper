@@ -17,12 +17,12 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None);
+        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None, details.NullablePolicy);
         var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
         if (inliner.CircularReferences.Any())
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
@@ -31,7 +31,7 @@ internal static class UpdatableMemberEmitter
 
         if (mapping.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mapping.ReturnType))
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableValueTypeReturn,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name,
@@ -48,12 +48,13 @@ internal static class UpdatableMemberEmitter
                 mapping.ParamType,
                 mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                 mapping.CollectionPolicy,
+                details.NullablePolicy,
                 lines))
         {
             return;
         }
 
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated update method for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");
@@ -65,7 +66,11 @@ internal static class UpdatableMemberEmitter
             }
             members.AppendLine("    /// <param name=\"dest\">The destination object to update. If null, the new instance is created.</param>");
             members.AppendLine("    /// <returns>The updated destination object for method chaining, or the new destination instance if either parameter is null.</returns>");
-            members.AppendLine("    public static " + details.DestinationTypeName + " " + mapping.Name + "(" + details.MethodParameterListWithNames + ", " + details.DestinationTypeName + " dest)");
+            members.AppendLine("    public static " + details.DestinationTypeName + " " + mapping.Name + details.MethodTypeParameterList + "(" + details.MethodParameterListWithNames + ", " + details.DestinationTypeName + " dest)");
+            foreach (var constraintClause in details.MethodConstraintClauses)
+            {
+                members.AppendLine("        " + constraintClause);
+            }
             members.AppendLine("    {");
             foreach (var line in lines)
             {

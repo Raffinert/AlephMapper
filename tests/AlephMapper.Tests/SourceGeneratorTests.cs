@@ -1,7 +1,13 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.Testing;
 using Microsoft.EntityFrameworkCore;
+using AlephMapper.Generation;
+using AlephMapper.Diagnostics;
+using System.Diagnostics;
+using System.Text;
 
 namespace AlephMapper.Tests;
 
@@ -15,6 +21,689 @@ public class SourceGeneratorTests
         _parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
         var generator = new AlephSourceGenerator().AsSourceGenerator();
         _driver = CSharpGeneratorDriver.Create(generators: [generator], parseOptions: _parseOptions);
+    }
+
+    [Test]
+    public async Task UnrelatedMethodsAreRejectedBySyntaxCandidateFilter()
+    {
+        var tree = CSharpSyntaxTree.ParseText(
+            "public class Unrelated { public int Add(int left, int right) => left + right; }",
+            _parseOptions);
+        var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+
+        await Assert.That(MappingMethodCandidate.IsCandidate(method, CancellationToken.None)).IsFalse();
+    }
+
+    [Test]
+    public async Task GenerationDiagnosticsPreserveDescriptorMetadata()
+    {
+        var compilation = CSharpCompilation.Create("DiagnosticMetadata");
+        var original = Diagnostic.Create(DiagnosticDescriptors.GeneratorCrash, Location.None, "boom");
+        var roundTripped = GenerationDiagnostic.From(original).ToDiagnostic(compilation);
+
+        await Assert.That(roundTripped.Descriptor.Description.ToString())
+            .IsEqualTo(original.Descriptor.Description.ToString());
+        await Assert.That(roundTripped.Descriptor.HelpLinkUri)
+            .IsEqualTo(original.Descriptor.HelpLinkUri);
+        await Assert.That(DiagnosticDescriptors.GeneratorCrash.HelpLinkUri).Contains("AM0004");
+        await Assert.That(DiagnosticDescriptors.GeneratorCrash.HelpLinkUri).DoesNotContain("IMP005");
+    }
+
+    [Test]
+    public async Task DiagnosticRoundTripPreservesFormattedMessage()
+    {
+        var compilation = CSharpCompilation.Create("DiagnosticMessage");
+        var original = Diagnostic.Create(
+            DiagnosticDescriptors.AdaptIncompatibleType,
+            Location.None,
+            "Map",
+            "Name");
+        var roundTripped = GenerationDiagnostic.From(original).ToDiagnostic(compilation);
+
+        await Assert.That(roundTripped.GetMessage()).IsEqualTo(original.GetMessage());
+    }
+
+    [Test]
+    public async Task GeneratedMembersUseOneTransparentNullablePolicy()
+    {
+        var cases = new[]
+        {
+            new { Directive = "#nullable disable", Expected = "disable", Annotations = false, ProjectDefault = NullableContextOptions.Disable },
+            new { Directive = "#nullable enable", Expected = "enable", Annotations = true, ProjectDefault = NullableContextOptions.Disable },
+            new { Directive = "#nullable enable warnings", Expected = "enable warnings", Annotations = false, ProjectDefault = NullableContextOptions.Disable },
+            new { Directive = "#nullable enable annotations", Expected = "enable annotations", Annotations = true, ProjectDefault = NullableContextOptions.Disable },
+            new { Directive = string.Empty, Expected = "enable", Annotations = true, ProjectDefault = NullableContextOptions.Enable }
+        };
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+
+        foreach (var testCase in cases)
+        {
+            var nullableSuffix = testCase.Annotations ? "?" : string.Empty;
+            var source = $$"""
+                using AlephMapper;
+
+                namespace NullablePolicyFixture;
+
+                {{testCase.Directive}}
+                public static partial class Mapper
+                {
+                    [Projectable]
+                    [Updatable]
+                    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                    public static PersonDto Map(Person source, string{{nullableSuffix}} prefix) =>
+                        new() { Name = prefix + source.Name };
+                }
+                {{(testCase.Directive.Length == 0 ? string.Empty : "#nullable restore")}}
+
+                public sealed class Person { public string Name { get; set; } = string.Empty; }
+                public sealed class Employee { public string Name { get; set; } = string.Empty; }
+                public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+                public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+                """;
+            var compilation = CSharpCompilation.Create(
+                "NullablePolicy_" + testCase.Expected.Replace(" ", "_", StringComparison.Ordinal),
+                [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+                references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                    .WithNullableContextOptions(testCase.ProjectDefault));
+
+            var driver = _driver.RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out var outputCompilation,
+                out var generatorDiagnostics);
+            var result = driver.GetRunResult().Results.Single();
+            var mapperSource = result.GeneratedSources
+                .Select(generated => generated.SourceText.ToString())
+                .Single(generated => generated.Contains("partial class Mapper", StringComparison.Ordinal));
+            var generatedTrees = outputCompilation.SyntaxTrees
+                .Where(tree => !compilation.SyntaxTrees.Contains(tree))
+                .ToHashSet();
+
+            await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            await Assert.That(result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Error &&
+                diagnostic.Location.SourceTree is { } tree &&
+                generatedTrees.Contains(tree))).IsEmpty();
+            await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Warning &&
+                diagnostic.Id.StartsWith("CS86", StringComparison.Ordinal) &&
+                diagnostic.Location.SourceTree is { } tree &&
+                generatedTrees.Contains(tree))).IsEmpty();
+            await Assert.That(mapperSource).Contains("#nullable " + testCase.Expected);
+            await Assert.That(mapperSource.StartsWith("// <auto-generated/>" + Environment.NewLine + Environment.NewLine, StringComparison.Ordinal)).IsTrue();
+            await Assert.That(mapperSource.Contains("string? prefix", StringComparison.Ordinal)).IsEqualTo(testCase.Annotations);
+            await Assert.That(mapperSource).Contains("MapExpression");
+            await Assert.That(mapperSource).Contains("MapEmployeeExpression");
+            await Assert.That(mapperSource).Contains("MapEmployee(");
+        }
+    }
+
+    [Test]
+    public async Task MapperHelpersRemainCandidatesForInlining()
+    {
+        var tree = CSharpSyntaxTree.ParseText(
+            "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
+            _parseOptions);
+        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+
+        await Assert.That(methods).Count().IsEqualTo(2);
+        await Assert.That(MappingMethodCandidate.IsCandidate(methods.Single(method => method.Identifier.ValueText == "Helper"), CancellationToken.None)).IsTrue();
+    }
+
+    [Test]
+    public async Task ExternalOrdinaryHelpersAreInlinedIntoProjectableMappings()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public sealed class Person
+            {
+                public string FirstName { get; set; } = "";
+                public string LastName { get; set; } = "";
+            }
+
+            public sealed class PersonDto
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public static class ExternalHelpers
+            {
+                public static string FullName(Person person) => person.FirstName + " " + person.LastName;
+            }
+
+            public static partial class PersonMapper
+            {
+                [Projectable]
+                public static PersonDto Map(Person person) => new() { Name = ExternalHelpers.FullName(person) };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "ExternalHelperInlining",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var generated = driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(result => result.HintName.EndsWith("PersonMapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated).DoesNotContain("ExternalHelpers.FullName");
+        await Assert.That(generated).Contains("person.FirstName + \" \" + person.LastName");
+    }
+
+    [Test]
+    public async Task ClassLevelConfigurationAcrossPartialDeclarationsGeneratesOnce()
+    {
+        const string configuration = """
+            using AlephMapper;
+            namespace Fixture;
+            [Projectable]
+            public static partial class Mapper { }
+            """;
+        const string mapping = """
+            namespace Fixture;
+            public static partial class Mapper
+            {
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "PartialMapper",
+            [
+                CSharpSyntaxTree.ParseText(configuration, _parseOptions, "Configuration.cs"),
+                CSharpSyntaxTree.ParseText(mapping, _parseOptions, "Mapping.cs")
+            ],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        var updatedDriver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var generatorResult = updatedDriver.GetRunResult().Results.Single();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generatorResult.Exception).IsNull();
+        await Assert.That(generatorResult.GeneratedSources
+            .Count(source => source.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task GeneratedConfigurationTypesAreNotPublic()
+    {
+        var assembly = typeof(AlephSourceGenerator).Assembly;
+        var typeNames = new[]
+        {
+            "ProjectableAttribute",
+            "UpdatableAttribute",
+            "AdaptAttribute",
+            "NullConditionalRewrite",
+            "CollectionPropertiesPolicy",
+            "AdaptGeneration"
+        };
+
+        foreach (var typeName in typeNames)
+        {
+            var type = assembly.GetType("AlephMapper." + typeName);
+            await Assert.That(type).IsNotNull();
+            await Assert.That(type!.IsPublic).IsFalse();
+        }
+
+        await Assert.That(assembly.GetType("AlephMapper.ExpressiveAttribute")).IsNull();
+    }
+
+    [Test]
+    public async Task GeneratedTypeReferencesAreGloballyQualified()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Collision;
+
+            public sealed class Func { }
+            public sealed class Expression { }
+            public sealed class Source { public string Name { get; set; } = ""; }
+            public sealed class Destination { public string Name { get; set; } = ""; }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Updatable]
+                public static Destination Map(Source source) => new() { Name = source.Name };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "GloballyQualifiedTypes",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var generated = driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(result => result.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated).Contains("global::System.Linq.Expressions.Expression<global::System.Func<global::Collision.Source, global::Collision.Destination>>");
+        await Assert.That(generated).Contains("new global::Collision.Destination");
+        await Assert.That(generated).Contains("dest = new global::Collision.Destination();");
+    }
+
+    [Test]
+    public async Task EmbeddedConfigurationTypesDoNotConflictAcrossConsumerAssemblies()
+    {
+        const string projectASource = """
+            using AlephMapper;
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ProjectB")]
+            namespace ProjectA;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """;
+        const string projectBSource = """
+            using AlephMapper;
+            using ProjectA;
+            namespace ProjectB;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var projectA = CSharpCompilation.Create(
+            "ProjectA",
+            [CSharpSyntaxTree.ParseText(projectASource, _parseOptions, "ProjectA.cs")],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var projectADriver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        projectADriver.RunGeneratorsAndUpdateCompilation(projectA, out var projectAOutput, out var projectADiagnostics);
+        await Assert.That(projectADiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectAOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+
+        using var projectAImage = new MemoryStream();
+        var emitResult = projectAOutput.Emit(projectAImage);
+        await Assert.That(emitResult.Success).IsTrue();
+
+        var projectB = CSharpCompilation.Create(
+            "ProjectB",
+            [CSharpSyntaxTree.ParseText(projectBSource, _parseOptions, "ProjectB.cs")],
+            references.Add(MetadataReference.CreateFromImage(projectAImage.ToArray())),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var projectBDriver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions);
+        projectBDriver.RunGeneratorsAndUpdateCompilation(projectB, out var projectBOutput, out var projectBDiagnostics);
+
+        await Assert.That(projectBDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectBOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ProjectableAttribute")!.DeclaredAccessibility)
+            .IsEqualTo(Accessibility.Internal);
+        await Assert.That(projectBOutput.GetTypeByMetadataName("AlephMapper.ProjectableAttribute")!.GetAttributes()
+            .Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Microsoft.CodeAnalysis.EmbeddedAttribute"))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task AttributeDiscoveryGeneratesOneFileForCombinedConfiguration()
+    {
+        const string source = """
+            using AlephMapper;
+            namespace Fixture;
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Updatable]
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedTarget), Name = "MapAdapted")]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            public sealed class AdaptedSource { public int Value { get; set; } }
+            public sealed class AdaptedTarget { public int Value { get; set; } }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "CombinedConfiguration",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions, "Mapper.cs")],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(result.GeneratedSources
+            .Count(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal)))
+            .IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task MapperGenerationResultRemainsStableWhenUnrelatedSourceChanges()
+    {
+        const string mapperA = """
+            using AlephMapper;
+            namespace Fixture;
+            public static partial class MapperA
+            {
+                [Projectable]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """;
+        const string mapperB = """
+            using AlephMapper;
+            namespace Fixture;
+            public static partial class MapperB
+            {
+                [Projectable]
+                public static Target Map(Source source) => new() { Value = source.Value };
+            }
+            """;
+        const string unrelated = "namespace Fixture; public sealed class Unrelated { public int Value => 1; }";
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var mapperATree = CSharpSyntaxTree.ParseText(mapperA, _parseOptions, "MapperA.cs");
+        var mapperBTree = CSharpSyntaxTree.ParseText(mapperB, _parseOptions, "MapperB.cs");
+        var unrelatedTree = CSharpSyntaxTree.ParseText(unrelated, _parseOptions, "Unrelated.cs");
+        var compilation = CSharpCompilation.Create(
+            "IncrementalTracking",
+            [mapperATree, mapperBTree, unrelatedTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CreateTrackingDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var updatedUnrelatedTree = unrelatedTree.WithChangedText(SourceText.From(
+            "namespace Fixture; public sealed class Unrelated { public int Value => 2; }"));
+        var updatedCompilation = compilation.ReplaceSyntaxTree(unrelatedTree, updatedUnrelatedTree);
+        driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
+
+        var trackedSteps = driver.GetRunResult().Results.Single().TrackedSteps;
+        var sourceOutputs = trackedSteps["AlephMapper.ProjectableSourceOutput"]
+            .SelectMany(static step => step.Outputs)
+            .ToArray();
+
+        await Assert.That(sourceOutputs).Count().IsEqualTo(2);
+        await Assert.That(sourceOutputs.All(static output =>
+            output.Item2 is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged)).IsTrue();
+    }
+
+    [Test]
+    public async Task SourceOutputRemainsUnchangedWhenOnlyDiagnosticLocationChanges()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource { string Name { get; } }
+            public interface IDestination { string Name { get; set; } }
+            public sealed class AdaptedSource : ISource { public string Name { get; set; } = string.Empty; }
+            public sealed class AdaptedDestination : IDestination { public string Name { get; set; } = string.Empty; }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new() { Name = source.Name };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, _parseOptions, "Mapper.cs");
+        var compilation = CSharpCompilation.Create(
+            "DiagnosticOnlyChange",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CreateTrackingDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var initialResult = driver.GetRunResult().Results.Single();
+        var generatedSource = initialResult.GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var initialDiagnostic = initialResult.Diagnostics.Single(static diagnostic => diagnostic.Id == "AM0018");
+        var updatedSyntaxTree = syntaxTree.WithChangedText(SourceText.From("\n" + source));
+        var updatedCompilation = compilation.ReplaceSyntaxTree(syntaxTree, updatedSyntaxTree);
+        driver = driver.RunGeneratorsAndUpdateCompilation(updatedCompilation, out _, out _);
+
+        var result = driver.GetRunResult().Results.Single();
+        var updatedGeneratedSource = result.GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var sourceOutputs = result.TrackedSteps["AlephMapper.ProjectableSourceOutput"]
+            .SelectMany(static step => step.Outputs)
+            .ToArray();
+        var diagnostic = result.Diagnostics.Single(static diagnostic => diagnostic.Id == "AM0018");
+
+        await Assert.That(updatedGeneratedSource).IsEqualTo(generatedSource);
+        await Assert.That(diagnostic.Location.GetLineSpan().StartLinePosition.Line)
+            .IsEqualTo(initialDiagnostic.Location.GetLineSpan().StartLinePosition.Line + 1);
+        await Assert.That(sourceOutputs).Count().IsEqualTo(1);
+        await Assert.That(sourceOutputs.Single().Item2).IsEqualTo(IncrementalStepRunReason.Unchanged);
+    }
+
+    [Test]
+    public async Task GenericMethodsGenerateProjectableAndUpdatableCompanions()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource
+            {
+                string Name { get; }
+            }
+
+            public interface IDestination
+            {
+                string Name { get; set; }
+            }
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                [Updatable]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new()
+                    {
+                        Name = source.Name
+                    };
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "GenericMethodMappings");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapExpression"));
+
+        await Assert.That(generatedSource).Contains("MapExpression<TSource, TResult>()");
+        await Assert.That(generatedSource).Contains("Map<TSource, TResult>(TSource source, TResult dest)");
+        await Assert.That(generatedSource).Contains("where TSource : global::Fixture.ISource");
+        await Assert.That(generatedSource).Contains("where TResult : global::Fixture.IDestination, new()");
+    }
+
+    [Test]
+    public async Task GenericMethodsDoNotGenerateAdaptedCompanions()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource
+            {
+                string Name { get; }
+            }
+
+            public interface IDestination
+            {
+                string Name { get; set; }
+            }
+
+            public sealed class AdaptedSource : ISource
+            {
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public sealed class AdaptedDestination : IDestination
+            {
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new()
+                    {
+                        Name = source.Name
+                    };
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "GenericAdaptation",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Id == "AM0018")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapAdapted", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(outputCompilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task PragmaCanSuppressGenericAdaptationDiagnostic()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public interface ISource { string Name { get; } }
+            public interface IDestination { string Name { get; set; } }
+            public sealed class AdaptedSource : ISource { public string Name { get; set; } = string.Empty; }
+            public sealed class AdaptedDestination : IDestination { public string Name { get; set; } = string.Empty; }
+
+            public static partial class Mapper
+            {
+            #pragma warning disable AM0018
+                [Adapt(typeof(AdaptedSource), typeof(AdaptedDestination), Name = "MapAdapted")]
+                public static TResult Map<TSource, TResult>(TSource source)
+                    where TSource : ISource
+                    where TResult : IDestination, new() => new() { Name = source.Name };
+            #pragma warning restore AM0018
+            }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, _parseOptions, "PragmaSuppression.cs");
+        var compilation = CSharpCompilation.Create(
+            "PragmaSuppression",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        var result = driver.GetRunResult().Results.Single();
+
+        await Assert.That(generatorDiagnostics.Any(diagnostic =>
+            diagnostic.Id == "AM0018" && !diagnostic.IsSuppressed)).IsFalse();
+        await Assert.That(result.Diagnostics.Any(diagnostic =>
+            diagnostic.Id == "AM0018" && !diagnostic.IsSuppressed)).IsFalse();
+    }
+
+    [Test]
+    public async Task LargeCompilationDiscoversOnlyAttributedMappers()
+    {
+        var source = new StringBuilder("using AlephMapper; namespace Fixture; public sealed class Source { public int Value { get; set; } } public sealed class Target { public int Value { get; set; } } public sealed class Unrelated {");
+        for (var index = 0; index < 1_000; index++)
+        {
+            source.Append("public int Method").Append(index).Append("() => ").Append(index).Append(';');
+        }
+
+        source.Append('}');
+        for (var index = 0; index < 10; index++)
+        {
+            source.Append("public static partial class Mapper").Append(index)
+                .Append(" { [Projectable] public static Target Map(Source source) => new() { Value = source.Value }; }");
+        }
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "LargeDiscovery",
+            [CSharpSyntaxTree.ParseText(source.ToString(), _parseOptions, "Large.cs")],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var stopwatch = Stopwatch.StartNew();
+        var driver = CreateTrackingDriver().RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+        stopwatch.Stop();
+
+        var result = driver.GetRunResult().Results.Single();
+        var candidateOutputs = result.TrackedSteps["AlephMapper.ProjectableSourceOutput"]
+            .SelectMany(static step => step.Outputs)
+            .ToArray();
+
+        Console.WriteLine($"Large discovery completed in {stopwatch.ElapsedMilliseconds} ms.");
+        await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(candidateOutputs).Count().IsEqualTo(10);
+        await Assert.That(result.GeneratedSources
+            .Count(generated => generated.HintName.EndsWith("_GeneratedMappings.g.cs", StringComparison.Ordinal)))
+            .IsEqualTo(10);
+    }
+
+    private CSharpGeneratorDriver CreateTrackingDriver()
+    {
+        return CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: _parseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
     }
 
     public static IEnumerable<object[]> GetTestCases()
@@ -72,7 +761,11 @@ public class SourceGeneratorTests
         var syntaxTrees = sourceTrees.Append(globalUsings).ToArray();
 
         var references = (await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None))
-            .Add(MetadataReference.CreateFromFile(typeof(DbContext).Assembly.Location));
+            .Add(MetadataReference.CreateFromFile(typeof(DbContext).Assembly.Location))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "AgileObjects.NetStandardPolyfills.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "AgileObjects.ReadableExpressions.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "TUnit.Assertions.dll")))
+            .Add(MetadataReference.CreateFromFile(Path.Combine(AppContext.BaseDirectory, "TUnit.Core.dll")));
 
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
 
@@ -82,11 +775,28 @@ public class SourceGeneratorTests
             references,
             compilationOptions);
 
-        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         await Assert.That(generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-
         var result = driver.GetRunResult().Results.Single();
+        var generatedSyntaxTrees = outputCompilation.SyntaxTrees
+            .Where(tree => !syntaxTrees.Contains(tree))
+            .ToHashSet();
+        await Assert.That(outputCompilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error &&
+                                 diagnostic.Location.SourceTree is { } sourceTree &&
+                                 generatedSyntaxTrees.Contains(sourceTree))).IsEmpty();
+        // The nullable-disabled fixture specifically verifies that generated output preserves
+        // the source nullable context without introducing nullable-flow warnings. Other
+        // fixtures intentionally exercise policies that dereference nullable values.
+        if (name == "NullableDisabled")
+        {
+            await Assert.That(outputCompilation.GetDiagnostics()
+                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning &&
+                                     diagnostic.Id.StartsWith("CS86", StringComparison.Ordinal) &&
+                                     diagnostic.Location.SourceTree is { } sourceTree &&
+                                     generatedSyntaxTrees.Contains(sourceTree))).IsEmpty();
+        }
 
         var actualSources = result.GeneratedSources.ToDictionary(
             source => Path.GetFileName(source.HintName),
@@ -342,8 +1052,8 @@ public class SourceGeneratorTests
         await Assert.That(generatedSource).DoesNotContain("?.");
         await Assert.That(generatedSource).DoesNotContain("MapNonNullPerson");
         await Assert.That(generatedSource).Contains("source != null");
-        await Assert.That(generatedSource).Contains("new EmployeeDto");
-        await Assert.That(generatedSource).Contains("Tax = new EmployeeTaxInfo");
+        await Assert.That(generatedSource).Contains("new global::Fixture.EmployeeDto");
+        await Assert.That(generatedSource).Contains("Tax = new global::Fixture.EmployeeTaxInfo");
     }
 
     [Test]
@@ -455,8 +1165,8 @@ public class SourceGeneratorTests
         await Assert.That(generatedSource).DoesNotContain("?.");
         await Assert.That(generatedSource).DoesNotContain("MapNonNullInputToItem");
         await Assert.That(generatedSource).Contains("source != null");
-        await Assert.That(generatedSource).Contains("new ReadOnlyOrderItem");
-        await Assert.That(generatedSource).Contains("Tax = new ReadOnlyTaxInfo");
+        await Assert.That(generatedSource).Contains("new global::Fixture.ReadOnlyOrderItem");
+        await Assert.That(generatedSource).Contains("Tax = new global::Fixture.ReadOnlyTaxInfo");
         await Assert.That(generatedSource).Contains("TotalAmount = decimal.Round((source.Subtotal * (1m + source.TaxRate / 100m)), 2)");
     }
 
@@ -512,7 +1222,7 @@ public class SourceGeneratorTests
         var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("MapEmployeeExpression"));
 
         await Assert.That(generatedSource).DoesNotContain("new string");
-        await Assert.That(generatedSource).Contains("new DescriptionWithOrder");
+        await Assert.That(generatedSource).Contains("new global::Fixture.Mapper.DescriptionWithOrder");
     }
 
     [Test]
@@ -574,13 +1284,13 @@ public class SourceGeneratorTests
 
             public static partial class Criteria
             {
-                [Expressive]
+                [Projectable]
                 public static bool HasCategoryLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
                     line.Invoice.DataSetId == dataSetId &&
                     line.Invoice.InvoiceIdReference == invoiceId &&
                     line.CategoryId != null;
 
-                [Expressive]
+                [Projectable]
                 public static bool HasCategoryLineSingleLine(InvoiceLine line, Guid dataSetId, Guid invoiceId) =>
                     line.Invoice.DataSetId == dataSetId && line.Invoice.InvoiceIdReference == invoiceId && line.CategoryId != null;
             }
@@ -605,6 +1315,49 @@ public class SourceGeneratorTests
         await Assert.That(generatedSource).Contains($"{Environment.NewLine}            && line.Invoice.InvoiceIdReference == invoiceId");
         await Assert.That(generatedSource).Contains($"{Environment.NewLine}            && line.CategoryId != null;");
         await Assert.That(generatedSource).Contains("line => line.Invoice.DataSetId == dataSetId && line.Invoice.InvoiceIdReference == invoiceId && line.CategoryId != null;");
+    }
+
+    [Test]
+    public async Task ExpressionOutputPreservesConditionalLayoutIncludingLoweredSwitches()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static string SingleConditional(bool condition) => condition ? "yes" : "no";
+
+                [Projectable]
+                public static string MultilineConditional(bool condition) =>
+                    condition
+                        ? "yes"
+                        : "no";
+
+                [Projectable]
+                public static string SingleSwitch(int value) => value switch { 1 => "one", _ => "other" };
+
+                [Projectable]
+                public static string MultilineSwitch(int value) =>
+                    value switch
+                    {
+                        1 => "one",
+                        _ => "other"
+                    };
+            }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "ConditionalExpressionFormatting");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("SingleConditionalExpression"));
+
+        await Assert.That(generatedSource).Contains("condition => condition ? \"yes\" : \"no\";");
+        await Assert.That(generatedSource).Contains(
+            $"condition => condition{Environment.NewLine}            ? \"yes\"{Environment.NewLine}            : \"no\";");
+        await Assert.That(generatedSource).Contains("value => value == 1 ? \"one\" : \"other\";");
+        await Assert.That(generatedSource).Contains(
+            $"value => value == 1{Environment.NewLine}            ? \"one\"{Environment.NewLine}            : \"other\";");
     }
 
     [Test]
@@ -664,6 +1417,45 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptationDiagnosticsPreserveSourceLocation()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                // Keep the attribute away from the first line to verify line mapping.
+                [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]
+                public static PersonDto MapPerson(Person source) => new() { Name = source.Name };
+            }
+
+            public sealed class Person { public string Name { get; set; } = string.Empty; }
+            public sealed class Employee { public int Name { get; set; } }
+            public sealed class PersonDto { public string Name { get; set; } = string.Empty; }
+            public sealed class EmployeeDto { public string Name { get; set; } = string.Empty; }
+            """;
+
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, _parseOptions, "AdaptLocation.cs");
+        var compilation = CSharpCompilation.Create(
+            "AdaptationDiagnosticLocation",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var diagnostic = driver.GetRunResult().Results.Single().Diagnostics.Single(diagnostic => diagnostic.Id == "AM0008");
+        var lineSpan = diagnostic.Location.GetLineSpan();
+
+        await Assert.That(diagnostic.Location).IsNotEqualTo(Location.None);
+        await Assert.That(diagnostic.Location.SourceTree).IsEqualTo(syntaxTree);
+        await Assert.That(lineSpan.Path).IsEqualTo("AdaptLocation.cs");
+        await Assert.That(lineSpan.StartLinePosition.Line).IsEqualTo(7);
+    }
+
+    [Test]
     public async Task UnsafeNullConditionalReceiverReportsDiagnosticAndSkipsExpression()
     {
         const string source = """
@@ -691,7 +1483,7 @@ public class SourceGeneratorTests
 
             public static partial class Mapper
             {
-                [Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
                 public static AddressDto? Map(Address source) =>
                     source.GetNested()?.ToDto();
             }
@@ -739,7 +1531,7 @@ public class SourceGeneratorTests
 
             public static partial class Mapper
             {
-                [Expressive(NullConditionalRewrite = NullConditionalRewrite.None)]
+                [Projectable(NullConditionalRewrite = NullConditionalRewrite.None)]
                 public static AddressDto? Map(Address? source) =>
                     source?.ToDto();
             }

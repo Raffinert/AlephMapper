@@ -2,7 +2,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace AlephMapper.Helpers;
 
@@ -15,6 +14,7 @@ internal static class EmitHelpers
         ITypeSymbol sourceType,
         IReadOnlyList<string> sourceParameterNames,
         CollectionPropertiesPolicy collectionPolicy,
+        NullablePolicy nullablePolicy,
         List<string> lines)
     {
         // Seed type collection with the destination (return) type to reliably resolve
@@ -28,7 +28,7 @@ internal static class EmitHelpers
 
         var typeContext = propertyInfoCollector.TypeContext;
 
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, sourceParameterNames);
+        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, sourceParameterNames, nullablePolicy);
         List<string> processedLines;
 
         var srcName = sourceParameterNames[0];

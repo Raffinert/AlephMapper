@@ -4,7 +4,7 @@ This test project provides comprehensive coverage of the AlephMapper source gene
 
 ## Test Coverage
 
-### 1. Expressive Mapping Tests (`SimpleIntegrationTests`)
+### 1. Projectable Mapping Tests (`SimpleIntegrationTests`)
 
 #### Basic Functionality
 - **Simple Property Expressions**: Tests basic property mapping with string interpolation
@@ -56,13 +56,13 @@ The test project uses a comprehensive domain model representing an employee mana
 
 ### Mappers Tested
 
-#### `SimpleEmployeeMapper` (Expressive with Rewrite Policy)
+#### `SimpleEmployeeMapper` (Projectable with Rewrite Policy)
 - Basic property mapping
 - Null conditional operators with rewrite
 - Simple DTO creation
 - Method inlining demonstration
 
-#### `SimpleIgnoreMapper` (Expressive with Ignore Policy)
+#### `SimpleIgnoreMapper` (Projectable with Ignore Policy)
 - Same functionality as above but with ignore policy
 - Demonstrates different null handling behavior
 
@@ -74,12 +74,12 @@ The test project uses a comprehensive domain model representing an employee mana
 ## Key Features Demonstrated
 
 ### 1. Expression Tree Generation
-All Expressive mappers automatically generate corresponding expression tree methods:
+All Projectable mappers automatically generate corresponding expression tree methods:
 - `GetFullName(Employee)` ? `GetFullNameExpression()`
 - `MapToSimpleDto(Employee)` ? `MapToSimpleDtoExpression()`
 
 ### 2. Method Inlining
-When using Expressive mappers, method calls to other methods in the same class are automatically inlined:
+When using Projectable mappers, method calls to other methods in the same class are automatically inlined:
 ```csharp
 public static EmployeeSimpleDto MapToSimpleDto(Employee employee) => new EmployeeSimpleDto
 {

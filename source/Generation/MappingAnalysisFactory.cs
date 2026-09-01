@@ -11,18 +11,19 @@ using System.Threading;
 
 namespace AlephMapper.Generation;
 
-internal static class MappingModelFactory
+internal static class MappingAnalysisFactory
 {
-    public static MappingModel? Create(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    public static MappingAnalysis? Create(
+        SemanticModel semanticModel,
+        MethodDeclarationSyntax methodDeclaration,
+        CancellationToken cancellationToken)
     {
-        if (context.Node is not MethodDeclarationSyntax methodDeclaration ||
-            methodDeclaration.Parent is not ClassDeclarationSyntax classDeclaration ||
+        if (methodDeclaration.Parent is not ClassDeclarationSyntax classDeclaration ||
             !classDeclaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
         {
             return null;
         }
 
-        var semanticModel = context.SemanticModel;
         var classSymbol = semanticModel.GetDeclaredSymbol(classDeclaration, cancellationToken);
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodDeclaration, cancellationToken);
         if (classSymbol == null || methodSymbol == null || methodSymbol.Parameters.Length == 0)
@@ -36,7 +37,7 @@ internal static class MappingModelFactory
             return null;
         }
 
-        return new MappingModel(
+        return new MappingAnalysis(
             classSymbol,
             methodSymbol,
             methodSymbol.Name,
@@ -44,7 +45,7 @@ internal static class MappingModelFactory
             methodSymbol.ReturnType,
             bodyExpression,
             semanticModel,
-            HasAttribute(classSymbol, methodSymbol, typeof(ExpressiveAttribute).FullName),
+            HasAttribute(classSymbol, methodSymbol, typeof(ProjectableAttribute).FullName),
             HasAttribute(classSymbol, methodSymbol, typeof(UpdatableAttribute).FullName),
             classDeclaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword)),
             GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore,
@@ -59,9 +60,9 @@ internal static class MappingModelFactory
                SymbolHelpers.HasAttribute(methodSymbol, attributeName);
     }
 
-    private static IReadOnlyList<AdaptationModel> GetAdaptations(IMethodSymbol methodSymbol)
+    private static IReadOnlyList<AdaptationAnalysis> GetAdaptations(IMethodSymbol methodSymbol)
     {
-        var adaptations = new List<AdaptationModel>();
+        var adaptations = new List<AdaptationAnalysis>();
         foreach (var attribute in methodSymbol.GetAttributes())
         {
             if (attribute.AttributeClass?.ToDisplayString() != typeof(AdaptAttribute).FullName ||
@@ -91,7 +92,13 @@ internal static class MappingModelFactory
                 }
             }
 
-            adaptations.Add(new AdaptationModel(sourceType, destinationType, name, generation, nullStrategy, attribute));
+            adaptations.Add(new AdaptationAnalysis(
+                sourceType,
+                destinationType,
+                name,
+                generation,
+                nullStrategy,
+                SourceLocationModel.FromSyntax(attribute.ApplicationSyntaxReference)));
         }
 
         return adaptations;
@@ -101,8 +108,8 @@ internal static class MappingModelFactory
     {
         var value = SymbolHelpers.GetAttributeArgumentValue(
             symbol,
-            typeof(ExpressiveAttribute).FullName,
-            nameof(ExpressiveAttribute.NullConditionalRewrite));
+            typeof(ProjectableAttribute).FullName,
+            nameof(ProjectableAttribute.NullConditionalRewrite));
         return value is int intValue ? (NullConditionalRewrite)intValue : null;
     }
 
@@ -130,17 +137,25 @@ internal static class MappingModelFactory
         var usings = new HashSet<string>();
         foreach (var usingDirective in compilationUnit.Usings)
         {
-            usings.Add(usingDirective.Name.ToString());
+            AddUsing(usings, usingDirective);
         }
 
         foreach (var namespaceDeclaration in compilationUnit.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
         {
             foreach (var usingDirective in namespaceDeclaration.Usings)
             {
-                usings.Add(usingDirective.Name.ToString());
+                AddUsing(usings, usingDirective);
             }
         }
 
         return usings.OrderBy(static value => value).ToList();
+    }
+
+    private static void AddUsing(ISet<string> usings, UsingDirectiveSyntax usingDirective)
+    {
+        if (usingDirective.Name is { } name)
+        {
+            usings.Add(name.ToString());
+        }
     }
 }

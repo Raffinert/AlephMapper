@@ -30,7 +30,7 @@ internal class TestObject
     public int Value { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class MixedTypeMapper
 {
     [Updatable]

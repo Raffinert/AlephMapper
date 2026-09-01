@@ -6,7 +6,6 @@
     <Description>Your manual mapping companion.</Description>
     <DevelopmentDependency>true</DevelopmentDependency>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IsRoslynComponent>true</IsRoslynComponent>
     <LangVersion>latest</LangVersion>
@@ -14,16 +13,21 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.6.2</PackageVersion>
+    <PackageVersion>0.7.0</PackageVersion>
+    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
+    <Version>$(PackageVersion)</Version>
+    <AssemblyVersion>$(PackageVersion).$(BuildNumber)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
     <PackageTags>Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Title>Aleph Mapper</Title>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -33,6 +37,7 @@
   <ItemGroup>
     <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers\dotnet\cs\$(AssemblyName).dll" Visible="false" />
     <None Include="../README.md" pack="true" PackagePath="." />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 
     <ItemGroup>

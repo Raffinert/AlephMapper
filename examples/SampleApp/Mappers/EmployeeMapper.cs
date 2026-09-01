@@ -11,7 +11,7 @@ namespace SampleApp.Mappers;
 /// </summary>
 public static partial class EmployeeMapper
 {
-    [Expressive]
+    [Projectable]
     [Updatable]
     public static EmployeeSummaryDto ToSummary(Employee emp, int year) => new()
     {

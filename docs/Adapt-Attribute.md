@@ -25,7 +25,7 @@ Use `[Adapt]` when a mapping body should be shared by explicitly named type pair
 
 For example, `Person` and `Employee` can both contain the fields used by a template, while `PersonDto` and `EmployeeDto` can both receive the initializer assignments. A single `Person -> PersonDto` template can therefore produce a separate `Employee -> EmployeeDto` API.
 
-Use `[Expressive]` when the generated expression is for the original method's declared signature. Use `[Adapt]` when the generated API should use a different, explicit source and/or destination type. The two attributes can be applied to the same template method.
+Use `[Projectable]` when the generated expression is for the original method's declared signature. Use `[Adapt]` when the generated API should use a different, explicit source and/or destination type. The two attributes can be applied to the same template method.
 
 ## Public API
 
@@ -55,7 +55,7 @@ public sealed class AdaptAttribute : Attribute
 
 `SourceType` and `DestinationType` are required `typeof(...)` constructor arguments. Each `[Adapt]` is independent, so a method may be adapted to multiple pairs.
 
-`NullConditionalRewrite` applies while helper methods are inlined for that adaptation. It uses the same policies as `[Expressive]`:
+`NullConditionalRewrite` applies while helper methods are inlined for that adaptation. It uses the same policies as `[Projectable]`:
 
 | Value | Effect |
 | --- | --- |
@@ -217,7 +217,7 @@ The feature is implemented as part of the incremental source generator. The foll
 | [`source/Generation/MapperFileEmitter.cs`](../source/Generation/MapperFileEmitter.cs) | Recreates the namespace and containing partial-type hierarchy and renders the generated file. |
 | [`source/Diagnostics/DiagnosticDescriptors.cs`](../source/Diagnostics/DiagnosticDescriptors.cs) | Defines `AM0005`–`AM0015`. |
 
-The older `[Expressive]` and `[Updatable]` behaviors are emitted by their own focused emitters. All three features share the mapping model, helper inliner, generated-file context, and output renderer.
+`[Projectable]` and `[Updatable]` are emitted by their own focused emitters. All three features share the mapping model, helper inliner, generated-file context, and output renderer.
 
 ## Generation pipeline
 
@@ -226,8 +226,8 @@ The incremental pipeline is registered in [`source/AlephSourceGenerator.cs`](../
 1. `AttributeSourceEmitter` adds `AlephMapper.Attributes.g.cs` after initialization so the consumer can use the attributes.
 2. `MappingMethodCandidate` identifies method declarations contained in classes.
 3. `MappingModelFactory` filters to static classes, resolves symbols, requires at least one parameter and an expression body, and collects the method's adaptation attributes.
-4. `MapperSourceOutput` groups mapping models by containing mapper type. A mapper produces output when it is partial and contains an expressive, updatable, or adapted mapping.
-5. For each eligible mapping, the output dispatcher runs `ExpressiveMemberEmitter`, `AdaptationMemberEmitter`, and `UpdatableMemberEmitter`.
+4. `MapperSourceOutput` groups mapping models by containing mapper type. A mapper produces output when it is partial and contains a projectable, updatable, or adapted mapping.
+5. For each eligible mapping, the output dispatcher runs `ProjectableMemberEmitter`, `AdaptationMemberEmitter`, and `UpdatableMemberEmitter`.
 6. The adaptation emitter processes every `AdaptationModel` independently:
    1. Decodes the requested flags and verifies the naming requirement.
    2. Rejects duplicate source/destination pairs on the same template.

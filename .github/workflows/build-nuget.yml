@@ -1,0 +1,104 @@
+name: Build NuGet package
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.400
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore AlephMapper.slnx
+
+      - name: Build solution
+        run: dotnet build AlephMapper.slnx --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test AlephMapper.slnx --configuration Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results
+          if-no-files-found: warn
+
+      - name: Pack NuGet package
+        run: dotnet pack source/AlephMapper.csproj --configuration Release --no-restore -p:BuildNumber=${{ github.run_number }} --output artifacts/nuget
+
+      - name: Verify package consumption
+        shell: bash
+        run: |
+          package_file=$(find artifacts/nuget -name 'AlephMapper.*.nupkg' -print -quit)
+          package_version=$(basename "$package_file" | sed -E 's/^AlephMapper\.(.*)\.nupkg$/\1/')
+          mkdir -p artifacts/package-smoke
+
+          cat > artifacts/package-smoke/PackageSmoke.csproj <<EOF
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="AlephMapper" Version="$package_version" PrivateAssets="all" />
+            </ItemGroup>
+          </Project>
+          EOF
+
+          cat > artifacts/package-smoke/Mapper.cs <<'EOF'
+          using AlephMapper;
+
+          namespace PackageSmoke;
+
+          public sealed class Source
+          {
+              public string Name { get; set; } = string.Empty;
+          }
+
+          public sealed class Destination
+          {
+              public string Name { get; set; } = string.Empty;
+          }
+
+          public static partial class Mapper
+          {
+              [Projectable]
+              public static Destination Map(Source source) => new() { Name = source.Name };
+          }
+          EOF
+
+          dotnet restore artifacts/package-smoke/PackageSmoke.csproj --source artifacts/nuget
+          dotnet build artifacts/package-smoke/PackageSmoke.csproj --configuration Release --no-restore
+
+      - name: Upload NuGet package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlephMapper-nuget
+          path: artifacts/nuget/*.nupkg
+          if-no-files-found: error

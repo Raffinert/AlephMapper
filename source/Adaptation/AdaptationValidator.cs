@@ -1,6 +1,7 @@
-﻿#nullable enable
+#nullable enable
 
 using AlephMapper.Diagnostics;
+using AlephMapper.Generation;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -17,12 +18,12 @@ namespace AlephMapper.Adaptation;
 internal static class AdaptationValidator
 {
     public static bool Validate(
-        SourceProductionContext context,
-        MappingModel mapping,
-        AdaptationModel adaptation,
+        MapperGenerationContext context,
+        MappingAnalysis mapping,
+        AdaptationAnalysis adaptation,
         ExpressionSyntax inlinedBody)
     {
-        var location = adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+        var location = adaptation.Location?.ToLocation()
             ?? mapping.MethodSymbol.Locations.FirstOrDefault();
         var isValid = true;
 
@@ -97,7 +98,7 @@ internal static class AdaptationValidator
 
             if (TryGetDirectSourcePath(assignment.Expression, mapping.SemanticModel, mapping.Parameters[0], out var path) &&
                 TryResolveReadablePath(adaptation.SourceType, path, out var sourceMember) &&
-                !IsImplicitlyConvertible(mapping.SemanticModel.Compilation, GetMemberType(sourceMember), GetMemberType(destinationMember)))
+                !IsImplicitlyConvertible(mapping.SemanticModel.Compilation, GetMemberType(sourceMember!), GetMemberType(destinationMember)))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptIncompatibleType,

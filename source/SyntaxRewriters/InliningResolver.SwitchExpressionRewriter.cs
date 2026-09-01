@@ -20,6 +20,11 @@ internal sealed partial class InliningResolver
             return switchExpression?.WithSwitchKeyword(node.SwitchKeyword.WithLeadingTrivia(Space));
         }
 
+        // Preserve the switch layout after lowering it to conditionals. The generated
+        // nodes have no trivia of their own, so the pretty printer needs this signal.
+        var switchText = node.ToFullString();
+        var multiline = switchText.IndexOf('\n') >= 0 || switchText.IndexOf('\r') >= 0;
+
         // Reverse arms order to start from the default value
         var arms = node.Arms.Reverse();
 
@@ -61,10 +66,11 @@ internal sealed partial class InliningResolver
                     );
                 }
 
-                currentExpression = ConditionalExpression(
+                currentExpression = CreateConditional(
                     expression,
                     armExpression,
-                    currentExpression
+                    currentExpression,
+                    multiline
                 );
 
                 continue;
@@ -99,10 +105,11 @@ internal sealed partial class InliningResolver
                     armExpression,
                     declaration,
                     governingExpressionNode);
-                currentExpression = ConditionalExpression(
+                currentExpression = CreateConditional(
                     condition,
                     modifiedArmExpression,
-                    currentExpression
+                    currentExpression,
+                    multiline
                 );
 
                 continue;
@@ -146,6 +153,19 @@ internal sealed partial class InliningResolver
         var stripped = expression.WithoutTrivia();
         var rewritten = (ExpressionSyntax?)Visit(stripped);
         return (rewritten ?? stripped).WithoutTrivia();
+    }
+
+    private static ConditionalExpressionSyntax CreateConditional(
+        ExpressionSyntax condition,
+        ExpressionSyntax whenTrue,
+        ExpressionSyntax whenFalse,
+        bool multiline)
+    {
+        var conditional = ConditionalExpression(condition, whenTrue, whenFalse);
+        var annotationKind = multiline
+            ? GeneratedSyntaxAnnotations.MultilineConditional
+            : GeneratedSyntaxAnnotations.SingleLineConditional;
+        return conditional.WithAdditionalAnnotations(new SyntaxAnnotation(annotationKind));
     }
 
     private static BinaryExpressionSyntax PadBinaryOperator(BinaryExpressionSyntax expression)

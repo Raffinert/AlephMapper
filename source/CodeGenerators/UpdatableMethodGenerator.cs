@@ -7,15 +7,14 @@ using System.Linq;
 
 namespace AlephMapper.CodeGenerators;
 
-internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext, IReadOnlyList<string> sourceParamNames)
+internal sealed class UpdatableMethodGenerator(
+    string destPrefix,
+    PropertyMappingContext typeContext,
+    IReadOnlyList<string> sourceParamNames,
+    AlephMapper.Helpers.NullablePolicy nullablePolicy)
 {
     private readonly List<string> _lines = [];
     private readonly string _primarySourceParamName = sourceParamNames.FirstOrDefault() ?? "source";
-
-    private static readonly SymbolDisplayFormat MinimallyQualifiedFormatWithoutNullability =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.WithMiscellaneousOptions(
-            SymbolDisplayFormat.MinimallyQualifiedFormat.MiscellaneousOptions
-            & ~SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
     {
@@ -26,7 +25,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         if (typeContext.ShouldPropertyBePreCreated(destPrefix, out var typeInfo))
         {
             _lines.Add($"if ({destPrefix} == null)");
-            _lines.Add($"    {destPrefix} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+            _lines.Add($"    {destPrefix} = new {GetTypeName(typeInfo.Type)}();");
         }
 
         foreach (var expr in objectCreation.Initializer.Expressions)
@@ -81,7 +80,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
                     if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
                     {
                         _lines.Add($"if ({fullDestPath} == null)");
-                        _lines.Add($"    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+                        _lines.Add($"    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
                     }
                     _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
                 }
@@ -177,7 +176,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             _lines.Add($"{indent}if ({fullDestPath} == null)");
-            _lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+            _lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
         }
         
         // Process nested properties
@@ -280,7 +279,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+            lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
         }
         
         // Process nested properties
@@ -312,7 +311,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+            lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
         }
         
 
@@ -354,7 +353,7 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
         {
             _lines.Add($"if ({fullDestPath} == null)");
-            _lines.Add($"    {fullDestPath} = new {typeInfo.Type.ToDisplayString(MinimallyQualifiedFormatWithoutNullability)}();");
+            _lines.Add($"    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
         }
 
         if (objectCreation.Initializer?.Expressions != null)
@@ -411,6 +410,12 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
     {
         return expression?.ToString().Trim() == "null";
     }
+
+    private string GetTypeName(ITypeSymbol type) =>
+        AlephMapper.Helpers.TypeDisplay.ForSymbol(
+            type,
+            NullableAnnotation.NotAnnotated,
+            nullablePolicy);
 
     private string NormalizeConditionalMemberAccess(ExpressionSyntax expression)
     {

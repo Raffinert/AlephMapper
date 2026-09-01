@@ -18,6 +18,19 @@ internal static class AdaptationMemberEmitter
     public static void Emit(MappingMethodDetails details, MapperGenerationContext context)
     {
         var mapping = details.Mapping;
+        if (mapping.MethodSymbol.TypeParameters.Length != 0)
+        {
+            foreach (var adaptation in mapping.Adaptations)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.AdaptGenericMethodUnsupported,
+                    GetLocation(mapping, adaptation),
+                    mapping.MethodSymbol.Name));
+            }
+
+            return;
+        }
+
         var adaptationPairs = new HashSet<string>(StringComparer.Ordinal);
         foreach (var adaptation in mapping.Adaptations)
         {
@@ -26,7 +39,7 @@ internal static class AdaptationMemberEmitter
             var generateUpdate = (adaptation.Generation & AdaptGeneration.Update) == AdaptGeneration.Update;
             if (generateExpression && string.IsNullOrWhiteSpace(adaptation.GeneratedName))
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptExpressionWithoutName,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name));
@@ -34,17 +47,17 @@ internal static class AdaptationMemberEmitter
             }
 
             var adaptationName = string.IsNullOrWhiteSpace(adaptation.GeneratedName) ? mapping.Name : adaptation.GeneratedName!;
-            var sourceTypeName = TypeDisplay.ForSymbol(adaptation.SourceType, NullableAnnotation.None, details.NullableContext);
-            var destinationTypeName = TypeDisplay.ForSymbol(adaptation.DestinationType, NullableAnnotation.None, details.NullableContext);
+            var sourceTypeName = TypeDisplay.ForSymbol(adaptation.SourceType, NullableAnnotation.None, details.NullablePolicy);
+            var destinationTypeName = TypeDisplay.ForSymbol(adaptation.DestinationType, NullableAnnotation.None, details.NullablePolicy);
             var additionalParametersWithNames = string.Join(", ", mapping.Parameters.Skip(1).Select(parameter =>
-                $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, details.NullableContext)} {parameter.Name}"));
+                $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, details.NullablePolicy)} {parameter.Name}"));
             var adaptationParametersWithNames = sourceTypeName + " " + details.SourceName +
                 (string.IsNullOrEmpty(additionalParametersWithNames) ? "" : ", " + additionalParametersWithNames);
 
             var pairSignature = MethodSignature.Build("", [sourceTypeName, destinationTypeName]);
             if (!adaptationPairs.Add(pairSignature))
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptDuplicatePair,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name,
@@ -53,12 +66,14 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, adaptation.NullStrategy);
-            var inlinedBody = (ExpressionSyntax)inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
+            var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, adaptation.NullStrategy, details.NullablePolicy);
+            var inlinedBody = ((ExpressionSyntax)inliner.Visit(mapping.BodySyntax.Expression)!)
+                .WithoutLeadingTrivia()
+                .WithoutTrailingTrivia();
             context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
             if (inliner.CircularReferences.Any())
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptCircularHelper,
                     mapping.MethodSymbol.Locations.FirstOrDefault(),
                     mapping.MethodSymbol.Name));
@@ -68,7 +83,7 @@ internal static class AdaptationMemberEmitter
             if ((generateMap || generateExpression) &&
                 inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsafeNullConditionalReceiver,
                     unsafeReceiver.Location,
                     mapping.MethodSymbol.Name,
@@ -79,7 +94,7 @@ internal static class AdaptationMemberEmitter
             if (generateExpression &&
                 inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsupportedNullConditionalExpression,
                     unsupportedConditional.Location,
                     mapping.MethodSymbol.Name,
@@ -87,7 +102,7 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            if (!AdaptationValidator.Validate(context.SourceProductionContext, mapping, adaptation, inlinedBody))
+            if (!AdaptationValidator.Validate(context, mapping, adaptation, inlinedBody))
             {
                 continue;
             }
@@ -99,7 +114,7 @@ internal static class AdaptationMemberEmitter
                 mapping.ReturnType,
                 destinationTypeName,
                 adaptation.DestinationType,
-                details.NullableContext);
+                details.NullablePolicy);
             var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
 
             var adaptationParameterTypes = new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).ToArray();
@@ -122,7 +137,7 @@ internal static class AdaptationMemberEmitter
                 out var conflict);
             if (generatedConflict || plannerConflict)
             {
-                context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.AdaptNameConflict,
                     GetLocation(mapping, adaptation),
                     mapping.MethodSymbol.Name,
@@ -153,7 +168,7 @@ internal static class AdaptationMemberEmitter
             {
                 if (adaptation.DestinationType.IsValueType && !SymbolHelpers.CanBeNull(adaptation.DestinationType))
                 {
-                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.UpdatableValueTypeReturn,
                         GetLocation(mapping, adaptation),
                         adaptationName,
@@ -161,12 +176,12 @@ internal static class AdaptationMemberEmitter
                     continue;
                 }
 
-                var updateInliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None);
+                var updateInliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None, details.NullablePolicy);
                 var inlinedUpdateBody = (ExpressionSyntax)updateInliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
                 context.AddUsings(updateInliner.UsingDirectives.Concat(mapping.UsingDirectives));
                 if (updateInliner.CircularReferences.Any())
                 {
-                    context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+                    context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.UpdatableCircularReferences,
                         GetLocation(mapping, adaptation),
                         adaptationName));
@@ -180,7 +195,7 @@ internal static class AdaptationMemberEmitter
                     mapping.ReturnType,
                     destinationTypeName,
                     adaptation.DestinationType,
-                    details.NullableContext);
+                    details.NullablePolicy);
                 var lines = new List<string>();
                 if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(
                         adaptedUpdateBody,
@@ -189,6 +204,7 @@ internal static class AdaptationMemberEmitter
                         adaptation.SourceType,
                         mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                         mapping.CollectionPolicy,
+                        details.NullablePolicy,
                         lines))
                 {
                     continue;
@@ -214,7 +230,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted mapping method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -231,7 +247,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted expression companion for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -239,7 +255,7 @@ internal static class AdaptationMemberEmitter
             var expressionMethodParameters = string.IsNullOrEmpty(details.ExtraExpressionParameterListWithNames)
                 ? "()"
                 : "(" + details.ExtraExpressionParameterListWithNames + ")";
-            members.AppendLine("    public static Expression<Func<" + functionArguments + ">> " + expressionName + expressionMethodParameters + " => ");
+            members.AppendLine("    public static global::System.Linq.Expressions.Expression<global::System.Func<" + functionArguments + ">> " + expressionName + expressionMethodParameters + " =>");
             members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(adaptedBodyText + ";");
         });
@@ -253,7 +269,7 @@ internal static class AdaptationMemberEmitter
         IEnumerable<string> lines,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted update method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -268,9 +284,9 @@ internal static class AdaptationMemberEmitter
         });
     }
 
-    private static Location? GetLocation(MappingModel mapping, AdaptationModel adaptation)
+    private static Location? GetLocation(MappingAnalysis mapping, AdaptationAnalysis adaptation)
     {
-        return adaptation.Attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ??
+        return adaptation.Location?.ToLocation() ??
                mapping.MethodSymbol.Locations.FirstOrDefault();
     }
 }

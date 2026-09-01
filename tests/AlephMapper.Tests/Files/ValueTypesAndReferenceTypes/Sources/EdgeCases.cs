@@ -1,4 +1,4 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 // Simple test types
 internal struct SimpleValueTypeSource
@@ -13,7 +13,7 @@ internal class SimpleReferenceTypeDestination
     public string Name { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class SimpleValueToReferenceMapper
 {
     [Updatable]
@@ -57,7 +57,7 @@ internal class DeeplyNestedReferenceType
     public string DeepValue { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class ComplexPropertyMapper
 {
     [Updatable]
@@ -109,7 +109,7 @@ internal class NestedEdgeCaseClass
     public string Value { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class EdgeCaseMapper
 {
     [Updatable]

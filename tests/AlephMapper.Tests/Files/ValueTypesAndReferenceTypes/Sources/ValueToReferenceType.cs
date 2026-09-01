@@ -1,4 +1,4 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 // Reference type equivalents of the value types
 internal class ComplexReferenceTypeDestination
@@ -55,7 +55,7 @@ internal class TagsClass
     public TagCategory Category { get; set; }
 }
 
-[Expressive]
+[Projectable]
 internal static partial class ValueToReferenceMapper
 {
     [Updatable]

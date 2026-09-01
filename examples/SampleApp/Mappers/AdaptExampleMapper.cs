@@ -6,7 +6,7 @@ namespace SampleApp.Mappers;
 
 /// <summary>
 /// Demonstrates [Adapt]: one mapping template reused for an explicitly declared
-/// different source/destination pair. Unlike [Expressive], [Adapt] is not for the
+/// different source/destination pair. Unlike [Projectable], [Adapt] is not for the
 /// exact method signature types; it structurally substitutes the template source
 /// and destination with the explicit types from the attribute.
 /// </summary>

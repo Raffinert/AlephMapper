@@ -118,11 +118,21 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
 
     public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
     {
+        if (!HasMultilineConditionalLayout(node))
+        {
+            Visit(node.Condition.WithoutTrailingTrivia());
+            WriteRaw(" ? ");
+            Visit(node.WhenTrue.WithoutLeadingTrivia().WithoutTrailingTrivia());
+            WriteRaw(" : ");
+            Visit(node.WhenFalse.WithoutLeadingTrivia());
+            return;
+        }
+
         Visit(node.Condition.WithoutTrailingTrivia());
         WriteLine();
         Indent();
         WriteRaw("? ");
-        Visit(node.WhenTrue.WithoutLeadingTrivia());
+        Visit(node.WhenTrue.WithoutLeadingTrivia().WithoutTrailingTrivia());
         WriteLine();
         WriteRaw(": ");
         Visit(node.WhenFalse.WithoutLeadingTrivia());
@@ -352,6 +362,24 @@ public sealed class PrettyPrinter : CSharpSyntaxVisitor
                ContainsLineBreak(binaryExpression.Right.GetLeadingTrivia()) ||
                HasLineBreakInLogicalChain(binaryExpression.Left, chainKind) ||
                HasLineBreakInLogicalChain(binaryExpression.Right, chainKind);
+    }
+
+    private static bool HasMultilineConditionalLayout(ConditionalExpressionSyntax node)
+    {
+        if (node.GetAnnotations(GeneratedSyntaxAnnotations.MultilineConditional).Any())
+        {
+            return true;
+        }
+
+        if (node.GetAnnotations(GeneratedSyntaxAnnotations.SingleLineConditional).Any())
+        {
+            return ContainsLineBreak(node.WhenTrue.ToFullString()) ||
+                   ContainsLineBreak(node.WhenFalse.ToFullString());
+        }
+
+        // Rewriters synthesize conditionals for null-conditional access. Keep their
+        // established, readable multi-line form unless the source layout was recorded.
+        return true;
     }
 
     private static bool ContainsLineBreak(SyntaxTriviaList trivia)

@@ -1,4 +1,5 @@
 using System;
+using AlephMapper.Generation;
 using Microsoft.CodeAnalysis;
 
 namespace AlephMapper.Diagnostics;
@@ -9,18 +10,12 @@ internal static class CrashDiagnosticsReporter
 {
     private const int MaxCrashDiagnosticLength = 2_000;
 
-    internal static void Report(
-        in SourceProductionContext sourceProductionContext,
-        Exception exception
-    )
+    internal static GenerationDiagnostic CreateDiagnostic(Exception exception)
     {
-        sourceProductionContext.ReportDiagnostic(
-            Diagnostic.Create(
-                DiagnosticDescriptors.GeneratorCrash,
-                Location.None,
-                FormatCrashDiagnostic(exception)
-            )
-        );
+        return Generation.GenerationDiagnostic.From(Diagnostic.Create(
+            DiagnosticDescriptors.GeneratorCrash,
+            Location.None,
+            FormatCrashDiagnostic(exception)));
     }
 
     private static string FormatCrashDiagnostic(Exception exception)
@@ -32,6 +27,6 @@ internal static class CrashDiagnosticsReporter
             return details;
         }
 
-        return $"{details.Substring(MaxCrashDiagnosticLength)}...";
+        return $"{details.Substring(0, MaxCrashDiagnosticLength)}...";
     }
 }

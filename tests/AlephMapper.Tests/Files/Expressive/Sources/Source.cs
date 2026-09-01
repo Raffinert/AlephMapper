@@ -1,8 +1,8 @@
-﻿using AlephMapper;
+using AlephMapper;
 
 namespace Tests;
 
-[Expressive]
+[Projectable]
 public static partial class SampleMapper
 {
     public static string ProjectName(SampleSource source) => source.Name;

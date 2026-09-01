@@ -1,4 +1,4 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 // Complex nested value types
 internal struct ComplexValueTypeSource
@@ -78,7 +78,7 @@ internal enum TagCategory
     Other = 2
 }
 
-[Expressive]
+[Projectable]
 internal static partial class ComplexValueTypeMapper
 {
     [Updatable]

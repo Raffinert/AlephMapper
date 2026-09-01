@@ -5,24 +5,26 @@ using System.Linq;
 
 namespace AlephMapper.Generation.Emitters;
 
-internal static class ExpressiveMemberEmitter
+internal static class ProjectableMemberEmitter
 {
     public static void Emit(MappingMethodDetails details, MapperGenerationContext context)
     {
         var mapping = details.Mapping;
-        if (!mapping.IsExpressive)
+        if (!mapping.IsProjectable)
         {
             return;
         }
 
-        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, mapping.NullStrategy);
-        var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
+        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, mapping.NullStrategy, details.NullablePolicy);
+        var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!
+            .WithoutLeadingTrivia()
+            .WithoutTrailingTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
 
         if (inliner.CircularReferences.Any())
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.ExpressiveCircularReferences,
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.ProjectableCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
             return;
@@ -30,7 +32,7 @@ internal static class ExpressiveMemberEmitter
 
         if (inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsafeNullConditionalReceiver,
                 unsafeReceiver.Location,
                 mapping.MethodSymbol.Name,
@@ -40,7 +42,7 @@ internal static class ExpressiveMemberEmitter
 
         if (inliner.UnsupportedNullConditionals.FirstOrDefault() is { } unsupportedConditional)
         {
-            context.SourceProductionContext.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsupportedNullConditionalExpression,
                 unsupportedConditional.Location,
                 mapping.MethodSymbol.Name,
@@ -49,7 +51,10 @@ internal static class ExpressiveMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
-        context.GeneratedMemberSignatures.Add(MethodSignature.Build(expressionMethodName, details.ExtraExpressionParameterTypeNames));
+        context.GeneratedMemberSignatures.Add(MethodSignature.Build(
+            expressionMethodName,
+            details.ExtraExpressionParameterTypeNames,
+            details.MethodTypeParameterCount));
         var nullStrategyDescription = mapping.NullStrategy switch
         {
             NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",
@@ -63,7 +68,7 @@ internal static class ExpressiveMemberEmitter
             ? "()"
             : "(" + details.ExtraExpressionParameterListWithNames + ")";
 
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");
@@ -73,7 +78,21 @@ internal static class ExpressiveMemberEmitter
             members.AppendLine($"    /// Null handling strategy: {nullStrategyDescription}");
             members.AppendLine("    /// </para>");
             members.AppendLine("    /// </remarks>");
-            members.AppendLine("    public static Expression<Func<" + funcTypeArguments + ">> " + expressionMethodName + expressionMethodParameters + " => ");
+            var declaration = "    public static global::System.Linq.Expressions.Expression<global::System.Func<" + funcTypeArguments + ">> " +
+                              expressionMethodName + details.MethodTypeParameterList + expressionMethodParameters;
+            if (details.MethodConstraintClauses.Count == 0)
+            {
+                members.AppendLine(declaration + " =>");
+            }
+            else
+            {
+                members.AppendLine(declaration);
+                foreach (var constraintClause in details.MethodConstraintClauses)
+                {
+                    members.AppendLine("        " + constraintClause);
+                }
+                members.AppendLine("        => ");
+            }
             members.Append("        " + details.ProjectionLambdaParameter + " => ");
             members.AppendLine(prettyBody + ";");
         });

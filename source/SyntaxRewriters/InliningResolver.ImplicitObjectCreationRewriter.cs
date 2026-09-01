@@ -9,7 +9,16 @@ internal sealed partial class InliningResolver
 {
     public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
-        var rewritten = base.VisitObjectCreationExpression(node)!;
+        var rewritten = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)!;
+        if (model.GetTypeInfo(node).Type is { } typeSymbol)
+        {
+            var typeName = AlephMapper.Helpers.TypeDisplay.ForSymbol(
+                typeSymbol,
+                NullableAnnotation.NotAnnotated,
+                nullablePolicy);
+            rewritten = rewritten.WithType(ParseTypeName(typeName).WithTriviaFrom(rewritten.Type));
+        }
+
         return IsAnnotatedReturnCreation(node)
             ? rewritten.WithAdditionalAnnotations(new SyntaxAnnotation(InlinedReturnCreationAnnotation))
             : rewritten;
@@ -17,14 +26,20 @@ internal sealed partial class InliningResolver
 
     public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax implicitNew)
     {
-        var type = model.GetTypeInfo(implicitNew).Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        var typeSymbol = model.GetTypeInfo(implicitNew).Type;
+        var type = typeSymbol == null
+            ? null
+            : AlephMapper.Helpers.TypeDisplay.ForSymbol(
+                typeSymbol,
+                NullableAnnotation.NotAnnotated,
+                nullablePolicy);
 
         if (type == null)
         {
             return base.VisitImplicitObjectCreationExpression(implicitNew);
         }
 
-        var objectCreation = ObjectCreationExpression(IdentifierName(type).WithTrailingTrivia(ElasticCarriageReturn));
+        var objectCreation = ObjectCreationExpression(ParseTypeName(type).WithTrailingTrivia(ElasticCarriageReturn));
 
         if (implicitNew.Initializer != null)
         {

@@ -44,7 +44,7 @@ public static class ProductExtensions
 /// </summary>
 public static partial class ProductMapper
 {
-    [Expressive]
+    [Projectable]
     public static ProductDto ToDto(Product product) => new()
     {
         Label = product.Name,
@@ -69,10 +69,10 @@ public class PersonProductDto
     public string FavoritePrice { get; set; } = string.Empty;
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
 public static partial class PersonProductMapperIgnore
 {
-    [Expressive]
+    [Projectable]
     public static PersonProductDto ToDto(Person person) => new()
     {
         Name = person.Name,
@@ -80,10 +80,10 @@ public static partial class PersonProductMapperIgnore
     };
 }
 
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class PersonProductMapperRewrite
 {
-    [Expressive]
+    [Projectable]
     public static PersonProductDto ToDto(Person person) => new()
     {
         Name = person.Name,

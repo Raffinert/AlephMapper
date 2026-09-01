@@ -368,10 +368,10 @@ public class UpdatableTests
 
     #endregion
 
-    #region Combined Expressive and Updatable Tests
+    #region Combined Projectable and Updatable Tests
 
     [Test]
-    public async Task Combined_Mapper_Expressive_Methods_Should_Work()
+    public async Task Combined_Mapper_Projectable_Methods_Should_Work()
     {
         // Arrange
         var fullNameExpression = EmployeeCombinedMapper.GetFullNameExpression();
@@ -468,7 +468,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee!, targetDto);
 
         // Assert
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -493,7 +493,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalMapping(sourceEmployee!, targetDto);
 
         // Assert - When source is null, target should remain unchanged
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -523,7 +523,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment!, targetDto);
 
         // Assert
         await Assert.That(result).IsSameReferenceAs(targetDto);
@@ -546,7 +546,7 @@ public class UpdatableTests
         };
 
         // Act
-        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment, targetDto);
+        var result = ConditionalUpdateMapper.ConditionalDepartmentMapping(sourceDepartment!, targetDto);
 
         // Assert - When source is null, target should remain unchanged
         await Assert.That(result).IsSameReferenceAs(targetDto);

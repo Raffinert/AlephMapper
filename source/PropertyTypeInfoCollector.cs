@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Linq;
 
+#nullable enable
+
 namespace AlephMapper;
 
 /// <summary>
@@ -114,12 +116,13 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
     {
         try
         {
-            if (_currentTargetType != null)
+            if (_currentTargetType is not { } currentTargetType)
             {
-                _visitedTypes.Add(_currentTargetType);
+                return;
             }
-            
-            var trueCollector = new PropertyTypeInfoCollector(_currentTargetType, _rootPath) { TypeContext = TypeContext, _visitedTypes = _visitedTypes };
+
+            _visitedTypes.Add(currentTargetType);
+            var trueCollector = new PropertyTypeInfoCollector(currentTargetType, _rootPath) { TypeContext = TypeContext, _visitedTypes = _visitedTypes };
             trueCollector.Visit(node.WhenTrue);
             trueCollector.Visit(node.WhenFalse);
         }
@@ -129,3 +132,5 @@ internal class PropertyTypeInfoCollector : CSharpSyntaxWalker
         }
     }
 }
+
+#nullable restore

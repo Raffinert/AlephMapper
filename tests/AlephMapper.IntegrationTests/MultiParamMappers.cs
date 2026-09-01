@@ -1,9 +1,9 @@
-﻿namespace AlephMapper.IntegrationTests;
+namespace AlephMapper.IntegrationTests;
 
 // ──────────────────────────────────────────────────────────────────
-// 1. Expressive mapper with multi-parameter helper inlining
+// 1. Projectable mapper with multi-parameter helper inlining
 // ──────────────────────────────────────────────────────────────────
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class MultiParamEmployeeMapper
 {
     // Two-parameter helper: concatenate first + last
@@ -27,7 +27,7 @@ public static partial class MultiParamEmployeeMapper
         employee.Department?.Name ?? "Unassigned";
 
     // ── Expression mapping that uses all the above helpers ──
-    [Expressive]
+    [Projectable]
     public static EmployeeDto MapToDto(Employee e) => new()
     {
         Id = e.Id,
@@ -38,7 +38,7 @@ public static partial class MultiParamEmployeeMapper
     };
 
     // Mapping that exercises three-parameter helper
-    [Expressive]
+    [Projectable]
     public static EmployeeSimpleDto MapToSimpleDto(Employee employee) => new()
     {
         Id = employee.Id,
@@ -49,7 +49,7 @@ public static partial class MultiParamEmployeeMapper
     };
 
     // Mapping that exercises nested multi-param helper
-    [Expressive]
+    [Projectable]
     public static EmployeeDto MapToDtoWithEmail(Employee employee) => new()
     {
         Id = employee.Id,
@@ -63,7 +63,7 @@ public static partial class MultiParamEmployeeMapper
 // ──────────────────────────────────────────────────────────────────
 // 2. Named-argument mapper — arguments passed out of order
 // ──────────────────────────────────────────────────────────────────
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class NamedArgEmployeeMapper
 {
     public static string FormatName(string first, string last) =>
@@ -72,7 +72,7 @@ public static partial class NamedArgEmployeeMapper
     public static string GetDepartmentName(Employee employee) =>
         employee.Department?.Name ?? "Unassigned";
 
-    [Expressive]
+    [Projectable]
     public static EmployeeDto MapToDto(Employee employee) => new()
     {
         Id = employee.Id,
@@ -88,7 +88,7 @@ public static partial class NamedArgEmployeeMapper
 // 3. Updatable mapper with multi-param helpers
 //    (exercises the BinaryExpressionSyntax spacing fix)
 // ──────────────────────────────────────────────────────────────────
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class MultiParamUpdatableMapper
 {
     public static string FormatName(string first, string last) =>
@@ -112,11 +112,11 @@ public static partial class MultiParamUpdatableMapper
 }
 
 // ──────────────────────────────────────────────────────────────────
-// 4. Multi-parameter [Expressive] method itself
+// 4. Multi-parameter [Projectable] method itself
 //    Generates Expression<Func<Employee, EmployeeDto>> MapWithYearExpression(int currentYear)
 // ──────────────────────────────────────────────────────────────────
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
-public static partial class MultiParamExpressiveMapper
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+public static partial class MultiParamProjectableMapper
 {
     public static string FormatName(string first, string last) =>
         first + " " + last;
@@ -124,8 +124,8 @@ public static partial class MultiParamExpressiveMapper
     public static string GetDepartmentName(Employee employee) =>
         employee.Department?.Name ?? "Unassigned";
 
-    // The [Expressive] method ITSELF takes two parameters
-    [Expressive]
+    // The [Projectable] method ITSELF takes two parameters
+    [Projectable]
     public static EmployeeDto MapWithYear(Employee employee, int currentYear) => new()
     {
         Id = employee.Id,

@@ -6,7 +6,7 @@ public static partial class ConditionalUpdateMapper
 {
     // This method mimics the PersonMapper pattern: source == null ? null : new TargetType { ... }
     public static EmployeeSimpleDto ConditionalMapping(Employee? employee) =>
-        employee == null ? null : new EmployeeSimpleDto
+        employee == null ? null! : new EmployeeSimpleDto
         {
             Id = employee.Id,
             FirstName = employee.FirstName,
@@ -20,10 +20,10 @@ public static partial class ConditionalUpdateMapper
         department != null ? new DepartmentUpdateDto
         {
             Id = department.Id,
-            Name = department.Name,
+            Name = department.Name ?? "",
             Description = department.Description,
             IsActive = department.IsActive
-        } : null;
+        } : null!;
 }
 
 // Mappers testing Updatable functionality
@@ -56,7 +56,7 @@ public static partial class EmployeeUpdateMapper
     public static DepartmentUpdateDto UpdateDepartment(Department department) => new DepartmentUpdateDto
     {
         Id = department.Id,
-        Name = department.Name,
+        Name = department.Name ?? "",
         Description = department.Description,
         IsActive = department.IsActive
     };
@@ -155,11 +155,11 @@ public static partial class EmployeeUpdateMapper
     };
 }
 
-// Test both Expressive and Updatable on the same class
-[Expressive(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+// Test both Projectable and Updatable on the same class
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
 public static partial class EmployeeCombinedMapper
 {
-    // Expressive methods
+    // Projectable methods
     public static string GetFullName(Employee employee) => 
         $"{employee.FirstName} {employee.LastName}";
 
@@ -197,7 +197,7 @@ public static partial class EmployeeCombinedMapper
         Department = employee.Department != null ? new DepartmentUpdateDto
         {
             Id = employee.Department.Id,
-            Name = employee.Department.Name,
+            Name = employee.Department.Name ?? "",
             Description = employee.Department.Description,
             IsActive = employee.Department.IsActive
         } : null

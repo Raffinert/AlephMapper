@@ -1,11 +1,14 @@
-﻿using System;
+using System;
+
+using Microsoft.CodeAnalysis;
 
 namespace AlephMapper;
 
 /// <summary>
 /// Configures how null-conditional operators are handled
 /// </summary>
-public enum NullConditionalRewrite
+[Embedded]
+internal enum NullConditionalRewrite
 {
     /// <summary>
     /// Don't rewrite null conditional operators (Default behavior).
@@ -31,10 +34,11 @@ public enum NullConditionalRewrite
 }
 
 /// <summary>
-/// Marks a class to generate expressive companion methods.
+/// Marks a class to generate projectable companion methods.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class ExpressiveAttribute : Attribute
+internal sealed class ProjectableAttribute : Attribute
 {
     /// <summary>
     /// Get or set how null-conditional operators are handled
@@ -45,8 +49,9 @@ public sealed class ExpressiveAttribute : Attribute
 /// <summary>
 /// Marks a class to generate update companion methods.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class UpdatableAttribute : Attribute
+internal sealed class UpdatableAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets the policy for handling collection updates during mapping operations
@@ -57,8 +62,9 @@ public sealed class UpdatableAttribute : Attribute
 /// <summary>
 /// Defines which adapted companions are generated for an <see cref="AdaptAttribute"/> declaration.
 /// </summary>
+[Embedded]
 [Flags]
-public enum AdaptGeneration
+internal enum AdaptGeneration
 {
     /// <summary>
     /// Generate a regular mapping method.
@@ -79,8 +85,9 @@ public enum AdaptGeneration
 /// <summary>
 /// Reuses a mapping method as a compile-time template for one explicitly specified source/destination pair.
 /// </summary>
+[Embedded]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
-public sealed class AdaptAttribute : Attribute
+internal sealed class AdaptAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new adaptation from the template method to the specified source and destination types.
@@ -105,7 +112,7 @@ public sealed class AdaptAttribute : Attribute
     /// Gets or sets the generated method base name.
     /// Required when expression generation is requested.
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets which adapted companions are generated.
@@ -121,7 +128,8 @@ public sealed class AdaptAttribute : Attribute
 /// <summary>
 /// Defines the policy for handling collection updates during mapping operations
 /// </summary>
-public enum CollectionPropertiesPolicy
+[Embedded]
+internal enum CollectionPropertiesPolicy
 {
     /// <summary>
     /// Skip collection updates - collections will not be modified during mapping

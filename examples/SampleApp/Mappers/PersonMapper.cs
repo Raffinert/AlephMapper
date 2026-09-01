@@ -1,4 +1,4 @@
-﻿using AlephMapper;
+using AlephMapper;
 using SampleApp.Entities;
 using SampleApp.Models;
 
@@ -7,9 +7,9 @@ namespace SampleApp.Mappers;
 public static partial class PersonMapper
 {
     // Main entity to DTO mapping with expression-bodied syntax
-    [Expressive]
+    [Projectable]
     [Updatable(CollectionProperties = CollectionPropertiesPolicy.Skip)]
-    public static PersonDto ToDto(Person entity) => entity == null ? null : new()
+    public static PersonDto ToDto(Person entity) => entity == null ? null! : new()
     {
         Id = entity.PersonId,
         FirstName = entity.FirstName,
@@ -23,7 +23,7 @@ public static partial class PersonMapper
 
     // DTO to entity mapping with expression-bodied syntax
     //[Updatable]
-    [Expressive]
+    [Projectable]
     public static Person ToEntity(PersonDto dto) => new()
     {
         PersonId = dto.Id,

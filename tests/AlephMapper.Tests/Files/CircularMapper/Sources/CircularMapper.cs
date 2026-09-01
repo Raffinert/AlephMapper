@@ -1,7 +1,7 @@
-﻿namespace AlephMapper.Tests;
+namespace AlephMapper.Tests;
 
 // Mapper with intentional circular references to test detection
-[Expressive]
+[Projectable]
 internal static partial class CircularMapper
 {
     // Simple direct circular reference - this method calls itself

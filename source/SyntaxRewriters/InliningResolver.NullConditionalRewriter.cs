@@ -49,18 +49,52 @@ internal partial class InliningResolver
             if (rewriteSupport is NullConditionalRewrite.Ignore)
             {
                 // Ignore the conditional access and simply return the accessed expression
-                return rewrittenWhenNotNull;
+                // Preserve the source semantics while suppressing the nullable-flow warning
+                // introduced by replacing `?.` with a regular member access.
+                if (!nullablePolicy.WarningsEnabled)
+                {
+                    return rewrittenWhenNotNull;
+                }
+
+                return rewrittenWhenNotNull is PostfixUnaryExpressionSyntax postfix &&
+                    postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression)
+                    ? rewrittenWhenNotNull
+                    : PostfixUnaryExpression(
+                        SyntaxKind.SuppressNullableWarningExpression,
+                        rewrittenWhenNotNull);
             }
 
             if (rewriteSupport is NullConditionalRewrite.Rewrite)
             {
                 var typeInfo = model.GetTypeInfo(node);
                 var convertedType = typeInfo.ConvertedType ?? typeInfo.Type;
-                var nullableContext = model.GetNullableContext(node.SpanStart);
 
                 if (convertedType is not null)
                 {
-                    var castTypeName = TypeDisplay.ForSymbol(convertedType, convertedType.NullableAnnotation, nullableContext);
+                    // A null-conditional access always produces null when its receiver is null.
+                    // Its converted type can still be non-nullable when it is immediately consumed
+                    // by an expression such as `??`, so explicitly retain that nullability here.
+                    var castTypeName = TypeDisplay.ForSymbol(
+                        convertedType,
+                        NullableAnnotation.Annotated,
+                        nullablePolicy);
+
+                    var nullValue = convertedType.IsReferenceType &&
+                        convertedType.NullableAnnotation != NullableAnnotation.Annotated &&
+                        nullablePolicy.WarningsEnabled
+                        ? (ExpressionSyntax)PostfixUnaryExpression(
+                            SyntaxKind.SuppressNullableWarningExpression,
+                            LiteralExpression(SyntaxKind.NullLiteralExpression))
+                        : LiteralExpression(SyntaxKind.NullLiteralExpression);
+                    var nullBranch = CastExpression(
+                        ParseTypeName(convertedType.IsReferenceType &&
+                                      convertedType.NullableAnnotation != NullableAnnotation.Annotated
+                            ? TypeDisplay.ForSymbol(
+                                convertedType,
+                                NullableAnnotation.NotAnnotated,
+                                nullablePolicy)
+                            : castTypeName),
+                        nullValue);
 
                     return ParenthesizedExpression(
                         ConditionalExpression(
@@ -72,10 +106,7 @@ internal partial class InliningResolver
                             ParenthesizedExpression(rewrittenWhenNotNull.WithoutTrivia())
                                 .WithLeadingTrivia(Space)
                                 .WithTrailingTrivia(Space),
-                            CastExpression(
-                                ParseTypeName(castTypeName),
-                                LiteralExpression(SyntaxKind.NullLiteralExpression)
-                            ).WithLeadingTrivia(Space)
+                            nullBranch.WithLeadingTrivia(Space)
                         )
                     );
                 }
