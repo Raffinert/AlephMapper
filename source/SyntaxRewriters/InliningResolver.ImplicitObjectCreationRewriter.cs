@@ -15,7 +15,7 @@ internal sealed partial class InliningResolver
             var typeName = AlephMapper.Helpers.TypeDisplay.ForSymbol(
                 typeSymbol,
                 NullableAnnotation.NotAnnotated,
-                model.GetNullableContext(node.SpanStart));
+                nullablePolicy);
             rewritten = rewritten.WithType(ParseTypeName(typeName).WithTriviaFrom(rewritten.Type));
         }
 
@@ -32,7 +32,7 @@ internal sealed partial class InliningResolver
             : AlephMapper.Helpers.TypeDisplay.ForSymbol(
                 typeSymbol,
                 NullableAnnotation.NotAnnotated,
-                model.GetNullableContext(implicitNew.SpanStart));
+                nullablePolicy);
 
         if (type == null)
         {

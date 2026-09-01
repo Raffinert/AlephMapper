@@ -22,7 +22,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
     private readonly HashSet<string> _destinationCreationTypeTexts;
     private readonly TypeSyntax _adaptedDestinationType;
     private readonly ITypeSymbol _adaptedDestinationTypeSymbol;
-    private readonly NullableContext _nullableContext;
+    private readonly NullablePolicy _nullablePolicy;
     private readonly HashSet<string> _originalDestinationTypeTexts;
     private readonly ExpressionSyntax _root;
     private readonly Stack<ITypeSymbol> _objectInitializerTypeStack = new();
@@ -34,14 +34,14 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         IEnumerable<string> originalDestinationTypeTexts,
         string adaptedDestinationTypeName,
         ITypeSymbol adaptedDestinationTypeSymbol,
-        NullableContext nullableContext,
+        NullablePolicy nullablePolicy,
         ExpressionSyntax root)
     {
         _destinationCreationSpans = new HashSet<TextSpan>(destinationCreationSpans);
         _destinationCreationTypeTexts = new HashSet<string>(destinationCreationTypeTexts);
         _adaptedDestinationType = SyntaxFactory.ParseTypeName(adaptedDestinationTypeName);
         _adaptedDestinationTypeSymbol = adaptedDestinationTypeSymbol;
-        _nullableContext = nullableContext;
+        _nullablePolicy = nullablePolicy;
         _originalDestinationTypeTexts = new HashSet<string>(originalDestinationTypeTexts);
         _root = root;
     }
@@ -53,7 +53,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         ITypeSymbol originalDestinationType,
         string adaptedDestinationTypeName,
         ITypeSymbol adaptedDestinationType,
-        NullableContext nullableContext)
+        NullablePolicy nullablePolicy)
     {
         if (bodyToRewrite is ImplicitObjectCreationExpressionSyntax implicitCreation)
         {
@@ -89,7 +89,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
                 originalDestinationTypeTexts,
                 adaptedDestinationTypeName,
                 adaptedDestinationType,
-                nullableContext,
+                nullablePolicy,
                 bodyToRewrite)
             .Visit(bodyToRewrite)!;
     }
@@ -270,7 +270,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
 
     private string GetObjectCreationTypeName(ITypeSymbol type)
     {
-        return TypeDisplay.ForSymbol(type, NullableAnnotation.NotAnnotated, _nullableContext);
+        return TypeDisplay.ForSymbol(type, NullableAnnotation.NotAnnotated, _nullablePolicy);
     }
 
     private string GetCastTypeName(ITypeSymbol type)
@@ -278,7 +278,7 @@ internal sealed class AdaptedDestinationRewriter : CSharpSyntaxRewriter
         var annotation = type.NullableAnnotation == NullableAnnotation.Annotated
             ? NullableAnnotation.Annotated
             : NullableAnnotation.NotAnnotated;
-        return TypeDisplay.ForSymbol(type, annotation, _nullableContext);
+        return TypeDisplay.ForSymbol(type, annotation, _nullablePolicy);
     }
 
     private static bool IsAdaptableObjectType(ITypeSymbol type)

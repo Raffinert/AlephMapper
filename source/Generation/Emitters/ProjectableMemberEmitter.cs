@@ -15,7 +15,7 @@ internal static class ProjectableMemberEmitter
             return;
         }
 
-        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, mapping.NullStrategy);
+        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, mapping.NullStrategy, details.NullablePolicy);
         var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!
             .WithoutLeadingTrivia()
             .WithoutTrailingTrivia();
@@ -68,7 +68,7 @@ internal static class ProjectableMemberEmitter
             ? "()"
             : "(" + details.ExtraExpressionParameterListWithNames + ")";
 
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");

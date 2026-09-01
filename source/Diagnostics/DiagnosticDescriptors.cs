@@ -1,3 +1,5 @@
+#nullable enable
+
 using Microsoft.CodeAnalysis;
 
 namespace AlephMapper.Diagnostics;
@@ -160,4 +162,27 @@ public static class DiagnosticDescriptors
         "AlephMapper",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor? GetById(string id) => id switch
+    {
+        "AM0001" => UpdatableValueTypeReturn,
+        "AM0002" => ProjectableCircularReferences,
+        "AM0003" => UpdatableCircularReferences,
+        "AM0004" => GeneratorCrash,
+        "AM0005" => InvalidAdaptType,
+        "AM0006" => AdaptSourceMemberMissing,
+        "AM0007" => AdaptDestinationMemberMissing,
+        "AM0008" => AdaptIncompatibleType,
+        "AM0009" => AdaptNameConflict,
+        "AM0010" => AdaptUnsupportedSyntax,
+        "AM0011" => AdaptExpressionWithoutName,
+        "AM0012" => AdaptDuplicatePair,
+        "AM0013" => AdaptCircularHelper,
+        "AM0014" => AdaptOpenGenericType,
+        "AM0015" => AdaptRebindingFailed,
+        "AM0016" => UnsafeNullConditionalReceiver,
+        "AM0017" => UnsupportedNullConditionalExpression,
+        "AM0018" => AdaptGenericMethodUnsupported,
+        _ => null
+    };
 }

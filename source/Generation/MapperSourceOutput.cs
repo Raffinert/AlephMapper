@@ -137,8 +137,7 @@ internal static class MapperSourceOutput
                      .ThenBy(static reference => reference.Span.Start))
         {
             if (declarationReference.GetSyntax(cancellationToken) is not MethodDeclarationSyntax declaration ||
-                declaration.ExpressionBody is null ||
-                !MappingMethodCandidate.IsCandidate(declaration, cancellationToken))
+                declaration.ExpressionBody is null)
             {
                 continue;
             }

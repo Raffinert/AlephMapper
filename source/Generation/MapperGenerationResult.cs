@@ -2,6 +2,7 @@
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using AlephMapper.Diagnostics;
 using System;
 using System.Collections.Immutable;
 using System.Linq;
@@ -91,7 +92,7 @@ internal readonly struct GenerationDiagnostic : IEquatable<GenerationDiagnostic>
             diagnostic.GetMessage(),
             diagnostic.Severity,
             diagnostic.Descriptor.Category,
-            location == Location.None ? null : location.SourceTree?.FilePath,
+            location == Location.None ? null : location.SourceTree?.FilePath ?? lineSpan.Path,
             location == Location.None ? 0 : location.SourceSpan.Start,
             location == Location.None ? 0 : location.SourceSpan.Length,
             location == Location.None ? 0 : lineSpan.StartLinePosition.Line,
@@ -102,7 +103,8 @@ internal readonly struct GenerationDiagnostic : IEquatable<GenerationDiagnostic>
 
     public Diagnostic ToDiagnostic()
     {
-        var descriptor = new DiagnosticDescriptor(Id, Title, Message, Category, Severity, isEnabledByDefault: true);
+        var descriptor = DiagnosticDescriptors.GetById(Id) ??
+            new DiagnosticDescriptor(Id, Title, Message, Category, Severity, isEnabledByDefault: true);
         if (string.IsNullOrEmpty(FilePath))
         {
             return Diagnostic.Create(descriptor, Location.None);

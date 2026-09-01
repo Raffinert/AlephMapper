@@ -7,7 +7,11 @@ using System.Linq;
 
 namespace AlephMapper.CodeGenerators;
 
-internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappingContext typeContext, IReadOnlyList<string> sourceParamNames)
+internal sealed class UpdatableMethodGenerator(
+    string destPrefix,
+    PropertyMappingContext typeContext,
+    IReadOnlyList<string> sourceParamNames,
+    AlephMapper.Helpers.NullablePolicy nullablePolicy)
 {
     private readonly List<string> _lines = [];
     private readonly string _primarySourceParamName = sourceParamNames.FirstOrDefault() ?? "source";
@@ -407,11 +411,11 @@ internal sealed class UpdatableMethodGenerator(string destPrefix, PropertyMappin
         return expression?.ToString().Trim() == "null";
     }
 
-    private static string GetTypeName(ITypeSymbol type) =>
+    private string GetTypeName(ITypeSymbol type) =>
         AlephMapper.Helpers.TypeDisplay.ForSymbol(
             type,
             NullableAnnotation.NotAnnotated,
-            NullableContext.Enabled);
+            nullablePolicy);
 
     private string NormalizeConditionalMemberAccess(ExpressionSyntax expression)
     {

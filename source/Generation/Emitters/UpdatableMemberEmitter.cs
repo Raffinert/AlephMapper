@@ -17,7 +17,7 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None);
+        var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None, details.NullablePolicy);
         var inlinedBody = inliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
         if (inliner.CircularReferences.Any())
@@ -48,12 +48,13 @@ internal static class UpdatableMemberEmitter
                 mapping.ParamType,
                 mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                 mapping.CollectionPolicy,
+                details.NullablePolicy,
                 lines))
         {
             return;
         }
 
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated update method for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");

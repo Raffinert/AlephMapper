@@ -20,15 +20,11 @@ internal static class TypeDisplay
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
     public static string ForSymbol(ITypeSymbol symbol, SemanticModel model, int position)
-        => ForSymbol(symbol, symbol.NullableAnnotation, model.GetNullableContext(position));
+        => ForSymbol(symbol, symbol.NullableAnnotation, NullablePolicy.From(model, position));
 
-    public static string ForSymbol(ITypeSymbol symbol, NullableAnnotation annotationOverride, NullableContext nullableContext)
+    public static string ForSymbol(ITypeSymbol symbol, NullableAnnotation annotationOverride, NullablePolicy nullablePolicy)
     {
-        var annotationsEnabled = nullableContext is NullableContext.Enabled
-            or NullableContext.AnnotationsEnabled
-            or NullableContext.AnnotationsContextInherited;
-
-        var format = annotationsEnabled ? NullableFormat : NonNullableFormat;
+        var format = nullablePolicy.AnnotationsEnabled ? NullableFormat : NonNullableFormat;
         var effectiveAnnotation = annotationOverride != NullableAnnotation.None
             ? annotationOverride
             : symbol.NullableAnnotation;
@@ -37,7 +33,7 @@ internal static class TypeDisplay
             : symbol;
         var display = displaySymbol.ToDisplayString(format);
 
-        if (annotationsEnabled &&
+        if (nullablePolicy.AnnotationsEnabled &&
             effectiveAnnotation == NullableAnnotation.Annotated &&
             !display.EndsWith("?", StringComparison.Ordinal))
         {

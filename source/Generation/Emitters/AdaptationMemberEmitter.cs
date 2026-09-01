@@ -47,10 +47,10 @@ internal static class AdaptationMemberEmitter
             }
 
             var adaptationName = string.IsNullOrWhiteSpace(adaptation.GeneratedName) ? mapping.Name : adaptation.GeneratedName!;
-            var sourceTypeName = TypeDisplay.ForSymbol(adaptation.SourceType, NullableAnnotation.None, details.NullableContext);
-            var destinationTypeName = TypeDisplay.ForSymbol(adaptation.DestinationType, NullableAnnotation.None, details.NullableContext);
+            var sourceTypeName = TypeDisplay.ForSymbol(adaptation.SourceType, NullableAnnotation.None, details.NullablePolicy);
+            var destinationTypeName = TypeDisplay.ForSymbol(adaptation.DestinationType, NullableAnnotation.None, details.NullablePolicy);
             var additionalParametersWithNames = string.Join(", ", mapping.Parameters.Skip(1).Select(parameter =>
-                $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, details.NullableContext)} {parameter.Name}"));
+                $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, details.NullablePolicy)} {parameter.Name}"));
             var adaptationParametersWithNames = sourceTypeName + " " + details.SourceName +
                 (string.IsNullOrEmpty(additionalParametersWithNames) ? "" : ", " + additionalParametersWithNames);
 
@@ -66,7 +66,7 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, adaptation.NullStrategy);
+            var inliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, false, adaptation.NullStrategy, details.NullablePolicy);
             var inlinedBody = ((ExpressionSyntax)inliner.Visit(mapping.BodySyntax.Expression)!)
                 .WithoutLeadingTrivia()
                 .WithoutTrailingTrivia();
@@ -114,7 +114,7 @@ internal static class AdaptationMemberEmitter
                 mapping.ReturnType,
                 destinationTypeName,
                 adaptation.DestinationType,
-                details.NullableContext);
+                details.NullablePolicy);
             var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
 
             var adaptationParameterTypes = new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).ToArray();
@@ -176,7 +176,7 @@ internal static class AdaptationMemberEmitter
                     continue;
                 }
 
-                var updateInliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None);
+                var updateInliner = new InliningResolver(mapping.SemanticModel, context.MappingsByMethod, true, NullConditionalRewrite.None, details.NullablePolicy);
                 var inlinedUpdateBody = (ExpressionSyntax)updateInliner.Visit(mapping.BodySyntax.Expression)!.WithoutTrivia();
                 context.AddUsings(updateInliner.UsingDirectives.Concat(mapping.UsingDirectives));
                 if (updateInliner.CircularReferences.Any())
@@ -195,7 +195,7 @@ internal static class AdaptationMemberEmitter
                     mapping.ReturnType,
                     destinationTypeName,
                     adaptation.DestinationType,
-                    details.NullableContext);
+                    details.NullablePolicy);
                 var lines = new List<string>();
                 if (!EmitHelpers.TryBuildUpdateAssignmentsWithInlining(
                         adaptedUpdateBody,
@@ -204,6 +204,7 @@ internal static class AdaptationMemberEmitter
                         adaptation.SourceType,
                         mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                         mapping.CollectionPolicy,
+                        details.NullablePolicy,
                         lines))
                 {
                     continue;
@@ -229,7 +230,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted mapping method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -246,7 +247,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted expression companion for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -268,7 +269,7 @@ internal static class AdaptationMemberEmitter
         IEnumerable<string> lines,
         MapperGenerationContext context)
     {
-        context.AppendMember(members =>
+        context.AppendMember(details.NullablePolicy, members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted update method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");

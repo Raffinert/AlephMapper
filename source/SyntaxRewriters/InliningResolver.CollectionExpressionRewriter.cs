@@ -196,7 +196,7 @@ internal sealed partial class InliningResolver
         return false;
     }
 
-    private static ExpressionSyntax CreateConstructorExpression(ITypeSymbol? targetType, SyntaxNode originalExpression)
+    private ExpressionSyntax CreateConstructorExpression(ITypeSymbol? targetType, SyntaxNode originalExpression)
     {
         if (targetType is INamedTypeSymbol namedType)
         {
@@ -240,31 +240,31 @@ internal sealed partial class InliningResolver
             .WithTrailingTrivia(originalExpression.GetTrailingTrivia());
     }
 
-    private static ExpressionSyntax CreateListConstructor(ITypeSymbol elementType)
+    private ExpressionSyntax CreateListConstructor(ITypeSymbol elementType)
     {
         var elementTypeName = TypeDisplay.ForSymbol(
             elementType,
             elementType.NullableAnnotation,
-            NullableContext.Enabled);
+            nullablePolicy);
         return ParseExpression($"new global::System.Collections.Generic.List<{elementTypeName}>()");
     }
 
-    private static ExpressionSyntax CreateArrayExpression(ITypeSymbol elementType)
+    private ExpressionSyntax CreateArrayExpression(ITypeSymbol elementType)
     {
         // Create Array.Empty<T>() for better performance
         var elementTypeName = TypeDisplay.ForSymbol(
             elementType,
             elementType.NullableAnnotation,
-            NullableContext.Enabled);
+            nullablePolicy);
         return ParseExpression($"global::System.Array.Empty<{elementTypeName}>()");
     }
 
-    private static ExpressionSyntax CreateGenericConstructor(INamedTypeSymbol namedType)
+    private ExpressionSyntax CreateGenericConstructor(INamedTypeSymbol namedType)
     {
         var typeSyntax = ParseTypeName(TypeDisplay.ForSymbol(
             namedType,
             NullableAnnotation.NotAnnotated,
-            NullableContext.Enabled));
+            nullablePolicy));
 
         return ObjectCreationExpression(typeSyntax.WithLeadingTrivia(Space))
             .WithArgumentList(ArgumentList());

@@ -16,20 +16,20 @@ internal sealed class MappingMethodDetails
     {
         Mapping = mapping;
         var nullableContextPosition = mapping.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
-        var nullableContext = mapping.SemanticModel.GetNullableContext(nullableContextPosition);
+        var nullablePolicy = NullablePolicy.From(mapping.SemanticModel, nullableContextPosition);
 
         ParameterTypeNames = mapping.Parameters
-            .Select(parameter => TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext))
+            .Select(parameter => TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy))
             .ToArray();
-        DestinationTypeName = TypeDisplay.ForSymbol(mapping.ReturnType, mapping.ReturnType.NullableAnnotation, nullableContext);
-        SourceTypeName = TypeDisplay.ForSymbol(mapping.ParamType, mapping.ParamType.NullableAnnotation, nullableContext);
+        DestinationTypeName = TypeDisplay.ForSymbol(mapping.ReturnType, mapping.ReturnType.NullableAnnotation, nullablePolicy);
+        SourceTypeName = TypeDisplay.ForSymbol(mapping.ParamType, mapping.ParamType.NullableAnnotation, nullablePolicy);
         SourceName = mapping.Parameters[0].Name;
         MethodParameterList = string.Join(", ", ParameterTypeNames);
         MethodParameterListWithNames = string.Join(", ", mapping.Parameters.Select(parameter =>
-            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext)} {parameter.Name}"));
+            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {parameter.Name}"));
         ExtraExpressionParameterTypeNames = ParameterTypeNames.Skip(1).ToArray();
         ExtraExpressionParameterListWithNames = string.Join(", ", mapping.Parameters.Skip(1).Select(parameter =>
-            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullableContext)} {parameter.Name}"));
+            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {parameter.Name}"));
         LambdaParameters = mapping.Parameters.Count == 1
             ? mapping.Parameters[0].Name
             : "(" + string.Join(", ", mapping.Parameters.Select(parameter => parameter.Name)) + ")";
@@ -38,8 +38,8 @@ internal sealed class MappingMethodDetails
             ? string.Empty
             : "<" + string.Join(", ", mapping.MethodSymbol.TypeParameters.Select(static parameter => parameter.Name)) + ">";
         MethodTypeParameterCount = mapping.MethodSymbol.TypeParameters.Length;
-        MethodConstraintClauses = BuildConstraintClauses(mapping.MethodSymbol.TypeParameters, nullableContext);
-        NullableContext = nullableContext;
+        MethodConstraintClauses = BuildConstraintClauses(mapping.MethodSymbol.TypeParameters, nullablePolicy);
+        NullablePolicy = nullablePolicy;
     }
 
     public MappingAnalysis Mapping { get; }
@@ -56,11 +56,11 @@ internal sealed class MappingMethodDetails
     public string MethodTypeParameterList { get; }
     public int MethodTypeParameterCount { get; }
     public IReadOnlyList<string> MethodConstraintClauses { get; }
-    public Microsoft.CodeAnalysis.NullableContext NullableContext { get; }
+    public NullablePolicy NullablePolicy { get; }
 
     private static IReadOnlyList<string> BuildConstraintClauses(
         ImmutableArray<ITypeParameterSymbol> typeParameters,
-        NullableContext nullableContext)
+        NullablePolicy nullablePolicy)
     {
         var clauses = new List<string>();
         foreach (var typeParameter in typeParameters)
@@ -86,7 +86,7 @@ internal sealed class MappingMethodDetails
             }
 
             constraints.AddRange(typeParameter.ConstraintTypes.Select(type =>
-                TypeDisplay.ForSymbol(type, type.NullableAnnotation, nullableContext)));
+                TypeDisplay.ForSymbol(type, type.NullableAnnotation, nullablePolicy)));
 
             if (typeParameter.HasConstructorConstraint && !typeParameter.HasValueTypeConstraint)
             {

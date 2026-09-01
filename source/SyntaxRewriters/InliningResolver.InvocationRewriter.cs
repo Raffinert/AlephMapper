@@ -18,6 +18,7 @@ internal sealed partial class InliningResolver(
     MappingCatalog catalog,
     bool forUpdateMethod,
     NullConditionalRewrite rewriteSupport,
+    NullablePolicy nullablePolicy,
     ITypeSymbol? returnTypeToAnnotate = null)
     : CSharpSyntaxRewriter
 {
@@ -104,7 +105,7 @@ internal sealed partial class InliningResolver(
                         {
                             _inlinedMethods[normalizedMethod] = callee;
                             var inlinedBody =
-                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod, rewriteSupport, callee.ReturnType)
+                                (ExpressionSyntax)new InliningResolver(callee.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee.ReturnType)
                                 {
                                     _callStack = _callStack,
                                     _circularReferences = _circularReferences,
@@ -179,7 +180,7 @@ internal sealed partial class InliningResolver(
         try
         {
             _inlinedMethods[directCallMethod] = callee2;
-            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, callee2.ReturnType)
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee2.ReturnType)
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,

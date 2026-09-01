@@ -1,7 +1,6 @@
 #nullable enable
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 
 namespace AlephMapper.Models;
 
@@ -36,16 +35,31 @@ internal sealed class AdaptationAnalysis
 
 internal sealed class SourceLocationModel
 {
-    private SourceLocationModel(string? filePath, int start, int length)
+    private SourceLocationModel(
+        string? filePath,
+        int start,
+        int length,
+        int startLine,
+        int startCharacter,
+        int endLine,
+        int endCharacter)
     {
         FilePath = filePath;
         Start = start;
         Length = length;
+        StartLine = startLine;
+        StartCharacter = startCharacter;
+        EndLine = endLine;
+        EndCharacter = endCharacter;
     }
 
     public string? FilePath { get; }
     public int Start { get; }
     public int Length { get; }
+    public int StartLine { get; }
+    public int StartCharacter { get; }
+    public int EndLine { get; }
+    public int EndCharacter { get; }
 
     public static SourceLocationModel? FromSyntax(SyntaxReference? syntaxReference)
     {
@@ -55,13 +69,24 @@ internal sealed class SourceLocationModel
         }
 
         var syntax = syntaxReference.GetSyntax();
-        return new SourceLocationModel(syntax.SyntaxTree.FilePath, syntax.Span.Start, syntax.Span.Length);
+        var location = syntax.GetLocation();
+        var lineSpan = location.GetLineSpan();
+        return new SourceLocationModel(
+            lineSpan.Path,
+            location.SourceSpan.Start,
+            location.SourceSpan.Length,
+            lineSpan.StartLinePosition.Line,
+            lineSpan.StartLinePosition.Character,
+            lineSpan.EndLinePosition.Line,
+            lineSpan.EndLinePosition.Character);
     }
 
     public Location ToLocation()
     {
-        var span = new TextSpan(Start, Length);
-        var lineSpan = new LinePositionSpan(new LinePosition(0, Start), new LinePosition(0, Start + Length));
+        var span = new Microsoft.CodeAnalysis.Text.TextSpan(Start, Length);
+        var lineSpan = new Microsoft.CodeAnalysis.Text.LinePositionSpan(
+            new Microsoft.CodeAnalysis.Text.LinePosition(StartLine, StartCharacter),
+            new Microsoft.CodeAnalysis.Text.LinePosition(EndLine, EndCharacter));
         return Microsoft.CodeAnalysis.Location.Create(FilePath ?? string.Empty, span, lineSpan);
     }
 }
