@@ -1,6 +1,5 @@
 using AlephMapper.Adaptation;
 using AlephMapper.Helpers;
-using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -13,22 +12,15 @@ namespace AlephMapper.Generation;
 /// Holds the mutable state for one generated mapper file. Feature emitters use
 /// this instead of sharing source-output orchestration concerns.
 /// </summary>
-internal sealed class MapperGenerationContext
+internal sealed class MapperGenerationContext(
+    INamedTypeSymbol mapperType,
+    MappingCatalog mappingsByMethod)
 {
     private bool _hasMembers;
 
-    public MapperGenerationContext(
-        INamedTypeSymbol mapperType,
-        MappingCatalog mappingsByMethod)
-    {
-        MapperType = mapperType;
-        MappingsByMethod = mappingsByMethod;
-        AdaptationMembers = new AdaptationMemberPlanner(mapperType);
-    }
-
-    public INamedTypeSymbol MapperType { get; }
-    public MappingCatalog MappingsByMethod { get; }
-    public AdaptationMemberPlanner AdaptationMembers { get; }
+    public INamedTypeSymbol MapperType { get; } = mapperType;
+    public MappingCatalog MappingsByMethod { get; } = mappingsByMethod;
+    public AdaptationMemberPlanner AdaptationMembers { get; } = new(mapperType);
     public HashSet<string> UsingDirectives { get; } = new(StringComparer.Ordinal);
     public HashSet<string> GeneratedMemberSignatures { get; } = new(StringComparer.Ordinal);
     public StringBuilder Members { get; } = new();

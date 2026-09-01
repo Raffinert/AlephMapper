@@ -1,6 +1,5 @@
 #nullable enable
 
-using AlephMapper.Diagnostics;
 using AlephMapper.Generation.Emitters;
 using AlephMapper.Helpers;
 using AlephMapper.Models;

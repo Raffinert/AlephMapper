@@ -10,44 +10,18 @@ using System.Linq;
 namespace AlephMapper.Generation;
 
 /// <summary>
-/// The source-only portion of a mapper generation result. Keeping this value
-/// separate ensures diagnostic changes do not invalidate source emission.
-/// </summary>
-internal readonly struct MapperSourceResult : IEquatable<MapperSourceResult>
-{
-    public MapperSourceResult(string? hintName, string? source)
-    {
-        HintName = hintName;
-        Source = source;
-    }
-
-    public string? HintName { get; }
-    public string? Source { get; }
-
-    public bool Equals(MapperSourceResult other) =>
-        string.Equals(HintName, other.HintName, StringComparison.Ordinal) &&
-        string.Equals(Source, other.Source, StringComparison.Ordinal);
-
-    public override bool Equals(object? obj) => obj is MapperSourceResult other && Equals(other);
-    public override int GetHashCode() => (HintName, Source).GetHashCode();
-}
-
-/// <summary>
 /// Value-only output from mapper analysis. This is the boundary between
 /// compiler-bound semantic rewriting and incremental source production.
 /// </summary>
-internal sealed class MapperGenerationResult : IEquatable<MapperGenerationResult>
+internal sealed class MapperGenerationResult(
+    string? hintName,
+    string? source,
+    ImmutableArray<GenerationDiagnostic> diagnostics)
+    : IEquatable<MapperGenerationResult>
 {
-    public MapperGenerationResult(string? hintName, string? source, ImmutableArray<GenerationDiagnostic> diagnostics)
-    {
-        HintName = hintName;
-        Source = source;
-        Diagnostics = diagnostics;
-    }
-
-    public string? HintName { get; }
-    public string? Source { get; }
-    public ImmutableArray<GenerationDiagnostic> Diagnostics { get; }
+    public string? HintName { get; } = hintName;
+    public string? Source { get; } = source;
+    public ImmutableArray<GenerationDiagnostic> Diagnostics { get; } = diagnostics;
 
     public static MapperGenerationResult Empty { get; } = new MapperGenerationResult(null, null, ImmutableArray<GenerationDiagnostic>.Empty);
 
@@ -63,48 +37,34 @@ internal sealed class MapperGenerationResult : IEquatable<MapperGenerationResult
     public override int GetHashCode() => (HintName, Source).GetHashCode();
 }
 
-internal readonly struct GenerationDiagnostic : IEquatable<GenerationDiagnostic>
+internal readonly struct GenerationDiagnostic(
+    string id,
+    string title,
+    string message,
+    DiagnosticSeverity severity,
+    string category,
+    string? filePath,
+    int start,
+    int length,
+    int startLine,
+    int startCharacter,
+    int endLine,
+    int endCharacter)
+    : IEquatable<GenerationDiagnostic>
 {
-    public GenerationDiagnostic(
-        string id,
-        string title,
-        string message,
-        DiagnosticSeverity severity,
-        string category,
-        string? filePath,
-        int start,
-        int length,
-        int startLine,
-        int startCharacter,
-        int endLine,
-        int endCharacter)
-    {
-        Id = id;
-        Title = title;
-        Message = message;
-        Severity = severity;
-        Category = category;
-        FilePath = filePath;
-        Start = start;
-        Length = length;
-        StartLine = startLine;
-        StartCharacter = startCharacter;
-        EndLine = endLine;
-        EndCharacter = endCharacter;
-    }
+    public string Id { get; } = id;
+    public string Title { get; } = title;
+    public string Message { get; } = message;
+    public DiagnosticSeverity Severity { get; } = severity;
+    public string Category { get; } = category;
+    public string? FilePath { get; } = filePath;
+    public int Start { get; } = start;
+    public int Length { get; } = length;
+    public int StartLine { get; } = startLine;
+    public int StartCharacter { get; } = startCharacter;
+    public int EndLine { get; } = endLine;
+    public int EndCharacter { get; } = endCharacter;
 
-    public string Id { get; }
-    public string Title { get; }
-    public string Message { get; }
-    public DiagnosticSeverity Severity { get; }
-    public string Category { get; }
-    public string? FilePath { get; }
-    public int Start { get; }
-    public int Length { get; }
-    public int StartLine { get; }
-    public int StartCharacter { get; }
-    public int EndLine { get; }
-    public int EndCharacter { get; }
     public static GenerationDiagnostic From(Diagnostic diagnostic)
     {
         var location = diagnostic.Location;

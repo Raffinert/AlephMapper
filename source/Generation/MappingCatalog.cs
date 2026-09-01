@@ -13,35 +13,26 @@ namespace AlephMapper.Generation;
 /// This keeps each mapper output independent while preserving cross-mapper
 /// inlining support.
 /// </summary>
-internal sealed class MappingCatalog
+internal sealed class MappingCatalog(
+    Dictionary<IMethodSymbol, MappingAnalysis> mappings,
+    Func<IMethodSymbol, MappingAnalysis?> createExternalMapping)
 {
-    private readonly Dictionary<IMethodSymbol, MappingAnalysis> _mappings;
-    private readonly Func<IMethodSymbol, MappingAnalysis?> _createExternalMapping;
-
-    public MappingCatalog(
-        Dictionary<IMethodSymbol, MappingAnalysis> mappings,
-        Func<IMethodSymbol, MappingAnalysis?> createExternalMapping)
-    {
-        _mappings = mappings;
-        _createExternalMapping = createExternalMapping;
-    }
-
     public bool TryGetValue(IMethodSymbol method, out MappingAnalysis mapping)
     {
         var normalizedMethod = SymbolHelpers.Normalize(method);
-        if (_mappings.TryGetValue(normalizedMethod, out mapping))
+        if (mappings.TryGetValue(normalizedMethod, out mapping))
         {
             return true;
         }
 
-        var externalMapping = _createExternalMapping(normalizedMethod);
+        var externalMapping = createExternalMapping(normalizedMethod);
         if (externalMapping is null)
         {
             mapping = null!;
             return false;
         }
 
-        _mappings[normalizedMethod] = externalMapping;
+        mappings[normalizedMethod] = externalMapping;
         mapping = externalMapping;
         return true;
     }

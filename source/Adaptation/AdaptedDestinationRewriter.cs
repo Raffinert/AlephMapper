@@ -4,7 +4,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using AlephMapper.SyntaxRewriters;
 using AlephMapper.Helpers;
 using System;
 using System.Collections.Generic;

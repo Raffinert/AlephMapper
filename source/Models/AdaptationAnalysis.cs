@@ -7,30 +7,20 @@ namespace AlephMapper.Models;
 /// <summary>
 /// Compiler-bound adaptation analysis state used only while rendering output.
 /// </summary>
-internal sealed class AdaptationAnalysis
+internal sealed class AdaptationAnalysis(
+    INamedTypeSymbol sourceType,
+    INamedTypeSymbol destinationType,
+    string? generatedName,
+    AdaptGeneration generation,
+    NullConditionalRewrite nullStrategy,
+    SourceLocationModel? location)
 {
-    public AdaptationAnalysis(
-        INamedTypeSymbol sourceType,
-        INamedTypeSymbol destinationType,
-        string? generatedName,
-        AdaptGeneration generation,
-        NullConditionalRewrite nullStrategy,
-        SourceLocationModel? location)
-    {
-        SourceType = sourceType;
-        DestinationType = destinationType;
-        GeneratedName = generatedName;
-        Generation = generation;
-        NullStrategy = nullStrategy;
-        Location = location;
-    }
-
-    public INamedTypeSymbol SourceType { get; }
-    public INamedTypeSymbol DestinationType { get; }
-    public string? GeneratedName { get; }
-    public AdaptGeneration Generation { get; }
-    public NullConditionalRewrite NullStrategy { get; }
-    public SourceLocationModel? Location { get; }
+    public INamedTypeSymbol SourceType { get; } = sourceType;
+    public INamedTypeSymbol DestinationType { get; } = destinationType;
+    public string? GeneratedName { get; } = generatedName;
+    public AdaptGeneration Generation { get; } = generation;
+    public NullConditionalRewrite NullStrategy { get; } = nullStrategy;
+    public SourceLocationModel? Location { get; } = location;
 }
 
 internal sealed class SourceLocationModel

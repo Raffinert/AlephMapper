@@ -307,28 +307,16 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
 }
 
-internal sealed class UnsafeConditionalReceiverInfo
+internal sealed class UnsafeConditionalReceiverInfo(ExpressionSyntax expression)
 {
-    public UnsafeConditionalReceiverInfo(ExpressionSyntax expression)
-    {
-        Expression = expression;
-        Location = expression.GetLocation();
-    }
-
-    public ExpressionSyntax Expression { get; }
-    public Location Location { get; }
+    public ExpressionSyntax Expression { get; } = expression;
+    public Location Location { get; } = expression.GetLocation();
 }
 
-internal sealed class UnsupportedNullConditionalInfo
+internal sealed class UnsupportedNullConditionalInfo(ConditionalAccessExpressionSyntax expression)
 {
-    public UnsupportedNullConditionalInfo(ConditionalAccessExpressionSyntax expression)
-    {
-        Expression = expression;
-        Location = expression.GetLocation();
-    }
-
-    public ConditionalAccessExpressionSyntax Expression { get; }
-    public Location Location { get; }
+    public ConditionalAccessExpressionSyntax Expression { get; } = expression;
+    public Location Location { get; } = expression.GetLocation();
 }
 
 #nullable restore
