@@ -30,10 +30,10 @@ partial class EfCoreMapper
                 : (int?)null),
             BirthPlace = (p.BirthInfo != null
                 ? (p.BirthInfo.BirthPlace)
-                : (string)null) ?? "Unknown",
+                : (string?)null) ?? "Unknown",
             BirthAddress = (p.BirthInfo != null
                 ? (p.BirthInfo.Address)
-                : (string)null) ?? "Not specified",
+                : (string?)null) ?? "Not specified",
             HasBirthInfo = p.BirthInfo != null,
             IsAdult = (p.BirthInfo != null
                 ? (p.BirthInfo.Age)
@@ -112,7 +112,7 @@ partial class EfCoreMapper
     public static Expression<Func<Person, string>> GetBirthPlaceExpression() => 
         person => (person.BirthInfo != null
             ? (person.BirthInfo.BirthPlace)
-            : (string)null) ?? "Unknown";
+            : (string?)null) ?? "Unknown";
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetBirthAddress(Person)"/>.
@@ -125,7 +125,7 @@ partial class EfCoreMapper
     public static Expression<Func<Person, string>> GetBirthAddressExpression() => 
         person => (person.BirthInfo != null
             ? (person.BirthInfo.Address)
-            : (string)null) ?? "Not specified";
+            : (string?)null) ?? "Not specified";
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="HasBirthInfo(Person)"/>.
@@ -162,7 +162,7 @@ partial class EfCoreMapper
     public static Expression<Func<Person, bool>> BornInUkraineExpression() => 
         person => (person.BirthInfo != null
             ? (person.BirthInfo.Address)
-            : (string)null) != null && person.BirthInfo.Address.Contains("Ukraine");
+            : (string?)null) != null && person.BirthInfo.Address.Contains("Ukraine");
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="GetAddressCount(Person)"/>.
@@ -245,7 +245,7 @@ partial class EfCoreMapper
     public static Expression<Func<Person, bool>> LivesInSamePlaceAsBornExpression() => 
         person => (person.BirthInfo != null
             ? (person.BirthInfo.BirthPlace)
-            : (string)null) != null
+            : (string?)null) != null
             && person.Addresses.Any(a => a.IsActive && a.City == person.BirthInfo.BirthPlace);
 
     /// <summary>

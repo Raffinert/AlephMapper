@@ -26,6 +26,6 @@ partial class PersonProductMapperRewrite
             Name = person.Name,
             FavoritePrice = (person.FavoriteProduct != null
                 ? ("$" + person.FavoriteProduct.Price)
-                : (string)null)
+                : (string?)null)
         };
 }

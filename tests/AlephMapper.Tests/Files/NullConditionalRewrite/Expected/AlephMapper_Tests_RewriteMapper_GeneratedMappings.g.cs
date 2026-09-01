@@ -22,7 +22,7 @@ partial class RewriteMapper
     public static Expression<Func<SourceDto, string>> GetAddressExpression() => 
         dto => (dto.BirthInfo != null
             ? (dto.BirthInfo.Address)
-            : (string)null) ?? "Unknown";
+            : (string?)null) ?? "Unknown";
 
     /// <summary>
     /// This is an auto-generated expression companion for <see cref="HasAddress(SourceDto)"/>.
@@ -35,5 +35,5 @@ partial class RewriteMapper
     public static Expression<Func<SourceDto, bool>> HasAddressExpression() => 
         source => (source.BirthInfo != null
             ? (source.BirthInfo.Address)
-            : (string)null) != null;
+            : (string?)null) != null;
 }

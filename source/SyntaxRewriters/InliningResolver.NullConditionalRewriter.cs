@@ -56,11 +56,15 @@ internal partial class InliningResolver
             {
                 var typeInfo = model.GetTypeInfo(node);
                 var convertedType = typeInfo.ConvertedType ?? typeInfo.Type;
-                var nullableContext = model.GetNullableContext(node.SpanStart);
 
                 if (convertedType is not null)
                 {
-                    var castTypeName = TypeDisplay.ForSymbol(convertedType, convertedType.NullableAnnotation, nullableContext);
+                    // A null-conditional access always produces null when its receiver is null.
+                    // Its converted type can still be non-nullable when it is immediately consumed
+                    // by an expression such as `??`, so explicitly retain that nullability here.
+                    // Generated files always enable nullable annotations, so render this cast in
+                    // that context even when the input source has annotations disabled.
+                    var castTypeName = TypeDisplay.ForSymbol(convertedType, NullableAnnotation.Annotated, NullableContext.Enabled);
 
                     return ParenthesizedExpression(
                         ConditionalExpression(
