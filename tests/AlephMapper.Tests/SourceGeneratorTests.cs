@@ -175,6 +175,9 @@ public class SourceGeneratorTests
                 .WithNullableContextOptions(NullableContextOptions.Enable));
 
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var generatedTrees = outputCompilation.SyntaxTrees
+            .Where(tree => !compilation.SyntaxTrees.Contains(tree))
+            .ToHashSet();
         var mapperSource = driver.GetRunResult().Results.Single().GeneratedSources
             .Single(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
             .SourceText.ToString();
@@ -188,7 +191,9 @@ public class SourceGeneratorTests
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic =>
             diagnostic.Id is "CS8632" or "CS8669")).IsEmpty();
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic =>
-            diagnostic.Id == "CS8602")).IsNotEmpty();
+            diagnostic.Id == "CS8602" &&
+            diagnostic.Location.SourceTree is { } tree &&
+            generatedTrees.Contains(tree))).IsNotEmpty();
     }
 
     [Test]

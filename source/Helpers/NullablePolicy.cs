@@ -17,9 +17,6 @@ internal readonly struct NullablePolicy
     public bool AnnotationsEnabled => Context is
         NullableContext.Enabled or NullableContext.AnnotationsEnabled;
 
-    public bool WarningsEnabled => Context is
-        NullableContext.Enabled or NullableContext.WarningsEnabled;
-
     public static NullablePolicy Disabled { get; } = new(NullableContext.Disabled);
 
     public static NullablePolicy From(Compilation compilation)
