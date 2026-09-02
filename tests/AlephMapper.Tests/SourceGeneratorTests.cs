@@ -197,6 +197,54 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task RewritePreservesNullableReferenceNullBranches()
+    {
+        const string source = """
+            #nullable enable
+            using AlephMapper;
+
+            namespace NullableRewriteFixture;
+
+            public static partial class Mapper
+            {
+                [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+                public static AddressDto Map(Person person) =>
+                    person.Address?.ToDto() ?? new AddressDto();
+            }
+
+            public static class AddressExtensions
+            {
+                public static AddressDto ToDto(this Address address) => new AddressDto();
+            }
+
+            public sealed class Person { public Address? Address { get; set; } }
+            public sealed class Address { }
+            public sealed class AddressDto { }
+            """;
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "NullableRewriteNullBranch",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithNullableContextOptions(NullableContextOptions.Enable));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var generatedTrees = outputCompilation.SyntaxTrees
+            .Where(tree => !compilation.SyntaxTrees.Contains(tree))
+            .ToHashSet();
+        var mapperSource = driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .SourceText.ToString();
+
+        await Assert.That(mapperSource).Contains("(global::NullableRewriteFixture.AddressDto?)null");
+        await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic =>
+            diagnostic.Id == "CS8600" &&
+            diagnostic.Location.SourceTree is { } tree &&
+            generatedTrees.Contains(tree))).IsEmpty();
+    }
+
+    [Test]
     public async Task MapperHelpersRemainCandidatesForInlining()
     {
         var tree = CSharpSyntaxTree.ParseText(
