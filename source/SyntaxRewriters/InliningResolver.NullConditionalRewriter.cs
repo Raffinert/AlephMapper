@@ -70,13 +70,7 @@ internal partial class InliningResolver
                         nullablePolicy);
 
                     var nullBranch = CastExpression(
-                        ParseTypeName(convertedType.IsReferenceType &&
-                                      convertedType.NullableAnnotation != NullableAnnotation.Annotated
-                            ? TypeDisplay.ForSymbol(
-                                convertedType,
-                                NullableAnnotation.NotAnnotated,
-                                nullablePolicy)
-                            : castTypeName),
+                        ParseTypeName(castTypeName),
                         LiteralExpression(SyntaxKind.NullLiteralExpression));
 
                     return ParenthesizedExpression(
