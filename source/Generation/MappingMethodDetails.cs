@@ -15,8 +15,7 @@ internal sealed class MappingMethodDetails
     public MappingMethodDetails(MappingAnalysis mapping)
     {
         Mapping = mapping;
-        var nullableContextPosition = mapping.MethodSymbol.Locations.FirstOrDefault()?.SourceSpan.Start ?? 0;
-        var nullablePolicy = NullablePolicy.From(mapping.SemanticModel, nullableContextPosition);
+        var nullablePolicy = NullablePolicy.From(mapping.SemanticModel.Compilation);
 
         ParameterTypeNames = mapping.Parameters
             .Select(parameter => TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy))
@@ -76,7 +75,8 @@ internal sealed class MappingMethodDetails
             }
             else if (typeParameter.HasReferenceTypeConstraint)
             {
-                constraints.Add(typeParameter.ReferenceTypeConstraintNullableAnnotation == NullableAnnotation.Annotated
+                constraints.Add(nullablePolicy.AnnotationsEnabled &&
+                    typeParameter.ReferenceTypeConstraintNullableAnnotation == NullableAnnotation.Annotated
                     ? "class?"
                     : "class");
             }

@@ -1,5 +1,4 @@
 using AlephMapper.Adaptation;
-using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -35,17 +34,14 @@ internal sealed class MapperGenerationContext(
         UsingDirectives.UnionWith(usingDirectives);
     }
 
-    public void AppendMember(NullablePolicy nullablePolicy, Action<StringBuilder> writeMember)
+    public void AppendMember(Action<StringBuilder> writeMember)
     {
         if (_hasMembers)
         {
             Members.AppendLine();
         }
 
-        Members.AppendLine($"#nullable {nullablePolicy.Directive}");
-
         writeMember(Members);
-        Members.AppendLine("#nullable restore");
 
         _hasMembers = true;
     }

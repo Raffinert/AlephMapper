@@ -54,7 +54,7 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        context.AppendMember(details.NullablePolicy, members =>
+        context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated update method for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");

@@ -19,9 +19,6 @@ internal static class TypeDisplay
             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
-    public static string ForSymbol(ITypeSymbol symbol, SemanticModel model, int position)
-        => ForSymbol(symbol, symbol.NullableAnnotation, NullablePolicy.From(model, position));
-
     public static string ForSymbol(ITypeSymbol symbol, NullableAnnotation annotationOverride, NullablePolicy nullablePolicy)
     {
         var format = nullablePolicy.AnnotationsEnabled ? NullableFormat : NonNullableFormat;

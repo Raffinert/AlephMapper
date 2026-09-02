@@ -72,7 +72,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.7.0">
+<PackageReference Include="AlephMapper" Version="0.7.1">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -82,7 +82,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.7.0" />
+<PackageVersion Include="AlephMapper" Version="0.7.1" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
@@ -103,7 +103,7 @@ When referencing the generator directly from source:
 
 ### Compiler compatibility
 
-AlephMapper 0.7.0 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+AlephMapper 0.7.1 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
 
 ### Migration: `[Expressive]` to `[Projectable]`
 
@@ -497,6 +497,8 @@ Attributes can be applied to individual methods. `[Projectable]` and `[Updatable
 AlephMapper is best suited to object initializers, predicates, constructor calls, member access, conversions, LINQ operations, and small expression-bodied methods that it can inline. Not every valid C# construct can be represented in an expression tree, and not every expression-tree operation can be translated by every query provider.
 
 ## Inspecting generated code
+
+Generated mapper files follow the consuming project's project-level nullable configuration. Source-local `#nullable` directives on mapping methods and inlined helpers are not propagated; AlephMapper emits `#nullable restore` in each generated mapper file so Roslyn applies that project policy to generated code.
 
 To emit generated files from a consuming project:
 

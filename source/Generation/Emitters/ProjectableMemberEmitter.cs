@@ -68,7 +68,7 @@ internal static class ProjectableMemberEmitter
             ? "()"
             : "(" + details.ExtraExpressionParameterListWithNames + ")";
 
-        context.AppendMember(details.NullablePolicy, members =>
+        context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated expression companion for <see cref=\"{mapping.Name}({details.MethodParameterList})\"/>.");
