@@ -47,7 +47,16 @@ internal static class AdaptationValidator
             mapping.SemanticModel,
             mapping.ReturnType).ToArray();
         var hasInlinedDestinationCreation = inlinedBody.GetAnnotatedNodes(SyntaxRewriters.InliningResolver.InlinedReturnCreationAnnotation).Any();
-        if (destinationCreations.Length == 0 && !hasInlinedDestinationCreation)
+        // Not every adaptation creates an object. Predicates and scalar projections can
+        // safely be adapted when their result type is unchanged: only the source
+        // parameter type needs substituting, so there is no destination construction
+        // to rebind.
+        var preservesDestinationType = SymbolEqualityComparer.Default.Equals(
+            adaptation.DestinationType,
+            mapping.ReturnType);
+        if (destinationCreations.Length == 0 &&
+            !hasInlinedDestinationCreation &&
+            !preservesDestinationType)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.AdaptUnsupportedSyntax,
