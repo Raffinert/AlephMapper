@@ -980,6 +980,42 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task AdaptedOutputCompilesForPredicateWithUnchangedResultType()
+    {
+        const string source = """
+            using AlephMapper;
+
+            namespace Fixture;
+
+            public static partial class Mapper
+            {
+                [Adapt(typeof(AlternateItem), typeof(bool), Name = "HasAlternateValue", Generate = AdaptGeneration.Expression)]
+                public static bool HasValue(Item item, int expectedValue) =>
+                    item.Metadata.Value == expectedValue;
+            }
+
+            public sealed class Item
+            {
+                public ItemMetadata Metadata { get; set; } = new();
+            }
+
+            public sealed class AlternateItem
+            {
+                public AlternateItemMetadata Metadata { get; set; } = new();
+            }
+
+            public sealed class ItemMetadata { public int Value { get; set; } }
+            public sealed class AlternateItemMetadata { public int Value { get; set; } }
+            """;
+
+        var generatedSources = await AssertAdaptedOutputCompiles(source, "AdaptedPredicate");
+        var generatedSource = generatedSources.Single(sourceText => sourceText.Contains("HasAlternateValueExpression"));
+
+        await Assert.That(generatedSource).Contains(
+            "item => item.Metadata.Value == expectedValue;");
+    }
+
+    [Test]
     public async Task AdaptedOutputCompilesForGenericNestedMapper()
     {
         const string source = """

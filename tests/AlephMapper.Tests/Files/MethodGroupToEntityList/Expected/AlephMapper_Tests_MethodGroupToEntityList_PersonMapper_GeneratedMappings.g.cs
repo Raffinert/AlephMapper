@@ -9,7 +9,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MethodGroupToEntityList;
 
-[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.1.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.2.0")]
 partial class PersonMapper
 {
     /// <summary>
