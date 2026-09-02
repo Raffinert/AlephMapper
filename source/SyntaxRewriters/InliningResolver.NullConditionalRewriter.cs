@@ -48,20 +48,10 @@ internal partial class InliningResolver
 
             if (rewriteSupport is NullConditionalRewrite.Ignore)
             {
-                // Ignore the conditional access and simply return the accessed expression
-                // Preserve the source semantics while suppressing the nullable-flow warning
-                // introduced by replacing `?.` with a regular member access.
-                if (!nullablePolicy.WarningsEnabled)
-                {
-                    return rewrittenWhenNotNull;
-                }
-
-                return rewrittenWhenNotNull is PostfixUnaryExpressionSyntax postfix &&
-                    postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression)
-                    ? rewrittenWhenNotNull
-                    : PostfixUnaryExpression(
-                        SyntaxKind.SuppressNullableWarningExpression,
-                        rewrittenWhenNotNull);
+                // Ignore the conditional access and simply return the accessed expression.
+                // Nullable-flow diagnostics from that access follow the generated file's
+                // project-level nullable warning policy.
+                return rewrittenWhenNotNull;
             }
 
             if (rewriteSupport is NullConditionalRewrite.Rewrite)
@@ -79,13 +69,6 @@ internal partial class InliningResolver
                         NullableAnnotation.Annotated,
                         nullablePolicy);
 
-                    var nullValue = convertedType.IsReferenceType &&
-                        convertedType.NullableAnnotation != NullableAnnotation.Annotated &&
-                        nullablePolicy.WarningsEnabled
-                        ? (ExpressionSyntax)PostfixUnaryExpression(
-                            SyntaxKind.SuppressNullableWarningExpression,
-                            LiteralExpression(SyntaxKind.NullLiteralExpression))
-                        : LiteralExpression(SyntaxKind.NullLiteralExpression);
                     var nullBranch = CastExpression(
                         ParseTypeName(convertedType.IsReferenceType &&
                                       convertedType.NullableAnnotation != NullableAnnotation.Annotated
@@ -94,7 +77,7 @@ internal partial class InliningResolver
                                 NullableAnnotation.NotAnnotated,
                                 nullablePolicy)
                             : castTypeName),
-                        nullValue);
+                        LiteralExpression(SyntaxKind.NullLiteralExpression));
 
                     return ParenthesizedExpression(
                         ConditionalExpression(
