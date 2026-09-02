@@ -230,7 +230,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(details.NullablePolicy, members =>
+        context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted mapping method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -247,7 +247,7 @@ internal static class AdaptationMemberEmitter
         string adaptedBodyText,
         MapperGenerationContext context)
     {
-        context.AppendMember(details.NullablePolicy, members =>
+        context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted expression companion for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");
@@ -269,7 +269,7 @@ internal static class AdaptationMemberEmitter
         IEnumerable<string> lines,
         MapperGenerationContext context)
     {
-        context.AppendMember(details.NullablePolicy, members =>
+        context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");
             members.AppendLine($"    /// This is an auto-generated adapted update method for <see cref=\"{details.Mapping.Name}({details.MethodParameterList})\"/>.");

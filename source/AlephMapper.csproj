@@ -13,7 +13,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.7.0</PackageVersion>
+    <PackageVersion>0.7.1</PackageVersion>
     <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
     <Version>$(PackageVersion)</Version>
     <AssemblyVersion>$(PackageVersion).$(BuildNumber)</AssemblyVersion>
