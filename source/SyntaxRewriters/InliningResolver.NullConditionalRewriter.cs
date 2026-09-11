@@ -56,6 +56,11 @@ internal partial class InliningResolver
 
             if (rewriteSupport is NullConditionalRewrite.Rewrite)
             {
+                if (!CanQuerySemanticModel(node))
+                {
+                    return base.VisitConditionalAccessExpression(node);
+                }
+
                 var typeInfo = model.GetTypeInfo(node);
                 var convertedType = typeInfo.ConvertedType ?? typeInfo.Type;
 

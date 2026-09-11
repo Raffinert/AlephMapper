@@ -18,7 +18,10 @@ internal sealed partial class InliningResolver
         // Only handle null-coalescing specially; otherwise defer to default behavior
         if (!node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken))
         {
-            return base.VisitBinaryExpression(node);
+            var rewritten = (BinaryExpressionSyntax?)base.VisitBinaryExpression(node);
+            return node.IsKind(SyntaxKind.AsExpression) && rewritten != null
+                ? rewritten.WithRight(GetFullyQualifiedTypeSyntax((TypeSyntax)node.Right, (TypeSyntax)rewritten.Right))
+                : rewritten;
         }
 
         var rightOriginal = node.Right;
@@ -116,35 +119,45 @@ internal sealed partial class InliningResolver
         try
         {
             // First, try to get the type from the semantic model of the collection expression itself
-            var typeInfo = model.GetTypeInfo(collectionExpression);
-            if (typeInfo.Type != null && typeInfo.Type.TypeKind != TypeKind.Error)
+            if (CanQuerySemanticModel(collectionExpression))
             {
-                return typeInfo.Type;
+                var typeInfo = model.GetTypeInfo(collectionExpression);
+                if (typeInfo.Type != null && typeInfo.Type.TypeKind != TypeKind.Error)
+                    return typeInfo.Type;
             }
 
             // If that fails, try to infer from the context
             if (contextNode != null)
             {
                 // For binary expressions (null coalescing), use the left side type
-                var leftTypeInfo = model.GetTypeInfo(contextNode);
-                if (leftTypeInfo.Type != null)
-                    return leftTypeInfo.Type;
+                if (CanQuerySemanticModel(contextNode))
+                {
+                    var leftTypeInfo = model.GetTypeInfo(contextNode);
+                    if (leftTypeInfo.Type != null)
+                        return leftTypeInfo.Type;
+                }
 
                 // For assignments, get the type of the left side
                 if (contextNode.Parent is AssignmentExpressionSyntax assignment)
                 {
-                    var leftType = model.GetTypeInfo(assignment.Left);
-                    if (leftType.Type != null)
-                        return leftType.Type;
+                    if (CanQuerySemanticModel(assignment.Left))
+                    {
+                        var leftType = model.GetTypeInfo(assignment.Left);
+                        if (leftType.Type != null)
+                            return leftType.Type;
+                    }
                 }
 
                 // For property initializers, look at the property type
                 if (contextNode.Parent is EqualsValueClauseSyntax equalsValue &&
                     equalsValue.Parent is PropertyDeclarationSyntax property)
                 {
-                    var propType = model.GetTypeInfo(property.Type);
-                    if (propType.Type != null)
-                        return propType.Type;
+                    if (CanQuerySemanticModel(property.Type))
+                    {
+                        var propType = model.GetTypeInfo(property.Type);
+                        if (propType.Type != null)
+                            return propType.Type;
+                    }
                 }
             }
 
@@ -157,9 +170,12 @@ internal sealed partial class InliningResolver
                 if (currentNode is AssignmentExpressionSyntax assignmentExpr &&
                     IsDescendantOf(collectionExpression, assignmentExpr.Right))
                 {
-                    var leftSideType = model.GetTypeInfo(assignmentExpr.Left);
-                    if (leftSideType.Type != null)
-                        return leftSideType.Type;
+                    if (CanQuerySemanticModel(assignmentExpr.Left))
+                    {
+                        var leftSideType = model.GetTypeInfo(assignmentExpr.Left);
+                        if (leftSideType.Type != null)
+                            return leftSideType.Type;
+                    }
                 }
 
                 // Look for binary expressions (null coalescing) where we're on the right side  
@@ -167,9 +183,12 @@ internal sealed partial class InliningResolver
                     binaryExpr.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken) &&
                     IsDescendantOf(collectionExpression, binaryExpr.Right))
                 {
-                    var leftSideType = model.GetTypeInfo(binaryExpr.Left);
-                    if (leftSideType.Type != null)
-                        return leftSideType.Type;
+                    if (CanQuerySemanticModel(binaryExpr.Left))
+                    {
+                        var leftSideType = model.GetTypeInfo(binaryExpr.Left);
+                        if (leftSideType.Type != null)
+                            return leftSideType.Type;
+                    }
                 }
 
                 currentNode = currentNode.Parent;

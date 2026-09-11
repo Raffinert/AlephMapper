@@ -38,9 +38,19 @@ internal sealed partial class InliningResolver(
 
     private IMethodSymbol? ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
+        if (!CanQuerySemanticModel(expr))
+        {
+            return null;
+        }
+
         var si = model.GetSymbolInfo(expr);
         if (si.Symbol is IMethodSymbol ms) return ms;
         return null;
+    }
+
+    private bool CanQuerySemanticModel(SyntaxNode node)
+    {
+        return node.SyntaxTree == model.SyntaxTree;
     }
 
     private static IMethodSymbol? TryGetDelegateInvoke(IMethodSymbol invokedMethod, int argIndex)
@@ -63,7 +73,9 @@ internal sealed partial class InliningResolver(
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (node.Parent == null || model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
+        if (node.Parent == null ||
+            !CanQuerySemanticModel(node) ||
+            model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
         {
             return base.VisitInvocationExpression(node);
         }
