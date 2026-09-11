@@ -8,7 +8,7 @@ using System.Linq.Expressions;
 
 namespace AlephMapper.Tests.MultiParamExtensionInlining;
 
-[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.2.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.7.3.0")]
 partial class ProductMapper
 {
     /// <summary>

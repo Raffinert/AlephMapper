@@ -382,14 +382,30 @@ public class SourceGeneratorTests
 
             public sealed class Func { }
             public sealed class Expression { }
-            public sealed class Source { public string Name { get; set; } = ""; }
-            public sealed class Destination { public string Name { get; set; } = ""; }
+            public enum Status { Open }
+            public sealed class Source
+            {
+                public string Name { get; set; } = "";
+                public int Status { get; set; }
+                public int? OptionalStatus { get; set; }
+            }
+            public sealed class Destination
+            {
+                public string Name { get; set; } = "";
+                public Status Status { get; set; }
+                public Status? OptionalStatus { get; set; }
+            }
 
             public static partial class Mapper
             {
                 [Projectable]
                 [Updatable]
-                public static Destination Map(Source source) => new() { Name = source.Name };
+                public static Destination Map(Source source) => new()
+                {
+                    Name = source.Name,
+                    Status = (Status)source.Status,
+                    OptionalStatus = (Status?)source.OptionalStatus
+                };
             }
             """;
 
@@ -410,6 +426,8 @@ public class SourceGeneratorTests
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("global::System.Linq.Expressions.Expression<global::System.Func<global::Collision.Source, global::Collision.Destination>>");
         await Assert.That(generated).Contains("new global::Collision.Destination");
+        await Assert.That(generated).Contains("Status = (global::Collision.Status)source.Status");
+        await Assert.That(generated).Contains("OptionalStatus = (global::Collision.Status?)source.OptionalStatus");
         await Assert.That(generated).Contains("dest = new global::Collision.Destination();");
     }
 
