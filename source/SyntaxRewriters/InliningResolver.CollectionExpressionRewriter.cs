@@ -18,7 +18,10 @@ internal sealed partial class InliningResolver
         // Only handle null-coalescing specially; otherwise defer to default behavior
         if (!node.OperatorToken.IsKind(SyntaxKind.QuestionQuestionToken))
         {
-            return base.VisitBinaryExpression(node);
+            var rewritten = (BinaryExpressionSyntax?)base.VisitBinaryExpression(node);
+            return node.IsKind(SyntaxKind.AsExpression) && rewritten != null
+                ? rewritten.WithRight(GetFullyQualifiedTypeSyntax((TypeSyntax)node.Right, (TypeSyntax)rewritten.Right))
+                : rewritten;
         }
 
         var rightOriginal = node.Right;

@@ -377,6 +377,7 @@ public class SourceGeneratorTests
     {
         const string source = """
             using AlephMapper;
+            using System.Linq;
 
             namespace Collision;
 
@@ -388,13 +389,16 @@ public class SourceGeneratorTests
                 public string Name { get; set; } = "";
                 public int Status { get; set; }
                 public int? OptionalStatus { get; set; }
+                public object Value { get; set; } = new();
             }
             public sealed class Destination
             {
                 public string Name { get; set; } = "";
                 public Status Status { get; set; }
                 public Status? OptionalStatus { get; set; }
+                public object Value { get; set; } = new();
             }
+            public sealed class Marker { }
 
             public static partial class Mapper
             {
@@ -404,7 +408,8 @@ public class SourceGeneratorTests
                 {
                     Name = source.Name,
                     Status = (Status)source.Status,
-                    OptionalStatus = (Status?)source.OptionalStatus
+                    OptionalStatus = (Status?)source.OptionalStatus ?? Status.Open,
+                    Value = source.Value as Marker ?? System.Linq.Enumerable.Empty<Marker>().FirstOrDefault() ?? new Marker()
                 };
             }
             """;
@@ -427,7 +432,10 @@ public class SourceGeneratorTests
         await Assert.That(generated).Contains("global::System.Linq.Expressions.Expression<global::System.Func<global::Collision.Source, global::Collision.Destination>>");
         await Assert.That(generated).Contains("new global::Collision.Destination");
         await Assert.That(generated).Contains("Status = (global::Collision.Status)source.Status");
-        await Assert.That(generated).Contains("OptionalStatus = (global::Collision.Status?)source.OptionalStatus");
+        await Assert.That(generated).Contains("OptionalStatus = (global::Collision.Status?)source.OptionalStatus ?? global::Collision.Status.Open");
+        await Assert.That(generated).Contains("source.Value as global::Collision.Marker");
+        await Assert.That(generated).Contains("Empty<global::Collision.Marker>()");
+        await Assert.That(generated).Contains("new global::Collision.Marker()");
         await Assert.That(generated).Contains("dest = new global::Collision.Destination();");
     }
 
