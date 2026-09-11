@@ -10,7 +10,7 @@ internal sealed partial class InliningResolver
     public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
         var rewritten = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)!;
-        if (model.GetTypeInfo(node).Type is { } typeSymbol)
+        if (CanQuerySemanticModel(node) && model.GetTypeInfo(node).Type is { } typeSymbol)
         {
             var typeName = AlephMapper.Helpers.TypeDisplay.ForSymbol(
                 typeSymbol,
@@ -26,7 +26,9 @@ internal sealed partial class InliningResolver
 
     public override SyntaxNode VisitImplicitObjectCreationExpression(ImplicitObjectCreationExpressionSyntax implicitNew)
     {
-        var typeSymbol = model.GetTypeInfo(implicitNew).Type;
+        var typeSymbol = CanQuerySemanticModel(implicitNew)
+            ? model.GetTypeInfo(implicitNew).Type
+            : null;
         var type = typeSymbol == null
             ? null
             : AlephMapper.Helpers.TypeDisplay.ForSymbol(
@@ -60,6 +62,7 @@ internal sealed partial class InliningResolver
     private bool IsAnnotatedReturnCreation(ExpressionSyntax expression)
     {
         return returnTypeToAnnotate != null &&
+               CanQuerySemanticModel(expression) &&
                SymbolEqualityComparer.Default.Equals(
                    model.GetTypeInfo(expression).Type ?? model.GetTypeInfo(expression).ConvertedType,
                    returnTypeToAnnotate);

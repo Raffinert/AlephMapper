@@ -75,6 +75,11 @@ internal sealed partial class InliningResolver
 
     private TypeSyntax GetFullyQualifiedTypeSyntax(TypeSyntax originalType, TypeSyntax rewrittenType)
     {
+        if (!CanQuerySemanticModel(originalType))
+        {
+            return rewrittenType;
+        }
+
         var type = model.GetTypeInfo(originalType).Type;
         if (type is null || type.TypeKind == TypeKind.Error)
         {

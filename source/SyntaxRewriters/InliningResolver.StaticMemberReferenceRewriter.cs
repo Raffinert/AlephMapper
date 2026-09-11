@@ -14,6 +14,7 @@ internal sealed partial class InliningResolver
     {
         var rewritten = (MemberAccessExpressionSyntax?)base.VisitMemberAccessExpression(node);
         if (rewritten == null ||
+            !CanQuerySemanticModel(node) ||
             model.GetSymbolInfo(node).Symbol is not ISymbol member ||
             !member.IsStatic ||
             member.ContainingType is not ITypeSymbol containingType)
