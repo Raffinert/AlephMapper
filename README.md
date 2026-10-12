@@ -542,6 +542,16 @@ The default `Ignore` policy removes null-conditional access from generated expre
 | Expressionify | Expression expansion | Mapping-oriented companion generation |
 | LINQKit | Runtime/query-time expression composition and expansion | Compile-time expansion of statically known composition |
 
+## AI Agent Skill
+
+Use AlephMapper with AI coding agents through the repository's [Agent Skill](.agents/skills/alephmapper/SKILL.md). It covers generated projection companions, in-place updates, explicit adaptations, null-conditional policies, diagnostics, and EF Core translation boundaries.
+
+~~~bash
+npx skills add Raffinert/AlephMapper --skill alephmapper
+~~~
+
+The skill is optional guidance for a consuming project's AI agent; install the `AlephMapper` NuGet package separately to use the source generator.
+
 ## Examples
 
 - [Sample application](examples/SampleApp)
