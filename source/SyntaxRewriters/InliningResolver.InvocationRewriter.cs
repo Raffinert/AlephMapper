@@ -136,18 +136,33 @@ internal sealed partial class InliningResolver(
 
             var bodyPrecedence = BinaryPrecedence(binary.Kind());
             var parentPrecedence = BinaryPrecedence(parent.Kind());
-            // On the right, same-precedence operators can be non-associative
-            // (for example x - (a + b)), so retain the callee's grouping.
+            // Right-associative ?? requires grouping on the LEFT; other binary
+            // operators need grouping on the RIGHT when precedence is equal.
             return bodyPrecedence < parentPrecedence ||
-                   bodyPrecedence == parentPrecedence && parent.Right == call;
+                   bodyPrecedence == parentPrecedence &&
+                   (parent.IsKind(SyntaxKind.CoalesceExpression)
+                       ? parent.Left == call
+                       : parent.Right == call);
         }
 
-        // A receiver or unary operand must remain a single operand.
-        return call.Parent is MemberAccessExpressionSyntax or ElementAccessExpressionSyntax or
-                   PrefixUnaryExpressionSyntax or PostfixUnaryExpressionSyntax or
-                   IsPatternExpressionSyntax &&
-               body is BinaryExpressionSyntax or ConditionalExpressionSyntax or
-                   AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax;
+        // A cast or unary operator binds more tightly than any binary/ternary
+        // expression. In a conditional test, a nested conditional or assignment
+        // must likewise be kept intact. Never rely on the pretty printer to
+        // recover lost parentheses from the rewritten syntax tree.
+        var composite = body is BinaryExpressionSyntax or ConditionalExpressionSyntax or
+            AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax;
+        if (!composite)
+            return false;
+
+        return call.Parent switch
+        {
+            CastExpressionSyntax or PrefixUnaryExpressionSyntax or
+                PostfixUnaryExpressionSyntax or MemberAccessExpressionSyntax or
+                ElementAccessExpressionSyntax or IsPatternExpressionSyntax => true,
+            ConditionalExpressionSyntax conditional when conditional.Condition == call =>
+                body is ConditionalExpressionSyntax or AssignmentExpressionSyntax,
+            _ => false
+        };
     }
 
     private static int BinaryPrecedence(SyntaxKind kind) => kind switch
