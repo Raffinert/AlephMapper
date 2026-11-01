@@ -107,6 +107,27 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Inlined_switch_governing_expression_preserves_logical_precedence()
+    {
+        var expression = SemanticRegressionMapper.SwitchFromLogicalHelperExpression().Compile();
+        var samples = new[]
+        {
+            new SemanticBooleanInput { A = false, B = true },
+            new SemanticBooleanInput { A = true, B = false },
+            new SemanticBooleanInput { A = true, B = true },
+            new SemanticBooleanInput { A = false, B = false }
+        };
+        var expected = new[] { 1, 1, 0, 1 };
+
+        for (var i = 0; i < samples.Length; i++)
+        {
+            await Assert.That(SemanticRegressionMapper.SwitchFromLogicalHelper(samples[i]))
+                .IsEqualTo(expected[i]);
+            await Assert.That(expression(samples[i])).IsEqualTo(expected[i]);
+        }
+    }
+
+    [Test]
     public async Task Inlining_preserves_parentheses_and_operator_precedence()
     {
         var model = new SemanticInput { Count = 3 };
@@ -132,6 +153,16 @@ public sealed class SemanticInput
 
 public static partial class SemanticRegressionMapper
 {
+    [Projectable]
+    public static int SwitchFromLogicalHelper(SemanticBooleanInput value) =>
+        Both(value) switch
+        {
+            false => 1,
+            _ => 0
+        };
+
+    private static bool Both(SemanticBooleanInput value) => value.A && value.B;
+
     [Projectable]
     public static int TypeRank(SemanticAnimal? animal) => animal switch
     {
@@ -221,4 +252,10 @@ public sealed class SemanticPatternAnimal
 {
     public int Score { get; set; }
     public SemanticPatternAnimal Other { get; set; } = null!;
+}
+
+public sealed class SemanticBooleanInput
+{
+    public bool A { get; set; }
+    public bool B { get; set; }
 }
