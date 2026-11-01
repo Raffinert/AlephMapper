@@ -29,14 +29,6 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        if (inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.UnsafeRepeatedArgument,
-                unsafeArgument.Location, mapping.MethodSymbol.Name, unsafeArgument.Text));
-            return;
-        }
-
         if (mapping.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mapping.ReturnType))
         {
             context.ReportDiagnostic(Diagnostic.Create(
