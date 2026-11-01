@@ -37,11 +37,7 @@ internal sealed partial class InliningResolver
         // Helper inlining can turn an invocation into a lower-precedence expression.
         // A binary/conditional governing expression must be grouped before being
         // embedded in a pattern comparison, e.g. (a && b) == false, not a && b == false.
-        if (governing is BinaryExpressionSyntax or ConditionalExpressionSyntax or
-            AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax)
-        {
-            governing = ParenthesizedExpression(governing);
-        }
+        governing = ParenthesizeCompositeExpression(governing);
 
         ExpressionSyntax currentExpression = VisitClean(node.Arms[node.Arms.Count - 1].Expression);
 
@@ -76,7 +72,9 @@ internal sealed partial class InliningResolver
                 var armExpression = VisitClean(arm.Expression);
                 if (arm.WhenClause is not null)
                 {
-                    var guard = VisitClean(arm.WhenClause.Condition);
+                    // A helper can inline to an OR/coalescing/conditional expression.
+                    // Do not let a low-precedence guard escape the pattern's AND test.
+                    var guard = ParenthesizeCompositeExpression(VisitClean(arm.WhenClause.Condition));
                     condition = PadBinaryOperator(BinaryExpression(
                         SyntaxKind.LogicalAndExpression, condition, guard));
                 }
@@ -160,6 +158,15 @@ internal sealed partial class InliningResolver
         var rewritten = (ExpressionSyntax?)Visit(expression);
         return (rewritten ?? expression).WithoutTrivia();
     }
+
+    // A lowered helper call can be an entire expression rather than the original
+    // invocation. Group it whenever it is embedded as a child of another operator,
+    // preserving its original precedence in both switch governing and guard contexts.
+    private static ExpressionSyntax ParenthesizeCompositeExpression(ExpressionSyntax expression) =>
+        expression is BinaryExpressionSyntax or ConditionalExpressionSyntax or
+            AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax
+                ? ParenthesizedExpression(expression)
+                : expression;
 
     private static ConditionalExpressionSyntax CreateConditional(
         ExpressionSyntax condition, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, bool multiline)

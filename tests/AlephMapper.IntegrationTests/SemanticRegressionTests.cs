@@ -107,6 +107,28 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Inlined_switch_guard_preserves_logical_or_precedence()
+    {
+        var projection = SemanticRegressionMapper.SwitchWithLogicalGuardExpression().Compile();
+        var samples = new[]
+        {
+            new SemanticGuardInput { Count = 2, A = false, B = true }, // OR must not bypass Count == 1
+            new SemanticGuardInput { Count = 1, A = false, B = true },
+            new SemanticGuardInput { Count = 1, A = true, B = false },
+            new SemanticGuardInput { Count = 1, A = false, B = false },
+            new SemanticGuardInput { Count = 2, A = true, B = true }
+        };
+        var expected = new[] { 0, 1, 1, 0, 0 };
+
+        for (var i = 0; i < samples.Length; i++)
+        {
+            await Assert.That(SemanticRegressionMapper.SwitchWithLogicalGuard(samples[i]))
+                .IsEqualTo(expected[i]);
+            await Assert.That(projection(samples[i])).IsEqualTo(expected[i]);
+        }
+    }
+
+    [Test]
     public async Task Inlined_switch_governing_expression_preserves_logical_precedence()
     {
         var expression = SemanticRegressionMapper.SwitchFromLogicalHelperExpression().Compile();
@@ -153,6 +175,16 @@ public sealed class SemanticInput
 
 public static partial class SemanticRegressionMapper
 {
+    [Projectable]
+    public static int SwitchWithLogicalGuard(SemanticGuardInput source) =>
+        source.Count switch
+        {
+            1 when Allowed(source) => 1,
+            _ => 0
+        };
+
+    private static bool Allowed(SemanticGuardInput source) => source.A || source.B;
+
     [Projectable]
     public static int SwitchFromLogicalHelper(SemanticBooleanInput value) =>
         Both(value) switch
@@ -256,6 +288,13 @@ public sealed class SemanticPatternAnimal
 
 public sealed class SemanticBooleanInput
 {
+    public bool A { get; set; }
+    public bool B { get; set; }
+}
+
+public sealed class SemanticGuardInput
+{
+    public int Count { get; set; }
     public bool A { get; set; }
     public bool B { get; set; }
 }
