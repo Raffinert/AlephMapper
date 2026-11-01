@@ -162,8 +162,6 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals,
-                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                _unsafeRepeatedArguments = _unsafeRepeatedArguments,
                                     _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
                                     _unsafeRepeatedArguments = _unsafeRepeatedArguments
                                 }.Visit(callee.BodySyntax.Expression)!;
@@ -245,7 +243,9 @@ internal sealed partial class InliningResolver(
                 _circularReferences = _circularReferences,
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
-                _unsupportedNullConditionals = _unsupportedNullConditionals
+                _unsupportedNullConditionals = _unsupportedNullConditionals,
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                _unsafeRepeatedArguments = _unsafeRepeatedArguments
             }.Visit(callee2.BodySyntax.Expression)!;
 
             var substituted = inlinedBody2.WithoutTrivia();
