@@ -87,6 +87,17 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Repeated_method_group_helper_in_LINQ_chain_is_not_circular()
+    {
+        var source = new SemanticNormalizationSource { Items = [1, 2, 3] };
+        var expected = SemanticRegressionMapper.NormalizeTwice(source);
+        var generated = SemanticRegressionMapper.NormalizeTwiceExpression().Compile()(source);
+
+        await Assert.That(expected).IsEquivalentTo(new[] { 3, 4, 5 });
+        await Assert.That(generated).IsEquivalentTo(expected);
+    }
+
+    [Test]
     public async Task Method_group_receiver_uses_substituted_helper_argument()
     {
         var node = new SemanticNode
@@ -231,6 +242,12 @@ public static partial class SemanticRegressionMapper
 
     private static int MapItem(SemanticItem item) => item.Value;
 
+    [Projectable]
+    public static int[] NormalizeTwice(SemanticNormalizationSource source) =>
+        source.Items.Select(Normalize).Select(Normalize).ToArray();
+
+    private static int Normalize(int item) => item + 1;
+
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static int? IndexWithIgnore(SemanticIndexSource source) =>
         IndexHelperIgnore(source.Values!, source.Offset + 1);
@@ -297,4 +314,9 @@ public sealed class SemanticGuardInput
     public int Count { get; set; }
     public bool A { get; set; }
     public bool B { get; set; }
+}
+
+public sealed class SemanticNormalizationSource
+{
+    public List<int> Items { get; set; } = [];
 }
