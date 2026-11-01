@@ -80,6 +80,22 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
+            if (inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UnsupportedSwitchPattern,
+                    unsupportedSwitch.Location, mapping.MethodSymbol.Name, unsupportedSwitch.Text));
+                continue;
+            }
+
+            if (inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UnsafeRepeatedArgument,
+                    unsafeArgument.Location, mapping.MethodSymbol.Name, unsafeArgument.Text));
+                continue;
+            }
+
             if ((generateMap || generateExpression) &&
                 inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
             {

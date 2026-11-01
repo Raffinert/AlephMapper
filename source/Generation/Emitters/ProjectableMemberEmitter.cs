@@ -30,6 +30,22 @@ internal static class ProjectableMemberEmitter
             return;
         }
 
+        if (inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsupportedSwitchPattern,
+                unsupportedSwitch.Location, mapping.MethodSymbol.Name, unsupportedSwitch.Text));
+            return;
+        }
+
+        if (inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsafeRepeatedArgument,
+                unsafeArgument.Location, mapping.MethodSymbol.Name, unsafeArgument.Text));
+            return;
+        }
+
         if (inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
         {
             context.ReportDiagnostic(Diagnostic.Create(

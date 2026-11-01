@@ -19,7 +19,8 @@ internal sealed partial class InliningResolver(
     bool forUpdateMethod,
     NullConditionalRewrite rewriteSupport,
     NullablePolicy nullablePolicy,
-    ITypeSymbol? returnTypeToAnnotate = null)
+    ITypeSymbol? returnTypeToAnnotate = null,
+    IReadOnlyDictionary<IParameterSymbol, ExpressionSyntax>? parameterSubstitutions = null)
     : CSharpSyntaxRewriter
 {
     internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
@@ -30,11 +31,15 @@ internal sealed partial class InliningResolver(
     private Dictionary<IMethodSymbol, MappingAnalysis> _inlinedMethods = new(SymbolEqualityComparer.Default);
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
+    private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
+    private List<UnsafeRepeatedArgumentInfo> _unsafeRepeatedArguments = [];
     public IEnumerable<string> UsingDirectives => _inlinedMethods.SelectMany(il => il.Value.UsingDirectives).Distinct();
 
     public IReadOnlyList<CircularReferenceInfo> CircularReferences => _circularReferences;
     public IReadOnlyList<UnsafeConditionalReceiverInfo> UnsafeConditionalReceivers => _unsafeConditionalReceivers;
     public IReadOnlyList<UnsupportedNullConditionalInfo> UnsupportedNullConditionals => _unsupportedNullConditionals;
+    public IReadOnlyList<UnsupportedSwitchPatternInfo> UnsupportedSwitchPatterns => _unsupportedSwitchPatterns;
+    public IReadOnlyList<UnsafeRepeatedArgumentInfo> UnsafeRepeatedArguments => _unsafeRepeatedArguments;
 
     private IMethodSymbol? ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
@@ -70,6 +75,39 @@ internal sealed partial class InliningResolver(
         var circularRef = new CircularReferenceInfo(method, _callStack.Append(method));
         _circularReferences.Add(circularRef);
     }
+
+    // Bind substitutions to Roslyn parameter symbols, not identifier text. In particular,
+    // 'person.Name' and a parameter named 'Name' must never be treated as the same symbol.
+    public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        if (parameterSubstitutions is not null &&
+            CanQuerySemanticModel(node) &&
+            model.GetSymbolInfo(node).Symbol is IParameterSymbol parameter &&
+            parameterSubstitutions.TryGetValue(parameter, out var replacement))
+        {
+            // Parenthesize non-primary expressions to preserve operator precedence after inlining.
+            var value = replacement.WithoutTrivia();
+            if (value is not (IdentifierNameSyntax or MemberAccessExpressionSyntax or
+                ElementAccessExpressionSyntax or InvocationExpressionSyntax or
+                LiteralExpressionSyntax or ThisExpressionSyntax or BaseExpressionSyntax))
+                value = ParenthesizedExpression(value);
+            return value.WithTriviaFrom(node);
+        }
+
+        return base.VisitIdentifierName(node);
+    }
+
+    private static bool CouldEvaluateWithSideEffects(ExpressionSyntax expression) =>
+        expression.DescendantNodesAndSelf().Any(n =>
+            n is InvocationExpressionSyntax or ObjectCreationExpressionSyntax or
+                AssignmentExpressionSyntax or AwaitExpressionSyntax or
+                PostfixUnaryExpressionSyntax or PrefixUnaryExpressionSyntax);
+
+    private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter) =>
+        callee.BodySyntax.Expression.DescendantNodesAndSelf()
+            .OfType<IdentifierNameSyntax>()
+            .Count(node => callee.SemanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol referenced &&
+                SymbolEqualityComparer.Default.Equals(referenced, parameter));
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
@@ -123,17 +161,15 @@ internal sealed partial class InliningResolver(
                                     _circularReferences = _circularReferences,
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
-                                    _unsupportedNullConditionals = _unsupportedNullConditionals
+                                    _unsupportedNullConditionals = _unsupportedNullConditionals,
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                _unsafeRepeatedArguments = _unsafeRepeatedArguments,
+                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                                    _unsafeRepeatedArguments = _unsafeRepeatedArguments
                                 }.Visit(callee.BodySyntax.Expression)!;
 
-                            var substitutions = callee.Parameters.ToDictionary(
-                                p => p.Name,
-                                p => (ExpressionSyntax)IdentifierName(p.Name));
-
-                            var substitutedBody =
-                                (ExpressionSyntax)new ParameterSubstitutionRewriter(substitutions)
-                                    .Visit(inlinedBody)!
-                                    .WithoutTrivia();
+                            // Lambda parameters intentionally keep the callee's parameter names.
+                            var substitutedBody = inlinedBody.WithoutTrivia();
 
                             LambdaExpressionSyntax lambda;
                             if (lambdaParams.Length == 1)
@@ -174,7 +210,7 @@ internal sealed partial class InliningResolver(
             return node.WithArgumentList((ArgumentListSyntax)Visit(node.ArgumentList)!);
         }
 
-        if (!TryBuildParameterSubstitutions(node, invokedMethod, args, out var substitutionsMap, out var conditionalAccessExpression))
+        if (!TryBuildParameterSubstitutions(node, invokedMethod, callee2.MethodSymbol, args, out var substitutionsMap, out var conditionalAccessExpression))
         {
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
@@ -187,12 +223,23 @@ internal sealed partial class InliningResolver(
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
 
+        // Inlining may duplicate a call or object creation argument that the original
+        // method evaluates just once. Refuse the unsafe projection rather than silently
+        // changing behavior. Ordinary parameters/constants remain safely reusable.
+        if (substitutionsMap.Any(entry =>
+            CouldEvaluateWithSideEffects(entry.Value) &&
+            CountParameterReferences(callee2, entry.Key) > 1))
+        {
+            _unsafeRepeatedArguments.Add(new UnsafeRepeatedArgumentInfo(node));
+            return base.VisitInvocationExpression(node);
+        }
+
         // Add method to call stack before inlining
         _callStack.Add(directCallMethod);
         try
         {
             _inlinedMethods[directCallMethod] = callee2;
-            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee2.ReturnType)
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee2.ReturnType, substitutionsMap)
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,
@@ -201,9 +248,7 @@ internal sealed partial class InliningResolver(
                 _unsupportedNullConditionals = _unsupportedNullConditionals
             }.Visit(callee2.BodySyntax.Expression)!;
 
-            var substituted = ((ExpressionSyntax)new ParameterSubstitutionRewriter(substitutionsMap)
-                .Visit(inlinedBody2)!)
-                .WithoutTrivia();
+            var substituted = inlinedBody2.WithoutTrivia();
 
             if (conditionalAccessExpression)
             {
@@ -222,20 +267,20 @@ internal sealed partial class InliningResolver(
     private bool TryBuildParameterSubstitutions(
         InvocationExpressionSyntax node,
         IMethodSymbol invokedMethod,
+        IMethodSymbol calleeMethod,
         SeparatedSyntaxList<ArgumentSyntax> args,
-        out Dictionary<string, ExpressionSyntax> substitutions,
+        out Dictionary<IParameterSymbol, ExpressionSyntax> substitutions,
         out bool conditionalAccessExpression)
     {
-        substitutions = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
+        substitutions = new Dictionary<IParameterSymbol, ExpressionSyntax>(SymbolEqualityComparer.Default);
         conditionalAccessExpression = false;
 
         // When an extension method is called via dot syntax (e.g. address.ToDto()),
         // Roslyn returns the "reduced" form where Parameters does NOT include the 'this' parameter.
         // We need the original definition's parameters (which include 'this') for correct substitution.
         var isReducedExtension = invokedMethod.IsExtensionMethod && invokedMethod.ReducedFrom != null;
-        var parameters = isReducedExtension
-            ? invokedMethod.ReducedFrom!.Parameters
-            : invokedMethod.Parameters;
+        // Keys must refer to symbols in the callee's source syntax tree.
+        var parameters = calleeMethod.Parameters;
 
         if (parameters.Length == 0)
         {
@@ -270,7 +315,7 @@ internal sealed partial class InliningResolver(
                 return false;
             }
 
-            substitutions[parameters[0].Name] = receiver;
+            substitutions[parameters[0]] = receiver;
             nextParamIndex = 1;
         }
 
@@ -297,7 +342,7 @@ internal sealed partial class InliningResolver(
             }
 
             var rewrittenArg = (ExpressionSyntax)(Visit(arg.Expression) ?? arg.Expression);
-            substitutions[targetParam.Name] = rewrittenArg;
+            substitutions[targetParam] = rewrittenArg;
         }
 
         // Ensure all parameters are covered (no optional/default handling for now)
@@ -317,6 +362,12 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
 {
     public IMethodSymbol Method { get; } = method;
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
+}
+
+internal sealed class UnsafeRepeatedArgumentInfo(InvocationExpressionSyntax invocation)
+{
+    public Location Location { get; } = invocation.GetLocation();
+    public string Text { get; } = invocation.ToString();
 }
 
 internal sealed class UnsafeConditionalReceiverInfo(ExpressionSyntax expression)
