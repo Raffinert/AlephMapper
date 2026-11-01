@@ -92,15 +92,6 @@ internal static class AdaptationMemberEmitter
             }
 
             if ((generateMap || generateExpression) &&
-                inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.UnsafeRepeatedArgument,
-                    unsafeArgument.Location, mapping.MethodSymbol.Name, unsafeArgument.Text));
-                continue;
-            }
-
-            if ((generateMap || generateExpression) &&
                 inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -205,14 +196,6 @@ internal static class AdaptationMemberEmitter
                         DiagnosticDescriptors.UpdatableCircularReferences,
                         GetLocation(mapping, adaptation),
                         adaptationName));
-                    continue;
-                }
-
-                if (updateInliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeUpdateArgument)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        DiagnosticDescriptors.UnsafeRepeatedArgument,
-                        unsafeUpdateArgument.Location, adaptationName, unsafeUpdateArgument.Text));
                     continue;
                 }
 
