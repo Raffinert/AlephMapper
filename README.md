@@ -193,7 +193,7 @@ non-exhaustive patterns, including cases whose comparison semantics cannot
 be lowered correctly. Inlining helper methods likewise substitutes their
 arguments directly; an argument with side effects can be evaluated more than
 once, skipped, or evaluated in a different order. Prefer stable, side-effect-free
-arguments when generating projections. No `AM0020` diagnostic is emitted.
+arguments when generating projections.
 
 ## Composing mappings and predicates
 
