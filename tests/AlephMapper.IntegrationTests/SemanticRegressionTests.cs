@@ -170,7 +170,7 @@ public static partial class SemanticRegressionMapper
 
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
     public static int? IndexWithIgnore(SemanticIndexSource source) =>
-        IndexHelperIgnore(source.Values, source.Offset + 1);
+        IndexHelperIgnore(source.Values!, source.Offset + 1);
 
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static int IndexWithRewrite(SemanticIndexSource source) =>
