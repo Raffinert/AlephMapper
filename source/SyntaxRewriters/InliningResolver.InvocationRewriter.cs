@@ -165,7 +165,12 @@ internal sealed partial class InliningResolver(
                             .Select(p => Parameter(Identifier(p.Name)))
                             .ToArray();
 
-                        // Add method to call stack before inlining
+                        // Rewriting the receiver is not recursion into the method-group
+                        // callee. Do it before pushing the callee on the call stack,
+                        // so Select(Normalize).Select(Normalize) is accepted.
+                        var rewrittenReceiver = (ExpressionSyntax)Visit(node.Expression)!;
+
+                        // Only the lambda body is an expansion of this callee.
                         _callStack.Add(normalizedMethod);
                         try
                         {
@@ -198,11 +203,6 @@ internal sealed partial class InliningResolver(
 
                             lambda = lambda.WithArrowToken(lambda.ArrowToken.WithLeadingTrivia(Space).WithTrailingTrivia(Space));
                             var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
-                            // Visiting only the method-group argument leaves parameter references
-                            // in the invocation receiver untouched (e.g. source.Items.Select(MapItem)).
-                            // Rewrite the original receiver while its syntax is still bound to
-                            // the callee's SemanticModel and symbol substitutions are available.
-                            var rewrittenReceiver = (ExpressionSyntax)Visit(node.Expression)!;
                             return node.WithExpression(rewrittenReceiver)
                                 .WithArgumentList(node.ArgumentList.WithArguments(newArgs));
                         }
