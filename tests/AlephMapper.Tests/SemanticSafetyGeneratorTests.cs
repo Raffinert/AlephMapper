@@ -30,7 +30,7 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
-    public async Task Repeated_effectful_switch_governing_reports_AM0019()
+    public async Task Repeated_switch_governing_is_permitted_for_expressive_sharp_parity()
     {
         const string source = """
             using AlephMapper;
@@ -47,10 +47,38 @@ public class SemanticSafetyGeneratorTests
             }
             """;
 
+        // Deliberate ExpressiveSharp parity: lowering may repeat the evaluation.
+        // AM0019 remains reserved for unsupported or non-exhaustive patterns.
         var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsFalse();
         await Assert.That(result.GeneratedSources.Any(s =>
-            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task String_normalization_switch_generates_expression()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(string value) => value.ToLower() switch
+                {
+                    "mobile" => 1,
+                    "home" => 2,
+                    "work" => 3,
+                    _ => 0
+                };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error))
+            .IsEmpty();
     }
 
     [Test]
