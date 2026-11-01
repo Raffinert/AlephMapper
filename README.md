@@ -420,7 +420,7 @@ This preserves EF Core's tracked instance:
 ```csharp
 var person = await dbContext.People.FindAsync(id);
 
-PersonMapper.Map(request, target: person);
+PersonMapper.Map(request, dest: person);
 
 await dbContext.SaveChangesAsync();
 ```
