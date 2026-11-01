@@ -33,6 +33,9 @@ internal sealed partial class InliningResolver(
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
     private List<UnsafeRepeatedArgumentInfo> _unsafeRepeatedArguments = [];
+    // Only the currently visited switch arm owns these locals. Keep the original
+    // Roslyn symbols, not their identifier text, to avoid collisions with callers.
+    private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _switchPatternVariables = new();
     public IEnumerable<string> UsingDirectives => _inlinedMethods.SelectMany(il => il.Value.UsingDirectives).Distinct();
 
     public IReadOnlyList<CircularReferenceInfo> CircularReferences => _circularReferences;
@@ -80,9 +83,18 @@ internal sealed partial class InliningResolver(
     // 'person.Name' and a parameter named 'Name' must never be treated as the same symbol.
     public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
     {
+        if (!CanQuerySemanticModel(node))
+            return base.VisitIdentifierName(node);
+
+        var symbol = model.GetSymbolInfo(node).Symbol;
+        foreach (var patternVariable in _switchPatternVariables)
+        {
+            if (SymbolEqualityComparer.Default.Equals(symbol, patternVariable.Symbol))
+                return patternVariable.Replacement.WithTriviaFrom(node);
+        }
+
         if (parameterSubstitutions is not null &&
-            CanQuerySemanticModel(node) &&
-            model.GetSymbolInfo(node).Symbol is IParameterSymbol parameter &&
+            symbol is IParameterSymbol parameter &&
             parameterSubstitutions.TryGetValue(parameter, out var replacement))
         {
             // Parenthesize non-primary expressions to preserve operator precedence after inlining.

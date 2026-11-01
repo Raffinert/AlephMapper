@@ -51,6 +51,41 @@ public class SemanticRegressionTests
     }
 
 
+
+    [Test]
+    public async Task Conditional_indexer_substitutes_inlined_index_parameter()
+    {
+        var input = new SemanticIndexSource
+        {
+            Values = [10, 20, 30, 40],
+            Offset = 1
+        };
+
+        await Assert.That(SemanticRegressionMapper.IndexWithIgnoreExpression().Compile()(input))
+            .IsEqualTo(SemanticRegressionMapper.IndexWithIgnore(input));
+        await Assert.That(SemanticRegressionMapper.IndexWithIgnore(input)).IsEqualTo(30);
+        await Assert.That(SemanticRegressionMapper.IndexWithRewriteExpression().Compile()(input))
+            .IsEqualTo(SemanticRegressionMapper.IndexWithRewrite(input));
+
+        input.Values = null;
+        await Assert.That(SemanticRegressionMapper.IndexWithRewriteExpression().Compile()(input))
+            .IsEqualTo(-1);
+    }
+
+    [Test]
+    public async Task Pattern_local_name_cannot_capture_substituted_caller_parameter()
+    {
+        var value = new SemanticPatternAnimal
+        {
+            Score = 2,
+            Other = new SemanticPatternAnimal { Score = 7 }
+        };
+
+        var actual = SemanticRegressionMapper.PatternCollisionExpression().Compile()(value);
+        await Assert.That(actual).IsEqualTo(SemanticRegressionMapper.PatternCollision(value));
+        await Assert.That(actual).IsEqualTo(9);
+    }
+
     [Test]
     public async Task Method_group_receiver_uses_substituted_helper_argument()
     {
@@ -132,6 +167,29 @@ public static partial class SemanticRegressionMapper
     };
 
     private static int MapItem(SemanticItem item) => item.Value;
+
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+    public static int IndexWithIgnore(SemanticIndexSource source) =>
+        IndexHelper(source.Values, source.Offset + 1);
+
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    public static int IndexWithRewrite(SemanticIndexSource source) =>
+        IndexHelper(source.Values, source.Offset + 1);
+
+    private static int IndexHelper(int[]? values, int index) =>
+        values?[index] ?? -1;
+
+    [Projectable]
+    public static int PatternCollision(SemanticPatternAnimal value) =>
+        PatternCollisionHelper(value.Other, value);
+
+    private static int PatternCollisionHelper(
+        SemanticPatternAnimal animal, SemanticPatternAnimal bonus) =>
+        animal switch
+        {
+            SemanticPatternAnimal value when value.Score > 3 => value.Score + bonus.Score,
+            _ => -1
+        };
 }
 
 public sealed class SemanticNode
@@ -148,4 +206,16 @@ public sealed class SemanticItem
 public sealed class SemanticArrayDto
 {
     public int[] Values { get; set; } = [];
+}
+
+public sealed class SemanticIndexSource
+{
+    public int[]? Values { get; set; }
+    public int Offset { get; set; }
+}
+
+public sealed class SemanticPatternAnimal
+{
+    public int Score { get; set; }
+    public SemanticPatternAnimal Other { get; set; } = null!;
 }

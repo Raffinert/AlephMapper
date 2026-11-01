@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -46,20 +45,40 @@ internal sealed partial class InliningResolver
                 return node;
             }
 
-            var armExpression = VisitClean(arm.Expression);
-            if (arm.Pattern is DeclarationPatternSyntax declaration)
-                armExpression = ReplaceVariableWithCast(armExpression, declaration, governing);
-
-            if (arm.WhenClause is not null)
+            // Rewrite pattern-local references while the original arm is still
+            // bound to its SemanticModel. Substituted caller expressions can have
+            // the same identifier text, but never the same ILocalSymbol.
+            var hasPatternVariable = arm.Pattern is DeclarationPatternSyntax
             {
-                var guard = VisitClean(arm.WhenClause.Condition);
-                if (arm.Pattern is DeclarationPatternSyntax declared)
-                    guard = ReplaceVariableWithCast(guard, declared, governing);
-                condition = PadBinaryOperator(BinaryExpression(
-                    SyntaxKind.LogicalAndExpression, condition, guard));
+                Designation: SingleVariableDesignationSyntax designation
+            } && CanQuerySemanticModel(designation) &&
+                model.GetDeclaredSymbol(designation) is ILocalSymbol;
+            if (hasPatternVariable)
+            {
+                var declaration = (DeclarationPatternSyntax)arm.Pattern;
+                var designation = (SingleVariableDesignationSyntax)declaration.Designation;
+                var local = (ILocalSymbol)model.GetDeclaredSymbol(designation)!;
+                var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
+                _switchPatternVariables.Push((local, cast));
             }
 
-            currentExpression = CreateConditional(condition, armExpression, currentExpression, multiline);
+            try
+            {
+                var armExpression = VisitClean(arm.Expression);
+                if (arm.WhenClause is not null)
+                {
+                    var guard = VisitClean(arm.WhenClause.Condition);
+                    condition = PadBinaryOperator(BinaryExpression(
+                        SyntaxKind.LogicalAndExpression, condition, guard));
+                }
+
+                currentExpression = CreateConditional(condition, armExpression, currentExpression, multiline);
+            }
+            finally
+            {
+                if (hasPatternVariable)
+                    _switchPatternVariables.Pop();
+            }
         }
 
         return currentExpression;
@@ -125,20 +144,6 @@ internal sealed partial class InliningResolver
         };
         return kind == SyntaxKind.None ? null
             : PadBinaryOperator(BinaryExpression(kind, governing, VisitClean(relational.Expression)));
-    }
-
-    private ExpressionSyntax ReplaceVariableWithCast(ExpressionSyntax expression,
-        DeclarationPatternSyntax declaration, ExpressionSyntax governing)
-    {
-        if (declaration.Designation is not SingleVariableDesignationSyntax designation)
-            return expression;
-
-        var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
-        var replacements = new Dictionary<string, ExpressionSyntax>
-        {
-            [designation.Identifier.ValueText] = cast
-        };
-        return (ExpressionSyntax)new ParameterSubstitutionRewriter(replacements).Visit(expression)!;
     }
 
     private ExpressionSyntax VisitClean(ExpressionSyntax expression)

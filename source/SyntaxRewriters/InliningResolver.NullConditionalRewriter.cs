@@ -186,7 +186,11 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
-        return ElementAccessExpression(targetExpression, node.ArgumentList);
+        // The index arguments still belong to the original bound syntax tree.
+        // Visit them before rebuilding the element access, so arguments referring
+        // to parameters of an inlined helper receive symbol-aware substitutions.
+        var rewrittenArguments = (BracketedArgumentListSyntax)Visit(node.ArgumentList)!;
+        return ElementAccessExpression(targetExpression, rewrittenArguments);
     }
 
     // Binary expressions are handled in the CollectionExpressionRewriter partial to avoid duplication.
