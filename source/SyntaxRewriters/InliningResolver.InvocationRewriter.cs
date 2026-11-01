@@ -119,6 +119,57 @@ internal sealed partial class InliningResolver(
             n is PrefixUnaryExpressionSyntax prefix && prefix.Kind() is
                 SyntaxKind.PreIncrementExpression or SyntaxKind.PreDecrementExpression);
 
+    // Invocation syntax behaves as a primary expression. Inserting a helper
+    // body may lower its precedence; group only when the containing operator
+    // would otherwise bind part of the helper body. This keeps prior generated
+    // snapshots stable where parentheses are unnecessary.
+    private static bool NeedsGroupingAtInlineSite(InvocationExpressionSyntax call, ExpressionSyntax body)
+    {
+        if (body is ParenthesizedExpressionSyntax)
+            return false;
+
+        if (call.Parent is BinaryExpressionSyntax parent)
+        {
+            if (body is not BinaryExpressionSyntax binary)
+                return body is ConditionalExpressionSyntax or AssignmentExpressionSyntax or
+                    IsPatternExpressionSyntax or SwitchExpressionSyntax;
+
+            var bodyPrecedence = BinaryPrecedence(binary.Kind());
+            var parentPrecedence = BinaryPrecedence(parent.Kind());
+            // On the right, same-precedence operators can be non-associative
+            // (for example x - (a + b)), so retain the callee's grouping.
+            return bodyPrecedence < parentPrecedence ||
+                   bodyPrecedence == parentPrecedence && parent.Right == call;
+        }
+
+        // A receiver or unary operand must remain a single operand.
+        return call.Parent is MemberAccessExpressionSyntax or ElementAccessExpressionSyntax or
+                   PrefixUnaryExpressionSyntax or PostfixUnaryExpressionSyntax or
+                   IsPatternExpressionSyntax &&
+               body is BinaryExpressionSyntax or ConditionalExpressionSyntax or
+                   AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax;
+    }
+
+    private static int BinaryPrecedence(SyntaxKind kind) => kind switch
+    {
+        SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or
+            SyntaxKind.ModuloExpression => 13,
+        SyntaxKind.AddExpression or SyntaxKind.SubtractExpression => 12,
+        SyntaxKind.LeftShiftExpression or SyntaxKind.RightShiftExpression or
+            SyntaxKind.UnsignedRightShiftExpression => 11,
+        SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression or
+            SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression or
+            SyntaxKind.IsExpression or SyntaxKind.AsExpression => 10,
+        SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression => 9,
+        SyntaxKind.BitwiseAndExpression => 8,
+        SyntaxKind.ExclusiveOrExpression => 7,
+        SyntaxKind.BitwiseOrExpression => 6,
+        SyntaxKind.LogicalAndExpression => 5,
+        SyntaxKind.LogicalOrExpression => 4,
+        SyntaxKind.CoalesceExpression => 3,
+        _ => 0
+    };
+
     private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter) =>
         callee.BodySyntax.Expression.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>()
@@ -270,10 +321,11 @@ internal sealed partial class InliningResolver(
                 _unsafeRepeatedArguments = _unsafeRepeatedArguments
             }.Visit(callee2.BodySyntax.Expression)!;
 
-            // Helper bodies can have lower precedence than the original invocation.
-            // Preserve grouping at the substitution site, not after their containing
-            // expression has already been rewritten (e.g. AddOne(x) * 2).
-            var substituted = ParenthesizeCompositeExpression(inlinedBody2.WithoutTrivia());
+            // Keep existing generated formatting unless grouping is needed for
+            // operator precedence (e.g. AddOne(x) * 2 must become (x + 1) * 2).
+            var substituted = inlinedBody2.WithoutTrivia();
+            if (NeedsGroupingAtInlineSite(node, substituted))
+                substituted = ParenthesizedExpression(substituted);
 
             if (conditionalAccessExpression)
             {
