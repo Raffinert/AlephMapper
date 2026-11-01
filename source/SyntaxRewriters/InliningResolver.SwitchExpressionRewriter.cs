@@ -34,6 +34,15 @@ internal sealed partial class InliningResolver
         // Visit original bound nodes before stripping trivia; symbol-aware substitutions
         // need access to the original semantic model.
         var governing = VisitClean(node.GoverningExpression);
+        // Helper inlining can turn an invocation into a lower-precedence expression.
+        // A binary/conditional governing expression must be grouped before being
+        // embedded in a pattern comparison, e.g. (a && b) == false, not a && b == false.
+        if (governing is BinaryExpressionSyntax or ConditionalExpressionSyntax or
+            AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax)
+        {
+            governing = ParenthesizedExpression(governing);
+        }
+
         ExpressionSyntax currentExpression = VisitClean(node.Arms[node.Arms.Count - 1].Expression);
 
         foreach (var arm in node.Arms.Reverse().Skip(1))
