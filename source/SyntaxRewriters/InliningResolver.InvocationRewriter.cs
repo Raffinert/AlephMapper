@@ -100,8 +100,11 @@ internal sealed partial class InliningResolver(
     private static bool CouldEvaluateWithSideEffects(ExpressionSyntax expression) =>
         expression.DescendantNodesAndSelf().Any(n =>
             n is InvocationExpressionSyntax or ObjectCreationExpressionSyntax or
-                AssignmentExpressionSyntax or AwaitExpressionSyntax or
-                PostfixUnaryExpressionSyntax or PrefixUnaryExpressionSyntax);
+                AssignmentExpressionSyntax or AwaitExpressionSyntax ||
+            n is PostfixUnaryExpressionSyntax postfix && postfix.Kind() is
+                SyntaxKind.PostIncrementExpression or SyntaxKind.PostDecrementExpression ||
+            n is PrefixUnaryExpressionSyntax prefix && prefix.Kind() is
+                SyntaxKind.PreIncrementExpression or SyntaxKind.PreDecrementExpression);
 
     private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter) =>
         callee.BodySyntax.Expression.DescendantNodesAndSelf()
