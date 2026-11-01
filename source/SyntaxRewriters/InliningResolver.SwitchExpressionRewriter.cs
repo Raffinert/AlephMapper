@@ -38,13 +38,6 @@ internal sealed partial class InliningResolver
         // A binary/conditional governing expression must be grouped before being
         // embedded in a pattern comparison, e.g. (a && b) == false, not a && b == false.
         governing = ParenthesizeCompositeExpression(governing);
-        // The original switch input is evaluated once. Track copies inserted into
-        // the lowered conditional expression so we can reject unsafe duplication.
-        var governingHasSideEffects = CouldEvaluateWithSideEffects(governing);
-        var governingMarker = new SyntaxAnnotation("AlephMapper.SwitchGoverningEvaluation");
-        if (governingHasSideEffects)
-            governing = governing.WithAdditionalAnnotations(governingMarker);
-
         ExpressionSyntax currentExpression = VisitClean(node.Arms[node.Arms.Count - 1].Expression);
 
         foreach (var arm in node.Arms.Reverse().Skip(1))
@@ -100,15 +93,6 @@ internal sealed partial class InliningResolver
                 while (pushedPatternVariables-- > 0)
                     _switchPatternVariables.Pop();
             }
-        }
-
-        if (governingHasSideEffects &&
-            currentExpression.GetAnnotatedNodes(governingMarker).Skip(1).Any())
-        {
-            // Reject a projection that would evaluate an effectful switch input
-            // more than once; update methods retain the native C# switch.
-            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node.GoverningExpression));
-            return node;
         }
 
         return currentExpression;
