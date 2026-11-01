@@ -50,6 +50,27 @@ public class SemanticRegressionTests
         await Assert.That(generated).IsEqualTo("Ada/Ada");
     }
 
+
+    [Test]
+    public async Task Method_group_receiver_uses_substituted_helper_argument()
+    {
+        var node = new SemanticNode
+        {
+            Items = [new SemanticItem { Value = 100 }],
+            Other = new SemanticNode
+            {
+                Items = [new SemanticItem { Value = 7 }, new SemanticItem { Value = 8 }]
+            }
+        };
+
+        var original = SemanticRegressionMapper.MapItems(node);
+        var projected = SemanticRegressionMapper.MapItemsExpression().Compile()(node);
+
+        await Assert.That(projected.Values).IsEquivalentTo(original.Values);
+        await Assert.That(projected.Values).IsEquivalentTo(new[] { 7, 8 });
+        await Assert.That(projected.Values).DoesNotContain(100);
+    }
+
     [Test]
     public async Task Inlining_preserves_parentheses_and_operator_precedence()
     {
@@ -101,4 +122,30 @@ public static partial class SemanticRegressionMapper
     public static int Arithmetic(SemanticInput model) => Twice(model.Count + 1);
 
     private static int Twice(int number) => number * 2;
+
+    [Projectable]
+    public static SemanticArrayDto MapItems(SemanticNode source) => MapItemsHelper(source.Other);
+
+    private static SemanticArrayDto MapItemsHelper(SemanticNode source) => new()
+    {
+        Values = source.Items.Select(MapItem).ToArray()
+    };
+
+    private static int MapItem(SemanticItem item) => item.Value;
+}
+
+public sealed class SemanticNode
+{
+    public List<SemanticItem> Items { get; set; } = [];
+    public SemanticNode Other { get; set; } = null!;
+}
+
+public sealed class SemanticItem
+{
+    public int Value { get; set; }
+}
+
+public sealed class SemanticArrayDto
+{
+    public int[] Values { get; set; } = [];
 }

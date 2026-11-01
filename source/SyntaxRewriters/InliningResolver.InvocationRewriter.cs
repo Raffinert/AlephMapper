@@ -186,7 +186,13 @@ internal sealed partial class InliningResolver(
 
                             lambda = lambda.WithArrowToken(lambda.ArrowToken.WithLeadingTrivia(Space).WithTrailingTrivia(Space));
                             var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
-                            return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
+                            // Visiting only the method-group argument leaves parameter references
+                            // in the invocation receiver untouched (e.g. source.Items.Select(MapItem)).
+                            // Rewrite the original receiver while its syntax is still bound to
+                            // the callee's SemanticModel and symbol substitutions are available.
+                            var rewrittenReceiver = (ExpressionSyntax)Visit(node.Expression)!;
+                            return node.WithExpression(rewrittenReceiver)
+                                .WithArgumentList(node.ArgumentList.WithArguments(newArgs));
                         }
                         finally
                         {

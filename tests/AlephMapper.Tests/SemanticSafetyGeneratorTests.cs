@@ -49,6 +49,62 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
     }
 
+
+    [Test]
+    public async Task Update_only_adaptation_preserves_non_exhaustive_switch()
+    {
+        const string source = """
+            using AlephMapper;
+
+            public sealed class PersonSource { public int Code { get; set; } }
+            public sealed class EmployeeSource { public int Code { get; set; } }
+            public sealed class PersonDest { public string Value { get; set; } = ""; }
+            public sealed class EmployeeDest { public string Value { get; set; } = ""; }
+
+            public static partial class Mapper
+            {
+                [Adapt(
+                    typeof(EmployeeSource),
+                    typeof(EmployeeDest),
+                    Name = "MapEmployee",
+                    Generate = AdaptGeneration.Update)]
+                public static PersonDest Map(PersonSource source) => new()
+                {
+                    Value = source.Code switch
+                    {
+                        1 => "one"
+                    }
+                };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapEmployee(", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapEmployeeExpression(", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    private static async Task<(GeneratorRunResult Result, Compilation Output)> GenerateAndCompile(string source)
+    {
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(
+            LanguageNames.CSharp, CancellationToken.None);
+        var compilation = CSharpCompilation.Create(
+            "UpdateOnlySafety",
+            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var driver = CSharpGeneratorDriver.Create(
+            generators: [new AlephSourceGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+        return (driver.RunGenerators(compilation).GetRunResult().Results.Single(), output);
+    }
+
     [Test]
     public async Task New_diagnostic_descriptors_are_registered()
     {

@@ -80,7 +80,10 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            if (inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
+            // Update-only adaptations use the ordinary C# body below, not the lowered
+            // expression. A non-exhaustive switch is valid there and must retain its throw.
+            if ((generateMap || generateExpression) &&
+                inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsupportedSwitchPattern,
@@ -88,7 +91,8 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
-            if (inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
+            if ((generateMap || generateExpression) &&
+                inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     DiagnosticDescriptors.UnsafeRepeatedArgument,
@@ -201,6 +205,14 @@ internal static class AdaptationMemberEmitter
                         DiagnosticDescriptors.UpdatableCircularReferences,
                         GetLocation(mapping, adaptation),
                         adaptationName));
+                    continue;
+                }
+
+                if (updateInliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeUpdateArgument)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.UnsafeRepeatedArgument,
+                        unsafeUpdateArgument.Location, adaptationName, unsafeUpdateArgument.Text));
                     continue;
                 }
 
