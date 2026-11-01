@@ -165,8 +165,8 @@ public static EmployeeDto MapEmployee(Employee source, int currentYear) =>
         YearsActive = currentYear - source.StartYear
     };
 
-public static Expression<Func<Employee, int, EmployeeDto>> MapEmployeeExpression() =>
-    (source, currentYear) => new EmployeeDto
+public static Expression<Func<Employee, EmployeeDto>> MapEmployeeExpression(int currentYear) =>
+    source => new EmployeeDto
     {
         Id = source.Id,
         DisplayName = source.FirstName + " " + source.LastName,
