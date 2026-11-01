@@ -173,8 +173,8 @@ public static class DiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor UnsafeRepeatedArgument = new(
         "AM0020",
-        "Inlining would evaluate an argument more than once",
-        "Expression generation for '{0}' skipped: inlining '{1}' would duplicate evaluation of a nontrivial argument",
+        "Inlining would change argument evaluation semantics",
+        "Expression generation for '{0}' skipped: inlining '{1}' would repeat, skip, or reorder potentially effectful argument evaluations",
         "AlephMapper",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
