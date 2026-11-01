@@ -169,14 +169,17 @@ public static partial class SemanticRegressionMapper
     private static int MapItem(SemanticItem item) => item.Value;
 
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
-    public static int IndexWithIgnore(SemanticIndexSource source) =>
-        IndexHelper(source.Values, source.Offset + 1);
+    public static int? IndexWithIgnore(SemanticIndexSource source) =>
+        IndexHelperIgnore(source.Values, source.Offset + 1);
 
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
     public static int IndexWithRewrite(SemanticIndexSource source) =>
-        IndexHelper(source.Values, source.Offset + 1);
+        IndexHelperRewrite(source.Values, source.Offset + 1);
 
-    private static int IndexHelper(int[]? values, int index) =>
+    private static int? IndexHelperIgnore(int[]? values, int index) =>
+        values?[index];
+
+    private static int IndexHelperRewrite(int[]? values, int index) =>
         values?[index] ?? -1;
 
     [Projectable]
