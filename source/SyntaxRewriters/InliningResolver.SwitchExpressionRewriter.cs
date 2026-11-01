@@ -56,25 +56,33 @@ internal sealed partial class InliningResolver
                 return node;
             }
 
-            // Rewrite pattern-local references while the original arm is still
-            // bound to its SemanticModel. Substituted caller expressions can have
-            // the same identifier text, but never the same ILocalSymbol.
-            var hasPatternVariable = arm.Pattern is DeclarationPatternSyntax
-            {
-                Designation: SingleVariableDesignationSyntax patternDesignation
-            } && CanQuerySemanticModel(patternDesignation) &&
-                model.GetDeclaredSymbol(patternDesignation) is ILocalSymbol;
-            if (hasPatternVariable)
-            {
-                var declaration = (DeclarationPatternSyntax)arm.Pattern;
-                var designation = (SingleVariableDesignationSyntax)declaration.Designation;
-                var local = (ILocalSymbol)model.GetDeclaredSymbol(designation)!;
-                var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
-                _switchPatternVariables.Push((local, cast));
-            }
-
+            // ConvertPattern accepts declaration patterns inside parentheses and
+            // logical wrappers. Bind every declaration-local symbol from the original
+            // pattern (not just an arm whose outermost node is a declaration).
+            // Identifier spelling is not sufficient: a substituted caller argument
+            // can have the same name as the pattern local.
+            var pushedPatternVariables = 0;
             try
             {
+                foreach (var declaration in arm.Pattern.DescendantNodesAndSelf()
+                             .OfType<DeclarationPatternSyntax>())
+                {
+                    if (declaration.Designation is not SingleVariableDesignationSyntax designation)
+                        continue;
+
+                    if (!CanQuerySemanticModel(designation) ||
+                        model.GetDeclaredSymbol(designation) is not ILocalSymbol local)
+                    {
+                        _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(declaration));
+                        return node;
+                    }
+
+                    var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
+                    _switchPatternVariables.Push((local, cast));
+                    pushedPatternVariables++;
+                }
+
+
                 var armExpression = VisitClean(arm.Expression);
                 if (arm.WhenClause is not null)
                 {
@@ -89,7 +97,7 @@ internal sealed partial class InliningResolver
             }
             finally
             {
-                if (hasPatternVariable)
+                while (pushedPatternVariables-- > 0)
                     _switchPatternVariables.Pop();
             }
         }
