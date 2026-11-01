@@ -37,15 +37,14 @@ public class SemanticSafetyGeneratorTests
             public static partial class Mapper
             {
                 [Projectable]
-                public static int Map(int number) => Twice(Read(number));
+                public static int Map(int number) => Twice(System.Random.Shared.Next());
 
-                private static int Read(int number) => number + 1;
                 private static int Twice(int value) => value + value;
             }
             """;
 
-        // 'Read(number)' is inlined before 'Twice' in the source, so this also
-        // exercises nested inlining and repeated evaluation detection.
+        // Random.Next() has observable state; expanding Twice(value) must not
+        // evaluate that invocation twice.
         var result = await Generate(source);
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
     }
