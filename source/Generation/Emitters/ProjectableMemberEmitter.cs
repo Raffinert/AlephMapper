@@ -38,14 +38,6 @@ internal static class ProjectableMemberEmitter
             return;
         }
 
-        if (inliner.UnsafeRepeatedArguments.FirstOrDefault() is { } unsafeArgument)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.UnsafeRepeatedArgument,
-                unsafeArgument.Location, mapping.MethodSymbol.Name, unsafeArgument.Text));
-            return;
-        }
-
         if (inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
         {
             context.ReportDiagnostic(Diagnostic.Create(
