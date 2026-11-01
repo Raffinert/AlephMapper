@@ -185,11 +185,71 @@ internal sealed partial class InliningResolver(
         _ => 0
     };
 
-    private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter) =>
-        callee.BodySyntax.Expression.DescendantNodesAndSelf()
+    // Count possible evaluations on a single execution path, not textual
+    // references in mutually exclusive branches (flag ? value : value).
+    private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter)
+    {
+        int Count(SyntaxNode syntax)
+        {
+            if (syntax is IdentifierNameSyntax identifier &&
+                callee.SemanticModel.GetSymbolInfo(identifier).Symbol is IParameterSymbol symbol &&
+                SymbolEqualityComparer.Default.Equals(symbol, parameter))
+                return 1;
+
+            if (syntax is ConditionalExpressionSyntax conditional)
+                return Count(conditional.Condition) +
+                       Math.Max(Count(conditional.WhenTrue), Count(conditional.WhenFalse));
+
+            return syntax.ChildNodes().Sum(Count);
+        }
+
+        return Count(callee.BodySyntax.Expression);
+    }
+
+    // Arguments are evaluated before entering the callee, left-to-right in
+    // call-site order. Reordering their side effects in the expanded body can
+    // change the result even when every parameter occurs only once.
+    private static bool ReordersEffectfulArguments(
+        InvocationExpressionSyntax call,
+        MappingAnalysis callee,
+        IReadOnlyDictionary<IParameterSymbol, ExpressionSyntax> substitutions)
+    {
+        var parameters = callee.MethodSymbol.Parameters;
+        var callOrder = new List<IParameterSymbol>();
+        if (call.Expression is MemberAccessExpressionSyntax &&
+            parameters.Length == call.ArgumentList.Arguments.Count + 1)
+            callOrder.Add(parameters[0]); // reduced extension receiver
+
+        var positional = callOrder.Count;
+        foreach (var argument in call.ArgumentList.Arguments)
+        {
+            IParameterSymbol? parameter = argument.NameColon is null
+                ? positional < parameters.Length ? parameters[positional++] : null
+                : parameters.FirstOrDefault(p => p.Name == argument.NameColon.Name.Identifier.ValueText);
+            if (parameter is not null)
+                callOrder.Add(parameter);
+        }
+
+        var bodyOrder = callee.BodySyntax.Expression.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>()
-            .Count(node => callee.SemanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol referenced &&
-                SymbolEqualityComparer.Default.Equals(referenced, parameter));
+            .Select(id => callee.SemanticModel.GetSymbolInfo(id).Symbol)
+            .OfType<IParameterSymbol>()
+            .Where(symbol => substitutions.ContainsKey(symbol))
+            .ToArray();
+
+        // Compare the relative positions of ALL parameters, since even a
+        // non-invocation argument can contain a property getter.
+        var index = -1;
+        foreach (var parameter in bodyOrder)
+        {
+            var next = callOrder.FindIndex(p => SymbolEqualityComparer.Default.Equals(p, parameter));
+            if (next < index && callOrder.Any(p => substitutions.TryGetValue(p, out var expression) &&
+                                                  CouldEvaluateWithSideEffects(expression)))
+                return true;
+            index = next;
+        }
+        return false;
+    }
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
@@ -313,8 +373,9 @@ internal sealed partial class InliningResolver(
         // method evaluates just once. Refuse the unsafe projection rather than silently
         // changing behavior. Ordinary parameters/constants remain safely reusable.
         if (substitutionsMap.Any(entry =>
-            CouldEvaluateWithSideEffects(entry.Value) &&
-            CountParameterReferences(callee2, entry.Key) > 1))
+                CouldEvaluateWithSideEffects(entry.Value) &&
+                CountParameterReferences(callee2, entry.Key) != 1) ||
+            ReordersEffectfulArguments(node, callee2, substitutionsMap))
         {
             _unsafeRepeatedArguments.Add(new UnsafeRepeatedArgumentInfo(node));
             return base.VisitInvocationExpression(node);
