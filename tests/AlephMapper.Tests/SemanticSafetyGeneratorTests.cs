@@ -30,6 +30,54 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
+    public async Task Repeated_effectful_switch_governing_reports_AM0019()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => Next() switch
+                {
+                    > 0 and < 10 => 1,
+                    _ => 0
+                };
+
+                private static int Next() => System.Random.Shared.Next();
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Single_use_effectful_switch_governing_remains_supported()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => Next() switch
+                {
+                    > 0 => 1,
+                    _ => 0
+                };
+
+                private static int Next() => System.Random.Shared.Next();
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Repeated_side_effectful_argument_reports_AM0020()
     {
         const string source = """
