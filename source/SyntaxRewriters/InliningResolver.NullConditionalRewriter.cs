@@ -107,6 +107,7 @@ internal partial class InliningResolver
         return expression switch
         {
             IdentifierNameSyntax => true,
+            LiteralExpressionSyntax => true,
             ThisExpressionSyntax => true,
             BaseExpressionSyntax => true,
             MemberAccessExpressionSyntax memberAccess => CanSafelyRepeat(memberAccess.Expression),
@@ -119,6 +120,19 @@ internal partial class InliningResolver
             ConditionalAccessExpressionSyntax conditional =>
                 CanSafelyRepeat(conditional.Expression) &&
                 CanSafelyRepeat(conditional.WhenNotNull),
+            // Nested null-conditional rewriting synthesizes stable ternaries and
+            // null checks. Recognize them rather than rejecting the same stable
+            // receiver merely because the syntax has already been lowered.
+            ConditionalExpressionSyntax conditional =>
+                CanSafelyRepeat(conditional.Condition) &&
+                CanSafelyRepeat(conditional.WhenTrue) &&
+                CanSafelyRepeat(conditional.WhenFalse),
+            BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression) ||
+                binary.IsKind(SyntaxKind.NotEqualsExpression) ||
+                binary.IsKind(SyntaxKind.CoalesceExpression) ||
+                binary.IsKind(SyntaxKind.LogicalAndExpression) ||
+                binary.IsKind(SyntaxKind.LogicalOrExpression) =>
+                    CanSafelyRepeat(binary.Left) && CanSafelyRepeat(binary.Right),
             _ => false
         };
     }
