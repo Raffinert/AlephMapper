@@ -139,6 +139,46 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Inlined_switch_arm_keeps_cast_coalesce_and_return_conversions()
+    {
+        var half = SemanticRegressionMapper.CastSwitchArmExpression().Compile();
+        await Assert.That(half(3)).IsEqualTo(SemanticRegressionMapper.CastSwitchArm(3));
+        await Assert.That(half(3)).IsEqualTo(1d);
+
+        var coalesce = SemanticRegressionMapper.CoalescingSwitchArmExpression().Compile();
+        var source = new SemanticCoalescingInput { Flag = true, A = 16777217, B = null };
+        await Assert.That(coalesce(source)).IsEqualTo(SemanticRegressionMapper.CoalescingSwitchArm(source));
+        await Assert.That(coalesce(source)).IsEqualTo(16777216d);
+
+        var longResult = SemanticRegressionMapper.ConvertedReturnSwitchArmExpression().Compile();
+        await Assert.That(longResult(2)).IsEqualTo(SemanticRegressionMapper.ConvertedReturnSwitchArm(2));
+        await Assert.That(longResult(2)).IsEqualTo(4294967294L);
+    }
+
+    [Test]
+    public async Task Null_constant_patterns_do_not_invoke_overloaded_equality()
+    {
+        var mapped = SemanticRegressionMapper.NotNullWithOverloadedEqualityExpression().Compile();
+        await Assert.That(mapped(new SemanticOddEquality())).IsEqualTo(1);
+        await Assert.That(mapped(null)).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Nested_rewritten_nullable_helper_receiver_is_not_rejected()
+    {
+        var projected = SemanticRegressionMapper.NestedNullableNameExpression().Compile();
+        var root = new SemanticNullableNode
+        {
+            Child = new SemanticNullableNode
+            {
+                Child = new SemanticNullableNode { Name = "Ada" }
+            }
+        };
+        await Assert.That(projected(root)).IsEqualTo("Ada");
+        await Assert.That(projected(new SemanticNullableNode())).IsNull();
+    }
+
+    [Test]
     public async Task Inlined_helper_in_switch_arm_preserves_multiplication_precedence()
     {
         var projection = SemanticRegressionMapper.SwitchArmHelperPrecedenceExpression().Compile();
@@ -220,6 +260,47 @@ public sealed class SemanticInput
 
 public static partial class SemanticRegressionMapper
 {
+    [Projectable]
+    public static double CastSwitchArm(int value) => value switch
+    {
+        3 => (double)HalfInt(value),
+        _ => 0d
+    };
+
+    private static int HalfInt(int value) => value / 2;
+
+    [Projectable]
+    public static double CoalescingSwitchArm(SemanticCoalescingInput source) =>
+        source.Flag switch
+        {
+            true => PickCoalesce(source.A, source.B) ?? 0d,
+            _ => -1d
+        };
+
+    private static float? PickCoalesce(int? a, float? b) => a ?? b;
+
+    [Projectable]
+    public static long ConvertedReturnSwitchArm(int value) => value switch
+    {
+        2 => AsLong(value) * int.MaxValue,
+        _ => 0L
+    };
+
+    private static long AsLong(int value) => value;
+
+    [Projectable]
+    public static int NotNullWithOverloadedEquality(SemanticOddEquality? value) => value switch
+    {
+        not null => 1,
+        _ => 0
+    };
+
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    public static string? NestedNullableName(SemanticNullableNode source) =>
+        NullableName(source.Child?.Child);
+
+    private static string? NullableName(SemanticNullableNode? node) => node?.Name;
+
     [Projectable]
     public static int SwitchArmHelperPrecedence(int value) => value switch
     {
@@ -376,4 +457,25 @@ public sealed class SemanticGuardInput
 public sealed class SemanticNormalizationSource
 {
     public List<int> Items { get; set; } = [];
+}
+
+public sealed class SemanticCoalescingInput
+{
+    public bool Flag { get; set; }
+    public int? A { get; set; }
+    public float? B { get; set; }
+}
+
+public sealed class SemanticNullableNode
+{
+    public SemanticNullableNode? Child { get; set; }
+    public string? Name { get; set; }
+}
+
+public sealed class SemanticOddEquality
+{
+    public static bool operator ==(SemanticOddEquality? a, SemanticOddEquality? b) => true;
+    public static bool operator !=(SemanticOddEquality? a, SemanticOddEquality? b) => false;
+    public override bool Equals(object? other) => ReferenceEquals(this, other);
+    public override int GetHashCode() => base.GetHashCode();
 }
