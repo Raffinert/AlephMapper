@@ -28,6 +28,20 @@ internal sealed partial class InliningResolver
             return node;
         }
 
+        // Pattern matching can narrow an object-typed input for relational
+        // comparisons; a plain 'object > int' comparison cannot. Reject until
+        // the lowering can introduce the required type tests/conversions.
+        var inputType = CanQuerySemanticModel(node.GoverningExpression)
+            ? model.GetTypeInfo(node.GoverningExpression).Type
+            : null;
+        if (inputType is { SpecialType: SpecialType.System_Object or SpecialType.System_ValueType } &&
+            node.Arms.Any(arm => arm.Pattern.DescendantNodesAndSelf()
+                .OfType<RelationalPatternSyntax>().Any()))
+        {
+            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
+            return node;
+        }
+
         var switchText = node.ToFullString();
         var multiline = switchText.IndexOf('\n') >= 0 || switchText.IndexOf('\r') >= 0;
 
@@ -101,8 +115,7 @@ internal sealed partial class InliningResolver
     private ExpressionSyntax? ConvertPattern(PatternSyntax pattern, ExpressionSyntax governing) =>
         pattern switch
         {
-            ConstantPatternSyntax constant => PadBinaryOperator(BinaryExpression(
-                SyntaxKind.EqualsExpression, governing, VisitClean(constant.Expression))),
+            ConstantPatternSyntax constant => ConvertConstantPattern(constant, governing),
 
             // 'is T' preserves inheritance and handles null, unlike GetType() == typeof(T).
             DeclarationPatternSyntax declaration => PadBinaryOperator(BinaryExpression(
@@ -125,6 +138,34 @@ internal sealed partial class InliningResolver
 
             _ => null
         };
+
+    private ExpressionSyntax? ConvertConstantPattern(ConstantPatternSyntax constant, ExpressionSyntax governing)
+    {
+        // C# constant patterns match NaN, whereas == returns false for NaN.
+        // An expression-tree comparison using == cannot represent that test
+        // without special lowering, so report AM0019 instead of silently
+        // reversing 'not NaN' (or skipping a matching NaN arm).
+        if (CanQuerySemanticModel(constant.Expression))
+        {
+            var value = model.GetConstantValue(constant.Expression);
+            if (value.HasValue &&
+                (value.Value is double d && double.IsNaN(d) ||
+                 value.Value is float f && float.IsNaN(f)))
+                return null;
+        }
+
+        var compared = governing;
+        if (constant.Expression.IsKind(SyntaxKind.NullLiteralExpression))
+        {
+            // A C# null pattern doesn't invoke an overloaded == operator.
+            // Compare boxed values using reference equality semantics.
+            compared = ParenthesizedExpression(
+                CastExpression(PredefinedType(Token(SyntaxKind.ObjectKeyword)), governing));
+        }
+
+        return PadBinaryOperator(BinaryExpression(
+            SyntaxKind.EqualsExpression, compared, VisitClean(constant.Expression)));
+    }
 
     private ExpressionSyntax? ConvertBinaryPattern(BinaryPatternSyntax binary, ExpressionSyntax governing)
     {
