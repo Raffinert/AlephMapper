@@ -61,7 +61,7 @@ partial class TestModel1Mapper
         {
             if (dest.Address == null)
                 dest.Address = new global::AlephMapper.Tests.Address1Dto();
-            if (source.Address.Line1== null)
+            if (source.Address.Line1 == null)
             {
                 dest.Address.Line1 = null;
             }
@@ -72,7 +72,7 @@ partial class TestModel1Mapper
                 dest.Address.Line1.Street = source.Address.Line1.Street;
                 dest.Address.Line1.HouseNumber = source.Address.Line1.HouseNumber;
             }
-            if (source.Address.Line2== null)
+            if (source.Address.Line2 == null)
             {
                 dest.Address.Line2 = null;
             }
