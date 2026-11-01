@@ -32,7 +32,6 @@ internal sealed partial class InliningResolver(
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
-    private List<UnsafeRepeatedArgumentInfo> _unsafeRepeatedArguments = [];
     // Only the currently visited switch arm owns these locals. Keep the original
     // Roslyn symbols, not their identifier text, to avoid collisions with callers.
     private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _switchPatternVariables = new();
@@ -42,7 +41,6 @@ internal sealed partial class InliningResolver(
     public IReadOnlyList<UnsafeConditionalReceiverInfo> UnsafeConditionalReceivers => _unsafeConditionalReceivers;
     public IReadOnlyList<UnsupportedNullConditionalInfo> UnsupportedNullConditionals => _unsupportedNullConditionals;
     public IReadOnlyList<UnsupportedSwitchPatternInfo> UnsupportedSwitchPatterns => _unsupportedSwitchPatterns;
-    public IReadOnlyList<UnsafeRepeatedArgumentInfo> UnsafeRepeatedArguments => _unsafeRepeatedArguments;
 
     private IMethodSymbol? ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
@@ -110,15 +108,6 @@ internal sealed partial class InliningResolver(
         return base.VisitIdentifierName(node);
     }
 
-    private static bool CouldEvaluateWithSideEffects(ExpressionSyntax expression) =>
-        expression.DescendantNodesAndSelf().Any(n =>
-            n is InvocationExpressionSyntax or ObjectCreationExpressionSyntax or
-                AssignmentExpressionSyntax or AwaitExpressionSyntax ||
-            n is PostfixUnaryExpressionSyntax postfix && postfix.Kind() is
-                SyntaxKind.PostIncrementExpression or SyntaxKind.PostDecrementExpression ||
-            n is PrefixUnaryExpressionSyntax prefix && prefix.Kind() is
-                SyntaxKind.PreIncrementExpression or SyntaxKind.PreDecrementExpression);
-
     // Invocation syntax behaves as a primary expression. Inserting a helper
     // body may lower its precedence; group only when the containing operator
     // would otherwise bind part of the helper body. This keeps prior generated
@@ -185,72 +174,6 @@ internal sealed partial class InliningResolver(
         _ => 0
     };
 
-    // Count possible evaluations on a single execution path, not textual
-    // references in mutually exclusive branches (flag ? value : value).
-    private static int CountParameterReferences(MappingAnalysis callee, IParameterSymbol parameter)
-    {
-        int Count(SyntaxNode syntax)
-        {
-            if (syntax is IdentifierNameSyntax identifier &&
-                callee.SemanticModel.GetSymbolInfo(identifier).Symbol is IParameterSymbol symbol &&
-                SymbolEqualityComparer.Default.Equals(symbol, parameter))
-                return 1;
-
-            if (syntax is ConditionalExpressionSyntax conditional)
-                return Count(conditional.Condition) +
-                       Math.Max(Count(conditional.WhenTrue), Count(conditional.WhenFalse));
-
-            return syntax.ChildNodes().Sum(Count);
-        }
-
-        return Count(callee.BodySyntax.Expression);
-    }
-
-    // Arguments are evaluated before entering the callee, left-to-right in
-    // call-site order. Reordering their side effects in the expanded body can
-    // change the result even when every parameter occurs only once.
-    private static bool ReordersEffectfulArguments(
-        InvocationExpressionSyntax call,
-        MappingAnalysis callee,
-        IReadOnlyDictionary<IParameterSymbol, ExpressionSyntax> substitutions)
-    {
-        var parameters = callee.MethodSymbol.Parameters;
-        var callOrder = new List<IParameterSymbol>();
-        if (call.Expression is MemberAccessExpressionSyntax &&
-            parameters.Length == call.ArgumentList.Arguments.Count + 1)
-            callOrder.Add(parameters[0]); // reduced extension receiver
-
-        var positional = callOrder.Count;
-        foreach (var argument in call.ArgumentList.Arguments)
-        {
-            IParameterSymbol? parameter = argument.NameColon is null
-                ? positional < parameters.Length ? parameters[positional++] : null
-                : parameters.FirstOrDefault(p => p.Name == argument.NameColon.Name.Identifier.ValueText);
-            if (parameter is not null)
-                callOrder.Add(parameter);
-        }
-
-        var bodyOrder = callee.BodySyntax.Expression.DescendantNodesAndSelf()
-            .OfType<IdentifierNameSyntax>()
-            .Select(id => callee.SemanticModel.GetSymbolInfo(id).Symbol)
-            .OfType<IParameterSymbol>()
-            .Where(symbol => substitutions.ContainsKey(symbol))
-            .ToArray();
-
-        // Compare the relative positions of ALL parameters, since even a
-        // non-invocation argument can contain a property getter.
-        var index = -1;
-        foreach (var parameter in bodyOrder)
-        {
-            var next = callOrder.FindIndex(p => SymbolEqualityComparer.Default.Equals(p, parameter));
-            if (next < index && callOrder.Any(p => substitutions.TryGetValue(p, out var expression) &&
-                                                  CouldEvaluateWithSideEffects(expression)))
-                return true;
-            index = next;
-        }
-        return false;
-    }
-
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         if (node.Parent == null ||
@@ -309,8 +232,7 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals,
-                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                                    _unsafeRepeatedArguments = _unsafeRepeatedArguments
+                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
                                 }.Visit(callee.BodySyntax.Expression)!;
 
                             // Lambda parameters intentionally keep the callee's parameter names.
@@ -369,18 +291,6 @@ internal sealed partial class InliningResolver(
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
 
-        // Inlining may duplicate a call or object creation argument that the original
-        // method evaluates just once. Refuse the unsafe projection rather than silently
-        // changing behavior. Ordinary parameters/constants remain safely reusable.
-        if (substitutionsMap.Any(entry =>
-                CouldEvaluateWithSideEffects(entry.Value) &&
-                CountParameterReferences(callee2, entry.Key) != 1) ||
-            ReordersEffectfulArguments(node, callee2, substitutionsMap))
-        {
-            _unsafeRepeatedArguments.Add(new UnsafeRepeatedArgumentInfo(node));
-            return base.VisitInvocationExpression(node);
-        }
-
         // Add method to call stack before inlining
         _callStack.Add(directCallMethod);
         try
@@ -393,8 +303,7 @@ internal sealed partial class InliningResolver(
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals,
-                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                _unsafeRepeatedArguments = _unsafeRepeatedArguments
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
             }.Visit(callee2.BodySyntax.Expression)!;
 
             // Keep existing generated formatting unless grouping is needed for
@@ -531,12 +440,6 @@ internal class CircularReferenceInfo(IMethodSymbol method, IEnumerable<IMethodSy
 {
     public IMethodSymbol Method { get; } = method;
     public string CallChain { get; } = string.Join(" -> ", callStack.Select(m => $"{m.ContainingType.Name}.{m.Name}"));
-}
-
-internal sealed class UnsafeRepeatedArgumentInfo(InvocationExpressionSyntax invocation)
-{
-    public Location Location { get; } = invocation.GetLocation();
-    public string Text { get; } = invocation.ToString();
 }
 
 internal sealed class UnsafeConditionalReceiverInfo(ExpressionSyntax expression)
