@@ -339,6 +339,22 @@ internal sealed partial class InliningResolver(
             // Keep existing generated formatting unless grouping is needed for
             // operator precedence (e.g. AddOne(x) * 2 must become (x + 1) * 2).
             var substituted = inlinedBody2.WithoutTrivia();
+
+            // Inlining removes the callee's return boundary. That boundary can
+            // perform an implicit conversion (e.g. int -> long) which changes the
+            // type of the surrounding arithmetic. Preserve the conversion before
+            // embedding the helper body into its caller.
+            var returnConversion = callee2.SemanticModel.GetTypeInfo(callee2.BodySyntax.Expression);
+            if (returnConversion.Type is { } expressionType &&
+                returnConversion.ConvertedType is { } convertedType &&
+                !SymbolEqualityComparer.Default.Equals(expressionType, convertedType) &&
+                SymbolEqualityComparer.Default.Equals(convertedType, callee2.ReturnType))
+            {
+                var returnType = ParseTypeName(TypeDisplay.ForSymbol(
+                    callee2.ReturnType, callee2.ReturnType.NullableAnnotation, nullablePolicy));
+                substituted = CastExpression(returnType, ParenthesizedExpression(substituted));
+            }
+
             if (NeedsGroupingAtInlineSite(node, substituted))
                 substituted = ParenthesizedExpression(substituted);
 
