@@ -73,6 +73,27 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Parenthesized_declaration_pattern_uses_original_local_symbol()
+    {
+        var value = new SemanticPatternAnimal
+        {
+            Score = 2,
+            Other = new SemanticPatternAnimal { Score = 7 }
+        };
+
+        var original = SemanticRegressionMapper.ParenthesizedPatternCollision(value);
+        var projected = SemanticRegressionMapper.ParenthesizedPatternCollisionExpression().Compile()(value);
+
+        await Assert.That(original).IsEqualTo(7);
+        await Assert.That(projected).IsEqualTo(original);
+
+        value.Other.Score = 3;
+        await Assert.That(SemanticRegressionMapper.ParenthesizedPatternCollision(value)).IsEqualTo(-1);
+        await Assert.That(SemanticRegressionMapper.ParenthesizedPatternCollisionExpression().Compile()(value))
+            .IsEqualTo(-1);
+    }
+
+    [Test]
     public async Task Pattern_local_name_cannot_capture_substituted_caller_parameter()
     {
         var value = new SemanticPatternAnimal
@@ -261,6 +282,17 @@ public static partial class SemanticRegressionMapper
 
     private static int IndexHelperRewrite(int[]? values, int index) =>
         values?[index] ?? -1;
+
+    [Projectable]
+    public static int ParenthesizedPatternCollision(SemanticPatternAnimal value) =>
+        ParenthesizedPatternHelper(value.Other);
+
+    private static int ParenthesizedPatternHelper(SemanticPatternAnimal animal) =>
+        animal switch
+        {
+            ((SemanticPatternAnimal value)) when value.Score > 5 => value.Score,
+            _ => -1
+        };
 
     [Projectable]
     public static int PatternCollision(SemanticPatternAnimal value) =>
