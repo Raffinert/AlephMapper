@@ -270,7 +270,10 @@ internal sealed partial class InliningResolver(
                 _unsafeRepeatedArguments = _unsafeRepeatedArguments
             }.Visit(callee2.BodySyntax.Expression)!;
 
-            var substituted = inlinedBody2.WithoutTrivia();
+            // Helper bodies can have lower precedence than the original invocation.
+            // Preserve grouping at the substitution site, not after their containing
+            // expression has already been rewritten (e.g. AddOne(x) * 2).
+            var substituted = ParenthesizeCompositeExpression(inlinedBody2.WithoutTrivia());
 
             if (conditionalAccessExpression)
             {
