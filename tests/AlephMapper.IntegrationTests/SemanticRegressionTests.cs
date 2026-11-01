@@ -139,6 +139,19 @@ public class SemanticRegressionTests
     }
 
     [Test]
+    public async Task Inlined_helper_in_switch_arm_preserves_multiplication_precedence()
+    {
+        var projection = SemanticRegressionMapper.SwitchArmHelperPrecedenceExpression().Compile();
+        var directProjection = SemanticRegressionMapper.DirectHelperPrecedenceExpression().Compile();
+
+        await Assert.That(SemanticRegressionMapper.SwitchArmHelperPrecedence(1)).IsEqualTo(4);
+        await Assert.That(projection(1)).IsEqualTo(4);
+        await Assert.That(projection(2)).IsEqualTo(0);
+        await Assert.That(SemanticRegressionMapper.DirectHelperPrecedence(1)).IsEqualTo(4);
+        await Assert.That(directProjection(1)).IsEqualTo(4);
+    }
+
+    [Test]
     public async Task Inlined_switch_guard_preserves_logical_or_precedence()
     {
         var projection = SemanticRegressionMapper.SwitchWithLogicalGuardExpression().Compile();
@@ -207,6 +220,18 @@ public sealed class SemanticInput
 
 public static partial class SemanticRegressionMapper
 {
+    [Projectable]
+    public static int SwitchArmHelperPrecedence(int value) => value switch
+    {
+        1 => AddOne(value) * 2,
+        _ => 0
+    };
+
+    [Projectable]
+    public static int DirectHelperPrecedence(int value) => AddOne(value) * 2;
+
+    private static int AddOne(int number) => number + 1;
+
     [Projectable]
     public static int SwitchWithLogicalGuard(SemanticGuardInput source) =>
         source.Count switch
