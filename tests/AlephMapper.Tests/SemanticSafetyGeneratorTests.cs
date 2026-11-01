@@ -106,7 +106,7 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
-    public async Task Repeated_side_effectful_argument_reports_AM0020()
+    public async Task Repeated_side_effectful_helper_argument_is_inlined()
     {
         const string source = """
             using AlephMapper;
@@ -119,12 +119,14 @@ public class SemanticSafetyGeneratorTests
             }
             """;
 
-        // Random.Next() has observable state; expanding Twice(value) must not
-        // evaluate that invocation twice.
-        var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
+        // Intentionally permits repeated evaluation of the inlined argument,
+        // matching the substitution behavior used by ExpressiveSharp.
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
-
 
     [Test]
     public async Task Boxed_object_relational_pattern_reports_AM0019()
@@ -167,7 +169,7 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
-    public async Task Mutually_exclusive_parameter_reads_do_not_trigger_AM0020()
+    public async Task Mutually_exclusive_parameter_reads_still_inline()
     {
         const string source = """
             using AlephMapper;
@@ -181,13 +183,12 @@ public class SemanticSafetyGeneratorTests
             """;
 
         var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsFalse();
         await Assert.That(result.GeneratedSources.Any(s =>
             s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
-    public async Task Reordered_effectful_arguments_report_AM0020()
+    public async Task Reordered_effectful_helper_arguments_are_inlined()
     {
         const string source = """
             using AlephMapper;
@@ -204,8 +205,11 @@ public class SemanticSafetyGeneratorTests
             }
             """;
 
-        var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
     [Test]
@@ -267,7 +271,7 @@ public class SemanticSafetyGeneratorTests
     public async Task New_diagnostic_descriptors_are_registered()
     {
         await Assert.That(DiagnosticDescriptors.GetById("AM0019")).IsEqualTo(DiagnosticDescriptors.UnsupportedSwitchPattern);
-        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsEqualTo(DiagnosticDescriptors.UnsafeRepeatedArgument);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsNull();
     }
 
     private static async Task<GeneratorRunResult> Generate(string source)
