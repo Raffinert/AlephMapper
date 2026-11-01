@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,168 +15,158 @@ internal sealed partial class InliningResolver
     {
         if (forUpdateMethod)
         {
-            // fix missing leading trivia on 'switch' keyword
-            var switchExpression = (SwitchExpressionSyntax?)base.VisitSwitchExpression(node);
-            return switchExpression?.WithSwitchKeyword(node.SwitchKeyword.WithLeadingTrivia(Space));
+            var original = (SwitchExpressionSyntax?)base.VisitSwitchExpression(node);
+            return original?.WithSwitchKeyword(node.SwitchKeyword.WithLeadingTrivia(Space));
         }
 
-        // Preserve the switch layout after lowering it to conditionals. The generated
-        // nodes have no trivia of their own, so the pretty printer needs this signal.
+        // Unlike a fallback branch, an unmatched C# switch expression throws. We cannot
+        // represent that throw in an EF-translatable lambda, so refuse generation.
+        if (node.Arms.Count == 0 ||
+            node.Arms[node.Arms.Count - 1].Pattern is not DiscardPatternSyntax ||
+            node.Arms[node.Arms.Count - 1].WhenClause is not null)
+        {
+            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
+            return node;
+        }
+
         var switchText = node.ToFullString();
         var multiline = switchText.IndexOf('\n') >= 0 || switchText.IndexOf('\r') >= 0;
 
-        // Reverse arms order to start from the default value
-        var arms = node.Arms.Reverse();
+        // Visit original bound nodes before stripping trivia; symbol-aware substitutions
+        // need access to the original semantic model.
+        var governing = VisitClean(node.GoverningExpression);
+        ExpressionSyntax currentExpression = VisitClean(node.Arms[node.Arms.Count - 1].Expression);
 
-        ExpressionSyntax? currentExpression = null;
-
-        foreach (var arm in arms)
+        foreach (var arm in node.Arms.Reverse().Skip(1))
         {
+            var condition = ConvertPattern(arm.Pattern, governing);
+            if (condition is null)
+            {
+                _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(arm.Pattern));
+                return node;
+            }
+
             var armExpression = VisitClean(arm.Expression);
-            var governingExpressionNode = node.GoverningExpression.WithoutTrivia();
-            var governingExpression = VisitClean(governingExpressionNode);
-
-            // Handle fallback value
-            if (currentExpression == null)
-            {
-                currentExpression = arm.Pattern is DiscardPatternSyntax
-                    ? armExpression
-                    : LiteralExpression(SyntaxKind.NullLiteralExpression);
-
-                continue;
-            }
-
-            // Handle each arm, only if it's a constant expression
-            if (arm.Pattern is ConstantPatternSyntax constant)
-            {
-                var constantExpression = VisitClean(constant.Expression);
-                ExpressionSyntax expression = PadBinaryOperator(
-                    BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        governingExpression,
-                        constantExpression));
-
-                // Add when clause as a AND expression
-                if (arm.WhenClause != null)
-                {
-                    expression = BinaryExpression(
-                        SyntaxKind.LogicalAndExpression,
-                        expression,
-                        VisitClean(arm.WhenClause.Condition)
-                    );
-                }
-
-                currentExpression = CreateConditional(
-                    expression,
-                    armExpression,
-                    currentExpression,
-                    multiline
-                );
-
-                continue;
-            }
-
             if (arm.Pattern is DeclarationPatternSyntax declaration)
+                armExpression = ReplaceVariableWithCast(armExpression, declaration, governing);
+
+            if (arm.WhenClause is not null)
             {
-                var getTypeExpression = MemberAccessExpression(
-                    SyntaxKind.SimpleMemberAccessExpression,
-                    governingExpression,
-                    IdentifierName("GetType"));
-
-                var getTypeCall = InvocationExpression(getTypeExpression);
-                var typeofExpression = TypeOfExpression(declaration.Type);
-                var equalsExpression = PadBinaryOperator(
-                    BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        getTypeCall,
-                        typeofExpression));
-
-                ExpressionSyntax condition = equalsExpression;
-                if (arm.WhenClause != null)
-                {
-                    condition = BinaryExpression(
-                        SyntaxKind.LogicalAndExpression,
-                        equalsExpression,
-                        VisitClean(arm.WhenClause.Condition)
-                    );
-                }
-
-                var modifiedArmExpression = ReplaceVariableWithCast(
-                    armExpression,
-                    declaration,
-                    governingExpressionNode);
-                currentExpression = CreateConditional(
-                    condition,
-                    modifiedArmExpression,
-                    currentExpression,
-                    multiline
-                );
-
-                continue;
+                var guard = VisitClean(arm.WhenClause.Condition);
+                if (arm.Pattern is DeclarationPatternSyntax declared)
+                    guard = ReplaceVariableWithCast(guard, declared, governing);
+                condition = PadBinaryOperator(BinaryExpression(
+                    SyntaxKind.LogicalAndExpression, condition, guard));
             }
 
-            throw new InvalidOperationException(
-                $"Switch expressions rewriting supports only constant values and declaration patterns (Type var). " +
-                $"Unsupported pattern: {arm.Pattern.GetType().Name}"
-            );
+            currentExpression = CreateConditional(condition, armExpression, currentExpression, multiline);
         }
 
         return currentExpression;
     }
 
-    private ExpressionSyntax ReplaceVariableWithCast(ExpressionSyntax expression, DeclarationPatternSyntax declaration,
-        ExpressionSyntax governingExpression)
-    {
-        if (declaration.Designation is SingleVariableDesignationSyntax variableDesignation)
+    private ExpressionSyntax? ConvertPattern(PatternSyntax pattern, ExpressionSyntax governing) =>
+        pattern switch
         {
-            var variableName = variableDesignation.Identifier.ValueText;
+            ConstantPatternSyntax constant => PadBinaryOperator(BinaryExpression(
+                SyntaxKind.EqualsExpression, governing, VisitClean(constant.Expression))),
 
-            var castExpression = ParenthesizedExpression(
-                CastExpression(
-                    declaration.Type,
-                    (ExpressionSyntax)Visit(governingExpression)
-                )
-            );
+            // 'is T' preserves inheritance and handles null, unlike GetType() == typeof(T).
+            DeclarationPatternSyntax declaration => PadBinaryOperator(BinaryExpression(
+                SyntaxKind.IsExpression, governing, declaration.Type)),
 
-            var rewriter = new ParameterSubstitutionRewriter(new Dictionary<string, ExpressionSyntax>
-            {
-                [variableName] = castExpression
-            });
-            return (ExpressionSyntax)rewriter.Visit(expression);
-        }
+            RelationalPatternSyntax relational => ConvertRelationalPattern(relational, governing),
 
-        return expression;
+            ParenthesizedPatternSyntax parenthesized =>
+                ConvertPattern(parenthesized.Pattern, governing),
+
+            BinaryPatternSyntax binary when
+                binary.OperatorToken.IsKind(SyntaxKind.AndKeyword) ||
+                binary.OperatorToken.IsKind(SyntaxKind.OrKeyword) =>
+                ConvertBinaryPattern(binary, governing),
+
+            UnaryPatternSyntax unary when unary.OperatorToken.IsKind(SyntaxKind.NotKeyword) =>
+                ConvertNotPattern(unary, governing),
+
+            DiscardPatternSyntax => LiteralExpression(SyntaxKind.TrueLiteralExpression),
+
+            _ => null
+        };
+
+    private ExpressionSyntax? ConvertBinaryPattern(BinaryPatternSyntax binary, ExpressionSyntax governing)
+    {
+        var left = ConvertPattern(binary.Left, governing);
+        var right = ConvertPattern(binary.Right, governing);
+        if (left is null || right is null)
+            return null;
+
+        var kind = binary.OperatorToken.IsKind(SyntaxKind.AndKeyword)
+            ? SyntaxKind.LogicalAndExpression
+            : SyntaxKind.LogicalOrExpression;
+        return ParenthesizedExpression(PadBinaryOperator(BinaryExpression(kind, left, right)));
+    }
+
+    private ExpressionSyntax? ConvertNotPattern(UnaryPatternSyntax unary, ExpressionSyntax governing)
+    {
+        var operand = ConvertPattern(unary.Pattern, governing);
+        return operand is null ? null
+            : PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, ParenthesizedExpression(operand));
+    }
+
+    private ExpressionSyntax? ConvertRelationalPattern(RelationalPatternSyntax relational, ExpressionSyntax governing)
+    {
+        var kind = relational.OperatorToken.Kind() switch
+        {
+            SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
+            SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
+            SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
+            SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
+            _ => SyntaxKind.None
+        };
+        return kind == SyntaxKind.None ? null
+            : PadBinaryOperator(BinaryExpression(kind, governing, VisitClean(relational.Expression)));
+    }
+
+    private ExpressionSyntax ReplaceVariableWithCast(ExpressionSyntax expression,
+        DeclarationPatternSyntax declaration, ExpressionSyntax governing)
+    {
+        if (declaration.Designation is not SingleVariableDesignationSyntax designation)
+            return expression;
+
+        var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
+        var replacements = new Dictionary<string, ExpressionSyntax>
+        {
+            [designation.Identifier.ValueText] = cast
+        };
+        return (ExpressionSyntax)new ParameterSubstitutionRewriter(replacements).Visit(expression)!;
     }
 
     private ExpressionSyntax VisitClean(ExpressionSyntax expression)
     {
-        var stripped = expression.WithoutTrivia();
-        var rewritten = (ExpressionSyntax?)Visit(stripped);
-        return (rewritten ?? stripped).WithoutTrivia();
+        var rewritten = (ExpressionSyntax?)Visit(expression);
+        return (rewritten ?? expression).WithoutTrivia();
     }
 
     private static ConditionalExpressionSyntax CreateConditional(
-        ExpressionSyntax condition,
-        ExpressionSyntax whenTrue,
-        ExpressionSyntax whenFalse,
-        bool multiline)
+        ExpressionSyntax condition, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, bool multiline)
     {
-        var conditional = ConditionalExpression(condition, whenTrue, whenFalse);
-        var annotationKind = multiline
+        var kind = multiline
             ? GeneratedSyntaxAnnotations.MultilineConditional
             : GeneratedSyntaxAnnotations.SingleLineConditional;
-        return conditional.WithAdditionalAnnotations(new SyntaxAnnotation(annotationKind));
+        return ConditionalExpression(condition, whenTrue, whenFalse)
+            .WithAdditionalAnnotations(new SyntaxAnnotation(kind));
     }
 
     private static BinaryExpressionSyntax PadBinaryOperator(BinaryExpressionSyntax expression)
     {
         var token = expression.OperatorToken;
-        return expression.WithOperatorToken(
-            Token(
-                TriviaList(Space),
-                token.Kind(),
-                TriviaList(Space)));
+        return expression.WithOperatorToken(Token(TriviaList(Space), token.Kind(), TriviaList(Space)));
     }
 }
 
+internal sealed class UnsupportedSwitchPatternInfo(SyntaxNode syntax)
+{
+    public string Text { get; } = syntax.ToString();
+    public Location Location { get; } = syntax.GetLocation();
+}
 #nullable restore
