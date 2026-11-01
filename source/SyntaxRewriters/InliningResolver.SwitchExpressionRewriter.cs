@@ -50,9 +50,9 @@ internal sealed partial class InliningResolver
             // the same identifier text, but never the same ILocalSymbol.
             var hasPatternVariable = arm.Pattern is DeclarationPatternSyntax
             {
-                Designation: SingleVariableDesignationSyntax designation
-            } && CanQuerySemanticModel(designation) &&
-                model.GetDeclaredSymbol(designation) is ILocalSymbol;
+                Designation: SingleVariableDesignationSyntax patternDesignation
+            } && CanQuerySemanticModel(patternDesignation) &&
+                model.GetDeclaredSymbol(patternDesignation) is ILocalSymbol;
             if (hasPatternVariable)
             {
                 var declaration = (DeclarationPatternSyntax)arm.Pattern;
