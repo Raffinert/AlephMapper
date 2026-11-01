@@ -171,14 +171,6 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor UnsafeRepeatedArgument = new(
-        "AM0020",
-        "Inlining would change argument evaluation semantics",
-        "Expression generation for '{0}' skipped: inlining '{1}' would repeat, skip, or reorder potentially effectful argument evaluations",
-        "AlephMapper",
-        DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
     public static DiagnosticDescriptor? GetById(string id) => id switch
     {
         "AM0001" => UpdatableValueTypeReturn,
@@ -200,7 +192,6 @@ public static class DiagnosticDescriptors
         "AM0017" => UnsupportedNullConditionalExpression,
         "AM0018" => AdaptGenericMethodUnsupported,
         "AM0019" => UnsupportedSwitchPattern,
-        "AM0020" => UnsafeRepeatedArgument,
         _ => null
     };
 }
