@@ -1,0 +1,104 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
+namespace AlephMapper.IntegrationTests;
+
+public class SemanticRegressionTests
+{
+    [Test]
+    public async Task Type_patterns_keep_inheritance_and_null_semantics()
+    {
+        var projection = SemanticRegressionMapper.TypeRankExpression().Compile();
+
+        await Assert.That(projection(new SemanticDerived { Score = 7 })).IsEqualTo(7);
+        await Assert.That(projection(new SemanticAnimal { Score = 2 })).IsEqualTo(2);
+        await Assert.That(projection(null)).IsEqualTo(-1);
+        await Assert.That(SemanticRegressionMapper.TypeRank(new SemanticDerived { Score = 7 })).IsEqualTo(7);
+        await Assert.That(SemanticRegressionMapper.TypeRankExpression().ToString()).DoesNotContain("GetType");
+    }
+
+    [Test]
+    public async Task Relational_and_logical_patterns_translate_in_SQLite()
+    {
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var context = new ComprehensiveTestDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var results = await context.Employees
+            .OrderBy(e => e.Id)
+            .Select(SemanticRegressionMapper.GradeExpression())
+            .ToListAsync();
+
+        await Assert.That(results.Count).IsEqualTo(6);
+        await Assert.That(results[0]).IsEqualTo(SemanticRegressionMapper.Grade(new Employee { Id = 1 }));
+        await Assert.That(results[3]).IsEqualTo(SemanticRegressionMapper.Grade(new Employee { Id = 4 }));
+    }
+
+    [Test]
+    public async Task Parameter_substitution_uses_symbols_not_member_names()
+    {
+        var model = new SemanticInput { Name = "Ada", Count = 3 };
+        var generated = SemanticRegressionMapper.NameCollisionExpression().Compile()(model);
+        var original = SemanticRegressionMapper.NameCollision(model);
+
+        await Assert.That(generated).IsEqualTo(original);
+        await Assert.That(generated).IsEqualTo("Ada/Ada");
+    }
+
+    [Test]
+    public async Task Inlining_preserves_parentheses_and_operator_precedence()
+    {
+        var model = new SemanticInput { Count = 3 };
+        var generated = SemanticRegressionMapper.ArithmeticExpression().Compile()(model);
+
+        await Assert.That(generated).IsEqualTo(SemanticRegressionMapper.Arithmetic(model));
+        await Assert.That(generated).IsEqualTo(8);
+    }
+}
+
+public class SemanticAnimal
+{
+    public int Score { get; set; }
+}
+
+public sealed class SemanticDerived : SemanticAnimal { }
+
+public sealed class SemanticInput
+{
+    public string Name { get; set; } = "";
+    public int Count { get; set; }
+}
+
+public static partial class SemanticRegressionMapper
+{
+    [Projectable]
+    public static int TypeRank(SemanticAnimal? animal) => animal switch
+    {
+        SemanticDerived derived when derived.Score > 3 => derived.Score,
+        SemanticAnimal other => other.Score,
+        _ => -1
+    };
+
+    [Projectable]
+    public static string Grade(Employee employee) => employee.Id switch
+    {
+        >= 4 and <= 5 => "HIGH",
+        > 0 => "LOW",
+        _ => "ZERO"
+    };
+
+    [Projectable]
+    public static string NameCollision(SemanticInput model) => Join(model, model.Name);
+
+    private static string Join(SemanticInput person, string Name) => person.Name + "/" + Name;
+
+    [Projectable]
+    public static int Arithmetic(SemanticInput model) => Twice(model.Count + 1);
+
+    private static int Twice(int number) => number * 2;
+}
