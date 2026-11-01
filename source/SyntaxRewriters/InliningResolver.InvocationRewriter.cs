@@ -89,7 +89,8 @@ internal sealed partial class InliningResolver(
             var value = replacement.WithoutTrivia();
             if (value is not (IdentifierNameSyntax or MemberAccessExpressionSyntax or
                 ElementAccessExpressionSyntax or InvocationExpressionSyntax or
-                LiteralExpressionSyntax or ThisExpressionSyntax or BaseExpressionSyntax))
+                LiteralExpressionSyntax or ThisExpressionSyntax or BaseExpressionSyntax or
+                ParenthesizedExpressionSyntax))
                 value = ParenthesizedExpression(value);
             return value.WithTriviaFrom(node);
         }
