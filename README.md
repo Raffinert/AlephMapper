@@ -174,6 +174,25 @@ Use the original method in memory:
 var person = PersonMapper.MapPerson(employee);
 ```
 
+## Switch expressions: evaluation semantics
+
+AlephMapper lowers supported C# `switch` expressions to nested conditional
+expressions so they can appear in LINQ expression trees. This deliberately
+matches the conditional-lowering behavior of ExpressiveSharp.
+
+**Important:** the input to a C# `switch` is ordinarily evaluated once, but
+lowering to conditional comparisons can evaluate the input **more than once**
+(for example, `source.Code.ToLower() switch { "a" => ..., "b" => ..., _ => ... }`).
+The generator does **not** reject these repeated input evaluations via
+`AM0019`. Prefer stable, side-effect-free expressions as switch inputs,
+especially for queries and methods with mutable state. EF Core translation
+depends on the provider.
+
+`AM0019` still prevents expression generation for unsupported or
+non-exhaustive patterns, including cases whose comparison semantics cannot
+be lowered correctly. `AM0020` separately guards unsafe argument evaluation
+introduced by helper inlining.
+
 ## Composing mappings and predicates
 
 Supported expression-bodied methods can call other mapping or helper methods. AlephMapper substitutes their arguments and expands their bodies into the generated expression:
