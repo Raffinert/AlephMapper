@@ -127,6 +127,88 @@ public class SemanticSafetyGeneratorTests
 
 
     [Test]
+    public async Task Boxed_object_relational_pattern_reports_AM0019()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(object value) => value switch
+                {
+                    > 0 => 1,
+                    _ => 0
+                };
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+    }
+
+    [Test]
+    public async Task NaN_constant_pattern_reports_AM0019_instead_of_wrong_not_pattern()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(double value) => value switch
+                {
+                    not double.NaN => 1,
+                    _ => 0
+                };
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+    }
+
+    [Test]
+    public async Task Mutually_exclusive_parameter_reads_do_not_trigger_AM0020()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(bool flag) => Choose(flag, Next());
+                private static int Choose(bool flag, int value) => flag ? value : value;
+                private static int Next() { return System.Random.Shared.Next(); }
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s =>
+            s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Reordered_effectful_arguments_report_AM0020()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => value switch
+                {
+                    1 => Subtract(Next(), Next()),
+                    _ => 0
+                };
+                private static int Subtract(int left, int right) => right - left;
+                private static int Next() { return System.Random.Shared.Next(); }
+            }
+            """;
+
+        var result = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
+    }
+
+    [Test]
     public async Task Update_only_adaptation_preserves_non_exhaustive_switch()
     {
         const string source = """
