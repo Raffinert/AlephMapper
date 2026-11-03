@@ -50,8 +50,6 @@ public class SemanticRegressionTests
         await Assert.That(generated).IsEqualTo("Ada/Ada");
     }
 
-
-
     [Test]
     public async Task Conditional_indexer_substitutes_inlined_index_parameter()
     {
