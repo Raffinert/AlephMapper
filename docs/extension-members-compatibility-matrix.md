@@ -1,8 +1,9 @@
 # Extension member compatibility matrix
 
-Scope: readable source-generated projection/inlining for C#14 instance extension
-methods and getter-only expression properties. Factories are static methods in the
-outer partial class. This is not full ExpressiveSharp parity.
+Scope: readable source-generated projection/inlining for C# 14 instance extension
+methods and getter-only expression properties, plus update/adaptation companions
+for instance methods. Generated companions are static members of the outer partial
+class. Extension properties remain projection-only. This is not full ExpressiveSharp parity.
 
 Evidence: [generator tests](../tests/AlephMapper.Tests/ExtensionMemberTests.cs),
 [runtime and SQLite tests](../tests/AlephMapper.IntegrationTests/ExtensionMembersParityTests.cs).
@@ -33,7 +34,11 @@ Evidence: [generator tests](../tests/AlephMapper.Tests/ExtensionMemberTests.cs),
 | Partial files, class/member attributes, repeat run | One deterministic file | Pass | N/A | N/A | Extension_members_in_partial_files_generate_once_and_deterministically |
 | Method/property cycles | Terminate safely | Pass | N/A | N/A | AM0002; Extension_member_cycles_terminate_with_diagnostic |
 | Missing partial outer class | No invalid partial source | Pass | N/A | N/A | AM0021; Missing_partial_outer_class_has_actionable_diagnostic |
-| Direct Updatable / Adapt extension request | Projection only, diagnostic for unsupported request | Pass | N/A | N/A | AM0021; direct Updatable regression, ordinary Update/Adapt suite retained |
+| `[Updatable]` on instance extension method returning reference DTO | `Map(receiver, ..., dest)` | Covered | Covered | N/A | CSharp14_extension_method_generates_projection_update_and_adapted_companions; CSharp14_extension_update_and_adapt_companions_preserve_destinations |
+| `[Adapt]` on instance extension method | `MapOther(receiver, ...)`, `MapOtherExpression(...)`, optional `MapOther(receiver, ..., dest)` | Covered | Covered | N/A | Same tests; type and member rebinding follows classic Adapt validation |
+| Projectable extension method used with SQLite | `MapExpression(...)` | Covered | Covered | Covered | CSharp14_projection_executes_in_SQLite |
+| `[Updatable]` on scalar/value-type return | No update companion; AM0001 | Covered | N/A | N/A | Unsupported_scalar_extension_update_reports_value_type_diagnostic |
+| Computed extension property | Projection-only; update/adaptation not accepted | As designed | N/A | N/A | `[Updatable]` and `[Adapt]` attribute targets exclude properties |
 | Generic blocks/methods | No assumed generic substitution | Pass method fixture | N/A | N/A | AM0021 |
 | Optional/params/ref args, ref-like receiver, ref returns | Explicit unsupported reason | Tested optional | N/A | N/A | AM0021; remaining shapes symbol-validated, no exhaustive test claim |
 | Block/accessor bodies, static extension members | Skip affected companion | Pass | N/A | N/A | AM0021; unsupported-member matrix |

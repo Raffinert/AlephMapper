@@ -26,6 +26,11 @@ await db.SaveChangesAsync();
 
 Use positional arguments: the current generator calls its destination parameter `dest`. The original one-argument `Map(request)` still creates a mapped value. Review nested reference and null semantics in the generated code; this is **not** EF `ExecuteUpdate`, a bulk SQL update, or an automatic patch engine.
 
+C# 14 instance extension methods also support `[Updatable]` (Roslyn 5.0+).
+The generated static overload treats the extension receiver as the source and
+uses `dest` as its final parameter. Getter-only extension properties remain
+projection-only.
+
 Collections are skipped by default. Opt into `[Updatable(CollectionProperties = CollectionPropertiesPolicy.Update)]` only if collection mutation is genuinely required. Test tracked EF relationships and side effects before enabling it. Updating a non-nullable value-type destination produces diagnostic `AM0001` rather than useful update-in-place semantics.
 
 ## Null conditional policy for generated expressions

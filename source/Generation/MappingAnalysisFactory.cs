@@ -92,8 +92,10 @@ internal static class MappingAnalysisFactory
         return new MappingAnalysis(outer, method, member.Name,
             new[] { receiver }.Concat(method.Parameters).ToArray(), method.ReturnType, body, model,
             SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) || SymbolHelpers.HasAttribute(outer, typeof(ProjectableAttribute).FullName),
-            false, GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
-            CollectionPropertiesPolicy.Skip, ExtractUsingDirectives(syntax), [], member, receiver);
+            member is IMethodSymbol && SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName),
+            GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
+            member is IMethodSymbol ? GetCollectionPropertiesPolicy(member) ?? CollectionPropertiesPolicy.Skip : CollectionPropertiesPolicy.Skip,
+            ExtractUsingDirectives(syntax), member is IMethodSymbol ? GetAdaptations(method) : [], member, receiver);
     }
 
     private static bool HasAttribute(INamedTypeSymbol classSymbol, IMethodSymbol methodSymbol, string attributeName)

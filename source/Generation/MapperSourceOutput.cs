@@ -276,12 +276,12 @@ internal static class MapperSourceOutput
         foreach (var extensionType in mapperType.GetTypeMembers().Where(RoslynCompatibility.IsExtensionType))
         foreach (var member in extensionType.GetMembers().Where(s => s is IPropertySymbol || s is IMethodSymbol { MethodKind: MethodKind.Ordinary }))
         {
-            var unsupportedRequest = SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
-                SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName);
-            if (!unsupportedRequest && !SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) &&
-                !SymbolHelpers.HasAttribute(mapperType, typeof(ProjectableAttribute).FullName)) continue;
-            var reason = unsupportedRequest ? "extension members support Projectable only; Updatable and Adapt requests are unsupported" :
-                MappingAnalysisFactory.ExtensionUnsupportedReason(member);
+            var requested = SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(mapperType, typeof(ProjectableAttribute).FullName);
+            if (!requested) continue;
+            var reason = MappingAnalysisFactory.ExtensionUnsupportedReason(member);
             if (reason is not null) context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsupportedExtensionMember, member.Locations.FirstOrDefault(), member.Name, reason));
         }

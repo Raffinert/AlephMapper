@@ -28,13 +28,18 @@ var rows = await db.Employees
     .ToListAsync();
 ~~~
 
+C# 14 instance extension methods can also declare `[Adapt]`. The generated
+map, projection, and optional update are static methods of the outer partial class;
+the extension receiver is substituted with the requested adapted source type.
+Computed extension properties are projection-only. C# 14 requires Roslyn 5.0+.
+
 Here `Employee` and `EmployeeDto` must expose the members actually used by the template, with compatible construction and assignments. `Name` is mandatory when `Generate` includes `Expression`. Default flags are `Map | Expression`; explicitly add `Update` when wanted. Extra mapping parameters are preserved; check generated factory signatures. Adaptation of generic mapping methods is unsupported (`AM0018`). See repository `docs/Adapt-Attribute.md` for detailed validation constraints.
 
 ## Diagnostic-led troubleshooting
 
 | Symptom | First things to check |
 |---|---|
-| Missing generated companion | `static partial` containing class, `static` expression-bodied method, source argument, applied method/class attribute, installed analyzer and compiler compatibility |
+| Missing generated companion | `static partial` containing class; classic `static` expression-bodied method or supported C# 14 instance extension member; appropriate attributes, source receiver, installed analyzer and compiler compatibility |
 | Generated query fails EF translation | Inspect `MapExpression()`'s generated expression; verify provider support. This is distinct from C# compilation. |
 | Missing adapted member | `AM0005`–`AM0015`: inspect explicitly requested types, accessed source-member paths, destination writable members, constructor compatibility, generated name/signature conflicts and `Name` requirements |
 | Helper recursion or unsupported conditional receiver | `AM0002`, `AM0003`, `AM0013` for circular composition; `AM0016` for unsafe null-conditional receiver; `AM0017` for unsupported null-conditional policy |

@@ -8,7 +8,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.1.0")]
 partial class NullableDisabledMapper
 {
     /// <summary>
