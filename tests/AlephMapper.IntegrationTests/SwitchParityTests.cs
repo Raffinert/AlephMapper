@@ -59,6 +59,13 @@ public class SwitchParityTests
     }
 
     [Test]
+    public async Task Inlined_lambda_argument_keeps_its_conversion_boundary()
+    {
+        await Assert.That(SwitchParityMapper.LambdaExpression().Compile()(3)).IsEqualTo(SwitchParityMapper.Lambda(3));
+        await Assert.That(SwitchParityMapper.Lambda(3)).IsEqualTo(4);
+    }
+
+    [Test]
     public async Task Record_patterns_match_original()
     {
         foreach (var sample in new SwitchPoint?[] { null, new(0, 0), new(2, 3), new(-1, 3), new(3, -1) })
@@ -136,6 +143,8 @@ public static partial class SwitchParityMapper
         { [.., var last] when last > 0 => last, _ => -1 };
     [Projectable] public static int List(List<int>? value) => value switch
         { [] => 0, [var first, .., var last] when first > 0 => first + last, _ => -1 };
+    [Projectable] public static int Lambda(int value) => Apply(value, x => x + 1);
+    private static int Apply(int value, Func<int, int> f) => f(value);
     [Projectable] public static int HiddenPath(SwitchDog value) => BaseChild(value);
     private static int BaseChild(SwitchNode value) => value.Child switch { { Score: 1 } => 1, _ => 0 };
     [Projectable] public static int HiddenMember(SwitchDog value) => BaseProperty(value);

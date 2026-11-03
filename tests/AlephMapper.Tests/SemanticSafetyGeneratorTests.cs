@@ -343,6 +343,15 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
+    [Test]
+    public async Task Inlined_lambda_argument_conversion_is_parenthesized()
+    {
+        const string source = "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => Apply(value, x => x + 1); private static int Apply(int value, System.Func<int,int> f) => f(value); }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
     private static async Task<(GeneratorRunResult Result, Compilation Output)> GenerateAndCompile(string source)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);

@@ -350,7 +350,7 @@ internal sealed partial class InliningResolver(
         var converted = expectedType ?? info.ConvertedType;
         if (converted is null || SymbolEqualityComparer.Default.Equals(info.Type, converted)) return rewritten;
         return ParenthesizedExpression(CastExpression(ParseTypeName(TypeDisplay.ForSymbol(
-            converted, converted.NullableAnnotation, nullablePolicy)), ParenthesizeCompositeExpression(rewritten)));
+            converted, converted.NullableAnnotation, nullablePolicy)), ParenthesizedExpression(rewritten)));
     }
 
     private bool TryBuildParameterSubstitutions(
