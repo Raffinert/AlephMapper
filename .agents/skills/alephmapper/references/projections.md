@@ -48,8 +48,8 @@ This is useful for statically known business rules. Do not use it as a substitut
 
 ## Inlining and collection mappings
 
-- Supported static expression-bodied helper and traditional `this` extension method calls can be inlined.
+- Supported static expression-bodied helpers, traditional `this` extension methods, and C# 14 extension-block instance methods/getter-only expression properties can be inlined (C# 14 requires Roslyn 5.0+).
 - `source.Addresses.Select(AddressMapper.ToDto).ToList()` is an available composition pattern when the mapper helper is suitable for inlining; inspect generated output and execute a provider test.
-- Never assume arbitrary methods, modern extension blocks, recursion, or unsupported C# syntax can be represented in an expression tree.
+- Never assume arbitrary methods, unsupported extension-member forms (such as generic or block-bodied members), recursion, or unsupported C# syntax can be represented in an expression tree. See the [extension compatibility matrix](https://github.com/Raffinert/AlephMapper/blob/main/docs/extension-members-compatibility-matrix.md).
 - Do not rely on `Include` to repair a projection: verify navigation translation against the chosen EF Core provider.
 - Validate observed rows and meaningful SQL behavior with SQLite/SQL Server tests, not just `IEnumerable` tests.

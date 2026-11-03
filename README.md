@@ -121,7 +121,7 @@ public static PersonDto Map(Person person) => new();
 
 ## Quick start
 
-Mapping methods must be `static`, expression-bodied, and declared in a `static partial` class.
+Classic mapping methods must be `static`, expression-bodied, and declared in a `static partial` class. Supported C# 14 extension methods and getter-only expression-bodied extension properties use [extension blocks](#c-14-extension-members) inside a `static partial` class.
 
 Add `using AlephMapper;`, then apply `[Projectable]` to a mapping method or its containing class:
 
@@ -484,8 +484,6 @@ This transformation is not applied automatically to regular method calls. `MapAd
 
 Apply `?.` only at genuinely nullable boundaries. Once inside the non-null extension mapping, access the receiver normally. A receiver must be a stable member-access path. Expression generation is skipped with diagnostic `AM0016` when rewriting a receiver such as `GetAddress()?.ToDto()` could evaluate it more than once.
 
-Modern C# extension blocks are not currently supported.
-
 ## Null handling
 
 C# null-conditional access (`?.`) is not directly supported in expression trees. Configure its treatment with `NullConditionalRewrite`:
@@ -532,12 +530,12 @@ public static partial class PersonMapper
 Generated shape:
 
 ```csharp
-public static Person Map(PersonUpdateDto source, Person target)
+public static Person Map(PersonUpdateDto source, Person dest)
 {
-    target.FirstName = source.FirstName;
-    target.LastName = source.LastName;
-    target.Email = source.Email;
-    return target;
+    dest.FirstName = source.FirstName;
+    dest.LastName = source.LastName;
+    dest.Email = source.Email;
+    return dest;
 }
 ```
 
@@ -615,7 +613,7 @@ Adaptation is explicit: AlephMapper does not scan for compatible types. Invalid 
 | Attribute | Generated member |
 | --- | --- |
 | `[Projectable]` | `<MethodName>Expression(...)` returning `Expression<Func<TSource, TDestination>>` |
-| `[Updatable]` | An overload with a final destination parameter named `target` |
+| `[Updatable]` | An overload with a final destination parameter named `dest` |
 | `[Adapt]` | The requested adapted map, expression, and/or update members |
 
 Attributes can be applied to individual methods. `[Projectable]` and `[Updatable]` can also be applied to the containing class.
@@ -643,7 +641,7 @@ Inspect generated code to confirm method inlining, null handling, adapted member
 
 ### A generated method is missing
 
-Confirm that the mapper class is `static partial`, the method is `static` and expression-bodied, and the appropriate attribute is applied to the method or class. For `[Adapt]`, check the explicit source/destination types and provide `Name` when generating an expression.
+For a classic mapping, confirm that the mapper class is `static partial`, the method is `static` and expression-bodied, and the appropriate attribute is applied to the method or class. For C# 14 extension members, use a `static partial` outer class, a supported instance method or expression-bodied getter-only property, and a C# 14 / Roslyn 5.0+ compiler; unsupported shapes report `AM0021`. For `[Adapt]`, check the explicit source/destination types and provide `Name` when generating an expression.
 
 ### EF Core cannot translate a generated expression
 
@@ -651,7 +649,7 @@ AlephMapper generates an expression tree; EF Core and its database provider tran
 
 ### A helper or extension method was not inlined
 
-The method must be visible in the current compilation and use a supported expression-bodied shape. Extension methods must use the traditional `this` parameter syntax. Circular helper calls report `AM0002` or `AM0003` and skip the affected generation.
+The method must be visible in the current compilation and use a supported expression-bodied shape. Both traditional `this` extension methods and [supported C# 14 extension members](#c-14-extension-members) can be expanded; unsupported C# 14 forms report `AM0021`. Circular helper calls report `AM0002` or `AM0003` and skip the affected generation.
 
 ### `?.` causes a `NullReferenceException`
 
