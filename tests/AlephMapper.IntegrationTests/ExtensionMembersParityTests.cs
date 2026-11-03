@@ -79,6 +79,18 @@ public class ExtensionMembersParityTests
     }
 
     [Test]
+    public async Task Shared_expansion_preserves_classic_bindings_and_method_group_return_conversion()
+    {
+        await Assert.That(ExtensionReviewMapper.MixedNamedExpression().Compile()(10)).IsEqualTo(8);
+        await Assert.That(ExtensionReviewMapper.MixedNamedExpression().ToString()).DoesNotContain("Subtract");
+        await Assert.That(ExtensionReviewMapper.MixedClassicExpression().Compile()(10)).IsEqualTo(15);
+        await Assert.That(ExtensionReviewMapper.MixedClassicExpression().ToString()).DoesNotContain("Plus");
+        var input = new[] { 16777217 };
+        await Assert.That(ExtensionReviewMapper.RoundedGroupExpression().Compile()(input))
+            .IsEquivalentTo(ExtensionReviewMapper.RoundedGroup(input));
+    }
+
+    [Test]
     public async Task CSharp14_projection_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -163,6 +175,12 @@ public static partial class ExtensionReviewMapper
     [Projectable] public static int GenericDependency(int n) => n.WithGenericOffset;
     [Projectable] public static int ClassicName(int[] values) => ClassicHelper(values.Length);
     private static int ClassicHelper(int n) => new[] { 1 }.Sum(Length => n + nameof(Length).Length);
+    [Projectable] public static int MixedNamed(int value) => Subtract(left: value, 2);
+    private static int Subtract(int left, int right) => left-right;
+    [Projectable] public static int MixedClassic(int value) => value.Plus(left: 7, 2);
+    private static int Plus(this int value, int left, int right) => value+left-right;
+    [Projectable] public static double[] RoundedGroup(int[] values) => values.Select(Narrow).Select(value => (double)value).ToArray();
+    private static float Narrow(int value) => value;
     [Projectable] public static string RootName(ExtensionOrder order) => nameof(order.Amount);
     [Projectable] public static int AnonymousName(int[] values) => AnonymousHelper(values.Length);
     private static int AnonymousHelper(int n) => new[] { 1 }.Select(Length => new { Length, Value = n }).Sum(v => v.Length + v.Value);

@@ -24,7 +24,7 @@ internal partial class InliningResolver
             {
                 if (!forUpdateMethod)
                 {
-                    _unsupportedNullConditionals.Add(new UnsupportedNullConditionalInfo(node));
+                    _context.UnsupportedNullConditionals.Add(new UnsupportedNullConditionalInfo(node));
                 }
 
                 _conditionalAccessExpressionsStack.Push(node.Expression);
@@ -38,7 +38,7 @@ internal partial class InliningResolver
             if (rewriteSupport == NullConditionalRewrite.Rewrite &&
                 !CanSafelyRepeat(targetExpression))
             {
-                _unsafeConditionalReceivers.Add(new UnsafeConditionalReceiverInfo(node.Expression));
+                _context.UnsafeConditionalReceivers.Add(new UnsafeConditionalReceiverInfo(node.Expression));
             }
 
             _conditionalAccessExpressionsStack.Push(targetExpression);

@@ -231,6 +231,10 @@ selected. The old single-5.0 package was reproduced failing on 4.14 with CS9057.
 The new package runs classic net8 consumers under 4.x and extension projections
 under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
 
+Mapper classes must be `static partial`. `AM0022` skips a classic mapper with an invalid declaration.
+`AM0023` skips a classic expression companion that conflicts with an existing member.
+Companion overload checks distinguish nullable value types such as `int` and `int?`, while ignoring nullable reference annotations.
+
 `AM0021` explains unsupported extension forms and skips the affected companion:
 generic blocks/methods, block/accessor bodies, query syntax (use LINQ method
 syntax), bound extension method groups (use an explicit lambda), static members,

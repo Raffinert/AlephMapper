@@ -1,64 +1,25 @@
 #nullable enable
+
 using System.Collections.Generic;
-using System.Linq;
 using AlephMapper.Generation;
 using AlephMapper.Helpers;
 using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Operations;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AlephMapper.SyntaxRewriters;
 
 internal sealed partial class InliningResolver
 {
-    private static ExpressionSyntax ExtensionConstant(IFieldSymbol field)
-    {
-        ExpressionSyntax value = field.ConstantValue switch
-        {
-            null => LiteralExpression(SyntaxKind.NullLiteralExpression),
-            string text => LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(text)),
-            char character => LiteralExpression(SyntaxKind.CharacterLiteralExpression, Literal(character)),
-            bool boolean => LiteralExpression(boolean ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression),
-            float number when float.IsNaN(number) || float.IsInfinity(number) => ParseExpression(
-                "global::System.Single." + (float.IsNaN(number) ? "NaN" : number > 0 ? "PositiveInfinity" : "NegativeInfinity")),
-            double number when double.IsNaN(number) || double.IsInfinity(number) => ParseExpression(
-                "global::System.Double." + (double.IsNaN(number) ? "NaN" : number > 0 ? "PositiveInfinity" : "NegativeInfinity")),
-            float number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
-            double number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
-            decimal number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
-            _ => ParseExpression(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(
-                field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false)!)
-        };
-        return ParenthesizedExpression(CastExpression(ParseTypeName(field.Type.ToDisplayString(
-            SymbolDisplayFormat.FullyQualifiedFormat)), ParenthesizedExpression(value)));
-    }
-
     private SyntaxNode RewriteExtensionCall(InvocationExpressionSyntax node, IMethodSymbol method)
     {
         if (node.Parent is ConditionalAccessExpressionSyntax && rewriteSupport == NullConditionalRewrite.None)
             return node;
         if (!catalog.TryGetValue(method, out var mapping)) return UnsupportedExtension(node, method);
-        ExpressionSyntax? receiver = node.Expression is MemberAccessExpressionSyntax access ? access.Expression : null;
-        var alreadyVisited = false;
-        if (node.Expression is MemberBindingExpressionSyntax && _conditionalAccessExpressionsStack.Count > 0)
-        {
-            receiver = _conditionalAccessExpressionsStack.Peek();
-            alreadyVisited = true;
-        }
-        if (receiver is null) return UnsupportedExtension(node, method);
-        var substitutions = BindExtensionReceiver(mapping, receiver, alreadyVisited);
-        foreach (var argument in node.ArgumentList.Arguments)
-        {
-            if (model.GetOperation(argument) is not IArgumentOperation { Parameter: { } boundParameter } ||
-                boundParameter.Ordinal >= mapping.MethodSymbol.Parameters.Length)
-                return UnsupportedExtension(node, method);
-            var parameter = mapping.MethodSymbol.Parameters[boundParameter.Ordinal];
-            substitutions[parameter] = PreserveArgumentConversion(argument.Expression, (ExpressionSyntax)Visit(argument.Expression)!);
-        }
-        if (substitutions.Count != mapping.Parameters.Count) return UnsupportedExtension(node, method);
+        if (!TryBindCallArguments(node, method, mapping, out var substitutions, out _))
+            return UnsupportedExtension(node, method);
         return ExpandExtension(node, mapping, substitutions);
     }
 
@@ -72,57 +33,23 @@ internal sealed partial class InliningResolver
     private Dictionary<IParameterSymbol, ExpressionSyntax> BindExtensionReceiver(MappingAnalysis mapping,
         ExpressionSyntax receiver, bool alreadyVisited)
     {
-        var rewritten = alreadyVisited ? receiver : (ExpressionSyntax)Visit(receiver)!;
-        if (alreadyVisited)
-            rewritten = ParenthesizedExpression(CastExpression(ParseTypeName(TypeDisplay.ForSymbol(
-                mapping.ReceiverSymbol.Type, mapping.ReceiverSymbol.NullableAnnotation, nullablePolicy)),
-                ParenthesizedExpression(rewritten)));
         return new Dictionary<IParameterSymbol, ExpressionSyntax>(SymbolEqualityComparer.Default)
         {
-            [mapping.ReceiverSymbol] = PreserveArgumentConversion(alreadyVisited ? null : receiver, rewritten, mapping.ReceiverSymbol.Type)
+            [mapping.ReceiverSymbol] = BindReceiver(receiver, alreadyVisited, mapping.ReceiverSymbol.Type)
         };
     }
 
     private SyntaxNode UnsupportedExtension(SyntaxNode original, ISymbol member)
     {
-        _unsupportedExtensions.Add((member, MappingAnalysisFactory.ExtensionUnsupportedReason(member) ?? "the receiver or arguments could not be bound to a source expression body"));
+        _context.UnsupportedExtensions.Add((member, MappingAnalysisFactory.ExtensionUnsupportedReason(member) ?? "the receiver or arguments could not be bound to a source expression body"));
         return original;
     }
 
     private SyntaxNode ExpandExtension(SyntaxNode original, MappingAnalysis mapping,
         IReadOnlyDictionary<IParameterSymbol, ExpressionSyntax> substitutions)
     {
-        var token = SymbolHelpers.Normalize(mapping.MethodSymbol);
-        if (IsCircularReference(token))
-        {
-            RecordCircularReference(token);
-            return original;
-        }
-        _callStack.Add(token);
-        try
-        {
-            _inlinedMethods[token] = mapping;
-            var resolver = new InliningResolver(mapping.SemanticModel, catalog, forUpdateMethod, rewriteSupport,
-                nullablePolicy, mapping.ReturnType, substitutions)
-            {
-                _callStack = _callStack,
-                _circularReferences = _circularReferences,
-                _inlinedMethods = _inlinedMethods,
-                _unsafeConditionalReceivers = _unsafeConditionalReceivers,
-                _unsupportedNullConditionals = _unsupportedNullConditionals,
-                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                _unsupportedExtensions = _unsupportedExtensions,
-                _extensionExpansion = true,
-                _outputType = _outputType
-            };
-            var body = (ExpressionSyntax)resolver.Visit(mapping.BodySyntax.Expression)!;
-            var info = mapping.SemanticModel.GetTypeInfo(mapping.BodySyntax.Expression);
-            if (!SymbolEqualityComparer.Default.Equals(info.Type, mapping.ReturnType))
-                body = CastExpression(ParseTypeName(TypeDisplay.ForSymbol(mapping.ReturnType,
-                    mapping.ReturnType.NullableAnnotation, nullablePolicy)), ParenthesizedExpression(body));
-            // Both methods and properties are primary expressions at the call site.
-            return ParenthesizedExpression(body.WithoutTrivia()).WithTriviaFrom(original);
-        }
-        finally { _callStack.Remove(token); }
+        if (!TryExpandBody(mapping, substitutions, out var body, extensionExpansion: true)) return original;
+        body = PreserveReturnConversion(mapping, body, includeUntyped: true);
+        return ParenthesizedExpression(body).WithTriviaFrom(original);
     }
 }

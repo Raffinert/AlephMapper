@@ -26,7 +26,7 @@ internal sealed partial class InliningResolver
             node.Arms[node.Arms.Count - 1].Pattern is not DiscardPatternSyntax ||
             node.Arms[node.Arms.Count - 1].WhenClause is not null)
         {
-            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
+            _context.UnsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
             return node;
         }
 
@@ -47,7 +47,7 @@ internal sealed partial class InliningResolver
             var lowered = LowerPattern(arm.Pattern, governing);
             if (lowered is null)
             {
-                _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(arm.Pattern));
+                _context.UnsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(arm.Pattern));
                 return node;
             }
 
@@ -104,7 +104,7 @@ internal sealed partial class InliningResolver
         // Captures used outside the pattern need a wider lexical binding scope.
         if (lowered is null || lowered.Bindings.Count != 0)
         {
-            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node.Pattern));
+            _context.UnsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node.Pattern));
             return node;
         }
         return ParenthesizeCompositeExpression(lowered.Condition);
@@ -112,7 +112,7 @@ internal sealed partial class InliningResolver
 
     public override SyntaxNode? VisitThrowExpression(ThrowExpressionSyntax node)
     {
-        if (!forUpdateMethod) _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
+        if (!forUpdateMethod) _context.UnsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
         return base.VisitThrowExpression(node);
     }
 

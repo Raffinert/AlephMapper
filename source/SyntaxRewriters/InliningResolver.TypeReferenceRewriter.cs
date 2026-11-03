@@ -70,16 +70,9 @@ internal sealed partial class InliningResolver
             .ToList();
         rewritten = rewritten.WithTypeArgumentList(rewritten.TypeArgumentList.WithArguments(
             Microsoft.CodeAnalysis.CSharp.SyntaxFactory.SeparatedList(typeArguments)));
-        if (_extensionExpansion && CanQuerySemanticModel(node) &&
-            model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsStatic: true } method &&
-            !(node.Parent is MemberAccessExpressionSyntax access && access.Name == node))
-        {
-            if (_outputType is not null && !model.Compilation.IsSymbolAccessibleWithin(method, _outputType))
-                _unsupportedExtensions.Add((method, "an expanded body references an inaccessible member"));
-            return Microsoft.CodeAnalysis.CSharp.SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseName(method.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                rewritten).WithTriviaFrom(node);
-        }
+        var symbol = CanQuerySemanticModel(node) ? model.GetSymbolInfo(node).Symbol : null;
+        if (TryRewriteExpandedName(node, rewritten, symbol, out var expandedReference))
+            return expandedReference;
         return rewritten;
     }
 
