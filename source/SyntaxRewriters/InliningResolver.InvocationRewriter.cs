@@ -36,7 +36,7 @@ internal sealed partial class InliningResolver(
         {
             var symbol = model.GetEnclosingSymbol(node.SpanStart);
             _outputType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
-            if (_outputType?.IsExtension == true) _outputType = _outputType.ContainingType;
+            if (_outputType is not null && RoslynCompatibility.IsExtensionType(_outputType)) _outputType = _outputType.ContainingType;
         }
         return base.Visit(node);
     }
@@ -219,7 +219,7 @@ internal sealed partial class InliningResolver(
             return base.VisitInvocationExpression(node);
         }
 
-        if (invokedMethod.ContainingType.IsExtension)
+        if (RoslynCompatibility.IsExtensionType(invokedMethod.ContainingType))
             return RewriteExtensionCall(node, invokedMethod);
 
         var args = node.ArgumentList.Arguments;
@@ -231,7 +231,7 @@ internal sealed partial class InliningResolver(
             or AliasQualifiedNameSyntax)
         {
             var methodGroup = ResolveMethodGroupSymbol(firstArgExpression);
-            if (methodGroup?.ContainingType.IsExtension == true)
+            if (methodGroup is not null && RoslynCompatibility.IsExtensionType(methodGroup.ContainingType))
             {
                 _unsupportedExtensions.Add((methodGroup, "bound extension method groups are not supported; use an explicit expression lambda"));
                 return node;

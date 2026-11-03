@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="source/AlephMapper.csproj" />
+  <Project Path="source/Roslyn4/AlephMapper.Roslyn4.csproj" />
   <Folder Name="/examples/">
     <Project Path="examples/SampleApp/SampleApp.csproj" />
   </Folder>

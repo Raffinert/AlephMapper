@@ -57,7 +57,7 @@ internal static class MappingAnalysisFactory
     internal static string? ExtensionUnsupportedReason(ISymbol member, bool requirePartial = true)
     {
         var type = member.ContainingType;
-        var receiver = type.ExtensionParameter;
+        var receiver = RoslynCompatibility.GetExtensionReceiver(type);
         if (member.IsStatic || receiver is null) return "static members or unnamed receivers are unsupported";
         if (type.TypeParameters.Length != 0 || member is IMethodSymbol { IsGenericMethod: true })
             return "generic extension blocks and methods are not supported yet";
@@ -84,10 +84,10 @@ internal static class MappingAnalysisFactory
 
     internal static MappingAnalysis? CreateExtension(SemanticModel model, SyntaxNode syntax, CancellationToken token)
     {
-        if (syntax.Parent is not ExtensionBlockDeclarationSyntax || model.GetDeclaredSymbol(syntax, token) is not { } member ||
+        if (!RoslynCompatibility.IsExtensionMember(syntax) || model.GetDeclaredSymbol(syntax, token) is not { } member ||
             ExtensionUnsupportedReason(member, SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
                 SymbolHelpers.HasAttribute(member.ContainingType.ContainingType, typeof(ProjectableAttribute).FullName)) is not null) return null;
-        var receiver = member.ContainingType.ExtensionParameter!;
+        var receiver = RoslynCompatibility.GetExtensionReceiver(member.ContainingType)!;
         var outer = member.ContainingType.ContainingType;
         var method = member as IMethodSymbol ?? ((IPropertySymbol)member).GetMethod!;
         var body = syntax is MethodDeclarationSyntax m ? m.ExpressionBody! : ((PropertyDeclarationSyntax)syntax).ExpressionBody!;

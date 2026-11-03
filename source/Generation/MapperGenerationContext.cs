@@ -25,7 +25,7 @@ internal sealed class MapperGenerationContext(
     public StringBuilder Members { get; } = new();
     private List<GenerationDiagnostic> Diagnostics { get; } = new();
 
-    public ImmutableArray<GenerationDiagnostic> GetDiagnostics() => [.. Diagnostics];
+    public ImmutableArray<GenerationDiagnostic> GetDiagnostics() => Diagnostics.ToImmutableArray();
 
     public void ReportDiagnostic(Diagnostic diagnostic) => Diagnostics.Add(GenerationDiagnostic.From(diagnostic));
 

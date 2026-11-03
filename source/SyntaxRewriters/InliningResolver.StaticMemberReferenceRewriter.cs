@@ -12,10 +12,10 @@ internal sealed partial class InliningResolver
 {
     public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
     {
-        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && property.ContainingType.IsExtension)
+        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && RoslynCompatibility.IsExtensionType(property.ContainingType))
             return RewriteExtensionProperty(node, property, node.Expression);
         if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IMethodSymbol method &&
-            method.ContainingType.IsExtension && !(node.Parent is InvocationExpressionSyntax invocation && invocation.Expression == node))
+            RoslynCompatibility.IsExtensionType(method.ContainingType) && !(node.Parent is InvocationExpressionSyntax invocation && invocation.Expression == node))
             return UnsupportedExtension(node, method);
         if (_extensionExpansion && CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is { } dependency)
         {
