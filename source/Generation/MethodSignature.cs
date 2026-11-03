@@ -32,7 +32,7 @@ internal sealed class MethodSignature : IEquatable<MethodSignature>
             a.ByRef == b.ByRef && SameType(a.Type, b.Type)).All(equal => equal);
 
     private static ITypeSymbol Normalize(ITypeSymbol type) => type is INamedTypeSymbol { IsTupleType: true } tuple
-        ? tuple.TupleUnderlyingType! : type;
+        ? tuple.TupleUnderlyingType ?? tuple : type;
 
     private static bool SameType(ITypeSymbol left, ITypeSymbol right)
     {

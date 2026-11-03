@@ -10,6 +10,8 @@ public class GeneratedMemberRegistryTests
     [Arguments("string value", "string? value", true)]
     [Arguments("dynamic value", "object value", true)]
     [Arguments("(int x, string y) value", "(int a, string b) value", true)]
+    [Arguments("(int, int) value", "(int x, int y) value", true)]
+    [Arguments("System.ValueTuple<int, int> value", "(int x, int y) value", true)]
     [Arguments("ref int value", "out int value", true)]
     [Arguments("ref int value", "int value", false)]
     [Arguments("System.Collections.Generic.List<T[]> value", "System.Collections.Generic.List<U[]> value", true)]
@@ -25,6 +27,15 @@ public class GeneratedMemberRegistryTests
         await Assert.That(left.Equals(right)).IsEqualTo(equal);
         await Assert.That(new HashSet<MethodSignature> { left, right }.Count).IsEqualTo(equal ? 1 : 2);
         if (equal) await Assert.That(left.GetHashCode()).IsEqualTo(right.GetHashCode());
+    }
+
+    [Test]
+    public async Task Unsupported_tuple_pattern_reports_AM0019_without_crashing_mapper()
+    {
+        var (result, output) = await ExtensionMemberTests.Generate("using AlephMapper; public static partial class Mapper { [Projectable] public static int Map((int,int) value) => value switch { (1,2) => 1, _ => 0 }; [Projectable] public static int Good(int value) => value+1; }");
+        await Assert.That(result.Diagnostics.Select(d => d.Id)).IsEquivalentTo(["AM0019"]);
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("GoodExpression"))).IsTrue();
     }
 
     [Test]
