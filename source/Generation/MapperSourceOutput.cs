@@ -50,6 +50,14 @@ internal static class MapperSourceOutput
                 return MapperGenerationResult.Empty;
             }
 
+            if (!MapperDeclarationValidator.IsEligible(mapperType))
+            {
+                var descriptor = mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType)
+                    ? DiagnosticDescriptors.UnsupportedExtensionMember : DiagnosticDescriptors.InvalidMapperDeclaration;
+                return new MapperGenerationResult(null, null, ImmutableArray.Create(GenerationDiagnostic.From(Diagnostic.Create(
+                    descriptor, mapperDeclaration.Identifier.GetLocation(), mapperType.Name, MapperDeclarationValidator.RequiredDeclaration))));
+            }
+
             var mappings = CreateMapperAnalyses(compilation, mapperType, cancellationToken);
             if (mappings.Count == 0 && !mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType))
             {
@@ -277,6 +285,9 @@ internal static class MapperSourceOutput
             if (reason is not null) context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UnsupportedExtensionMember, member.Locations.FirstOrDefault(), member.Name, reason));
         }
+        var conflictingProjections = new HashSet<MethodSignature>(mappings.Where(m => m.IsProjectable)
+            .GroupBy(m => MethodSignature.Build(m.Name + "Expression", m.Parameters.Skip(1).Select(p => p.Type), m.MethodSymbol.Arity))
+            .Where(group => group.Count() > 1 && group.Any(m => m.ReceiverSymbol is not null)).Select(group => group.Key));
         foreach (var mapping in mappings)
         {
             if (!mapping.IsProjectable && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
@@ -284,10 +295,8 @@ internal static class MapperSourceOutput
                 continue;
             }
 
-            if (mapping.IsProjectable && mappings.Any(other => other != mapping && other.IsProjectable &&
-                (mapping.ReceiverSymbol is not null || other.ReceiverSymbol is not null) &&
-                mapping.Name == other.Name && mapping.MethodSymbol.TypeParameters.Length == other.MethodSymbol.TypeParameters.Length &&
-                mapping.Parameters.Skip(1).Select(p => p.Type).SequenceEqual(other.Parameters.Skip(1).Select(p => p.Type), SymbolEqualityComparer.Default)))
+            if (mapping.IsProjectable && conflictingProjections.Contains(MethodSignature.Build(
+                mapping.Name + "Expression", mapping.Parameters.Skip(1).Select(p => p.Type), mapping.MethodSymbol.Arity)))
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
                     mapping.MemberSymbol.Locations.FirstOrDefault(), mapping.Name, "the generated factory signature conflicts with another mapping"));

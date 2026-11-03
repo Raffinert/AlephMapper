@@ -66,21 +66,15 @@ internal static class ProjectableMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
-        if (mapping.ReceiverSymbol is not null &&
-            (context.GeneratedMemberSignatures.Contains(MethodSignature.Build(expressionMethodName,
-                details.ExtraExpressionParameterTypeNames, details.MethodTypeParameterCount)) ||
-             context.MapperType.GetMembers(expressionMethodName).OfType<IMethodSymbol>().Any(m =>
-                 m.Parameters.Select(p => p.Type.ToDisplayString()).SequenceEqual(mapping.Parameters.Skip(1).Select(p => p.Type.ToDisplayString())))))
+        var signature = MethodSignature.Build(expressionMethodName, mapping.Parameters.Skip(1).Select(p => p.Type), mapping.MethodSymbol.Arity);
+        if (!context.MemberSignatures.TryReserve([signature], out var conflict))
         {
-            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
-                mapping.MemberSymbol.Locations.FirstOrDefault(), mapping.Name, "the generated factory signature conflicts with another member"));
+            var descriptor = mapping.ReceiverSymbol is not null
+                ? DiagnosticDescriptors.UnsupportedExtensionMember : DiagnosticDescriptors.GeneratedMemberConflict;
+            context.ReportDiagnostic(Diagnostic.Create(descriptor, mapping.MemberSymbol.Locations.FirstOrDefault(),
+                mapping.Name, "the generated factory signature conflicts with another member: " + conflict));
             return;
         }
-
-        context.GeneratedMemberSignatures.Add(MethodSignature.Build(
-            expressionMethodName,
-            details.ExtraExpressionParameterTypeNames,
-            details.MethodTypeParameterCount));
         var nullStrategyDescription = mapping.NullStrategy switch
         {
             NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",

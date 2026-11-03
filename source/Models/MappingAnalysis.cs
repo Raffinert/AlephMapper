@@ -18,7 +18,6 @@ internal sealed class MappingAnalysis(
     SemanticModel semanticModel,
     bool isProjectable,
     bool isUpdatable,
-    bool classIsStaticAndPartial,
     NullConditionalRewrite nullStrategy,
     CollectionPropertiesPolicy collectionPolicy,
     IReadOnlyList<string> usingDirectives,
@@ -39,7 +38,6 @@ internal sealed class MappingAnalysis(
 
     public readonly bool IsProjectable = isProjectable;
     public readonly bool IsUpdatable = isUpdatable;
-    public readonly bool IsClassPartial = classIsStaticAndPartial;
 
     public readonly NullConditionalRewrite NullStrategy = nullStrategy;
     public readonly CollectionPropertiesPolicy CollectionPolicy = collectionPolicy;

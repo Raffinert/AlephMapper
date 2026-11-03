@@ -47,7 +47,6 @@ internal static class MappingAnalysisFactory
             semanticModel,
             HasAttribute(classSymbol, methodSymbol, typeof(ProjectableAttribute).FullName),
             HasAttribute(classSymbol, methodSymbol, typeof(UpdatableAttribute).FullName),
-            classDeclaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword)),
             GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore,
             GetCollectionPropertiesPolicy(methodSymbol) ?? GetCollectionPropertiesPolicy(classSymbol) ?? CollectionPropertiesPolicy.Skip,
             ExtractUsingDirectives(methodDeclaration),
@@ -63,9 +62,8 @@ internal static class MappingAnalysisFactory
             return "generic extension blocks and methods are not supported yet";
         if (receiver.RefKind != RefKind.None || receiver.Type.IsRefLikeType)
             return "ref/in/out or ref-like receivers cannot be projected";
-        if (requirePartial && !type.ContainingType.DeclaringSyntaxReferences.All(r => r.GetSyntax() is ClassDeclarationSyntax c &&
-                c.Modifiers.Any(SyntaxKind.StaticKeyword) && c.Modifiers.Any(SyntaxKind.PartialKeyword)))
-            return "the outer class must be static partial";
+        if (requirePartial && !MapperDeclarationValidator.IsEligible(type.ContainingType))
+            return MapperDeclarationValidator.RequiredDeclaration;
         if (member is IMethodSymbol method && (method.ReturnsVoid || method.ReturnsByRef || method.ReturnsByRefReadonly ||
             method.Parameters.Any(p => p.RefKind != RefKind.None || p.IsOptional || p.IsParams)))
             return "void/ref returns, ref parameters, optional parameters and params are unsupported";
@@ -94,7 +92,7 @@ internal static class MappingAnalysisFactory
         return new MappingAnalysis(outer, method, member.Name,
             new[] { receiver }.Concat(method.Parameters).ToArray(), method.ReturnType, body, model,
             SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) || SymbolHelpers.HasAttribute(outer, typeof(ProjectableAttribute).FullName),
-            false, true, GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
+            false, GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
             CollectionPropertiesPolicy.Skip, ExtractUsingDirectives(syntax), [], member, receiver);
     }
 

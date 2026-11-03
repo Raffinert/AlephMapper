@@ -176,6 +176,14 @@ public static class DiagnosticDescriptors
         "Expression generation for extension member '{0}' skipped: {1}",
         "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor InvalidMapperDeclaration = new(
+        "AM0022", "Mapper declaration cannot contain generated companions",
+        "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor GeneratedMemberConflict = new(
+        "AM0023", "Generated companion conflicts with another member",
+        "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
     public static DiagnosticDescriptor? GetById(string id) => id switch
     {
         "AM0001" => UpdatableValueTypeReturn,
@@ -198,6 +206,8 @@ public static class DiagnosticDescriptors
         "AM0018" => AdaptGenericMethodUnsupported,
         "AM0019" => UnsupportedSwitchPattern,
         "AM0021" => UnsupportedExtensionMember,
+        "AM0022" => InvalidMapperDeclaration,
+        "AM0023" => GeneratedMemberConflict,
         _ => null
     };
 }

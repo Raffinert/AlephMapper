@@ -186,6 +186,29 @@ public class ExtensionMemberTests
         await Assert.That(compilation.GetDiagnostics().Any(d => d.Id == "CS9316")).IsTrue();
     }
 
+    [Test]
+    public async Task Nullable_value_type_extension_factory_overloads_remain_distinct()
+    {
+        var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(string value) { [Projectable] public int Scale(int amount) => value.Length+amount; [Projectable] public int Scale(int? amount) => value.Length+(amount??0); } }");
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(result.GeneratedSources.Single(s => s.HintName.EndsWith("GeneratedMappings.g.cs")).SourceText.ToString().Split(" ScaleExpression(").Length).IsEqualTo(3);
+    }
+
+    [Test]
+    [Arguments("static", "Projectable")]
+    [Arguments("static", "Updatable")]
+    [Arguments("partial", "Projectable")]
+    public async Task Invalid_classic_mapper_declarations_skip_only_affected_mapper(string modifiers, string attribute)
+    {
+        var source = "using AlephMapper; public class Input { public int Value {get;set;} } public class Dto {public int Value {get;set;} } public " + modifiers + " class Bad { [" + attribute + "] public static Dto Map(Input value) => new() {Value=value.Value}; } public static partial class Good { [Projectable] public static int Map(int value) => value; }";
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0022")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Bad_GeneratedMappings.g.cs")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Good_GeneratedMappings.g.cs")).IsTrue();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
     internal static async Task<(GeneratorRunResult Result, Compilation Output)> Generate(string source)
     {
         var compilation = await Compile(source);

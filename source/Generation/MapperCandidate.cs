@@ -44,20 +44,7 @@ internal sealed class MapperCandidate : IEquatable<MapperCandidate>
             _ => null
         };
 
-        if (containingClass is null)
-        {
-            return false;
-        }
-
-        foreach (var modifier in containingClass.Modifiers)
-        {
-            if (modifier.IsKind(SyntaxKind.StaticKeyword))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return containingClass is not null;
     }
 
     public static MapperCandidate Create(

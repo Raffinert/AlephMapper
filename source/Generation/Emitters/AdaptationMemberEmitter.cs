@@ -31,7 +31,7 @@ internal static class AdaptationMemberEmitter
             return;
         }
 
-        var adaptationPairs = new HashSet<string>(StringComparer.Ordinal);
+        var adaptationPairs = new HashSet<MethodSignature>();
         foreach (var adaptation in mapping.Adaptations)
         {
             var generateMap = (adaptation.Generation & AdaptGeneration.Map) == AdaptGeneration.Map;
@@ -54,7 +54,7 @@ internal static class AdaptationMemberEmitter
             var adaptationParametersWithNames = sourceTypeName + " " + details.SourceName +
                 (string.IsNullOrEmpty(additionalParametersWithNames) ? "" : ", " + additionalParametersWithNames);
 
-            var pairSignature = MethodSignature.Build("", [sourceTypeName, destinationTypeName]);
+            var pairSignature = MethodSignature.Build("", [adaptation.SourceType, adaptation.DestinationType]);
             if (!adaptationPairs.Add(pairSignature))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -135,49 +135,32 @@ internal static class AdaptationMemberEmitter
                 details.NullablePolicy);
             var adaptedBodyText = PrettyPrinter.Print(adaptedBody, 2);
 
-            var adaptationParameterTypes = new[] { sourceTypeName }.Concat(details.ParameterTypeNames.Skip(1)).ToArray();
+            var adaptationParameterTypes = new[] { adaptation.SourceType }.Concat(mapping.Parameters.Skip(1).Select(p => p.Type)).ToArray();
             var mapSignature = MethodSignature.Build(adaptationName, adaptationParameterTypes);
-            var updateParameterTypes = adaptationParameterTypes.Append(destinationTypeName).ToArray();
+            var updateParameterTypes = adaptationParameterTypes.Append(adaptation.DestinationType).ToArray();
             var updateSignature = MethodSignature.Build(adaptationName, updateParameterTypes);
             var expressionName = adaptationName + "Expression";
-            var expressionSignature = MethodSignature.Build(expressionName, details.ExtraExpressionParameterTypeNames);
-            var generatedConflict = (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature)) ||
-                                    (generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature)) ||
-                                    (generateUpdate && context.GeneratedMemberSignatures.Contains(updateSignature));
-            var plannerConflict = !context.AdaptationMembers.TryReserve(
-                adaptationName,
-                adaptationParameterTypes,
-                details.ExtraExpressionParameterTypeNames,
-                generateMap,
-                generateExpression,
-                generateUpdate,
-                updateParameterTypes,
-                out var conflict);
-            if (generatedConflict || plannerConflict)
+            var expressionSignature = MethodSignature.Build(expressionName, mapping.Parameters.Skip(1).Select(p => p.Type));
+            var signatures = new List<MethodSignature>();
+            if (generateMap) signatures.Add(mapSignature);
+            if (generateExpression) signatures.Add(expressionSignature);
+            if (generateUpdate) signatures.Add(updateSignature);
+            if (!context.MemberSignatures.TryReserve(signatures, out var conflict))
             {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.AdaptNameConflict,
-                    GetLocation(mapping, adaptation),
-                    mapping.MethodSymbol.Name,
-                    generatedConflict
-                        ? (generateMap && context.GeneratedMemberSignatures.Contains(mapSignature)
-                            ? mapSignature
-                            : generateExpression && context.GeneratedMemberSignatures.Contains(expressionSignature)
-                                ? expressionSignature
-                                : updateSignature)
-                        : conflict));
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.AdaptNameConflict,
+                    GetLocation(mapping, adaptation), mapping.Name, conflict));
                 continue;
             }
 
             if (generateMap)
             {
-                context.GeneratedMemberSignatures.Add(mapSignature);
+
                 EmitMapMember(details, adaptationName, destinationTypeName, adaptationParametersWithNames, adaptedBodyText, context);
             }
 
             if (generateExpression)
             {
-                context.GeneratedMemberSignatures.Add(expressionSignature);
+
                 var functionArguments = string.Join(", ", new[] { sourceTypeName, destinationTypeName });
                 EmitExpressionMember(details, expressionName, functionArguments, adaptedBodyText, context);
             }
@@ -228,7 +211,6 @@ internal static class AdaptationMemberEmitter
                     continue;
                 }
 
-                context.GeneratedMemberSignatures.Add(updateSignature);
                 EmitUpdateMember(
                     details,
                     adaptationName,
