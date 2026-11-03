@@ -579,7 +579,7 @@ AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.co
 
 ## Related projects
 
-- [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables)
+- [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables) and its successor [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp)
 - [Expressionify](https://github.com/ClaveConsulting/Expressionify)
 - [LINQKit](https://github.com/scottksmith95/LINQKit)
 - [NeinLinq](https://github.com/axelheer/nein-linq)
