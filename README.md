@@ -174,6 +174,63 @@ Use the original method in memory:
 var person = PersonMapper.MapPerson(employee);
 ```
 
+## C# 14 extension members
+
+C# 14 instance methods and expression-bodied getter-only properties in extension
+blocks can generate ordinary static expression factories in the outer `static
+partial` class. The receiver is the expression input; ordinary method arguments
+become factory arguments.
+
+```csharp
+public static partial class OrderExtensions
+{
+    // Classic extension method remains supported.
+    [Projectable]
+    public static decimal Twice(this Order order) => order.Amount * 2m;
+
+    extension(Order order)
+    {
+        [Projectable]
+        public decimal AmountWithTax => order.Amount * 1.25m;
+
+        [Projectable]
+        public string Label(int min) => order.Amount >= min ? "high" : "low";
+    }
+}
+
+// Expression<Func<Order, decimal>>
+var tax = OrderExtensions.AmountWithTaxExpression();
+// Expression<Func<Order, string>>
+var label = OrderExtensions.LabelExpression(100);
+```
+
+Nested source-defined extension accesses/calls are expanded by symbol identity,
+including classic/C# 14 composition, switch bodies, and nested LINQ method calls.
+Primitive, interface, struct, nullable-value and reference receivers are supported.
+`[Projectable]` on the outer class includes supported extension members.
+`[Updatable]` and `[Adapt]` do not automatically apply to computed properties;
+direct requests on extension methods receive `AM0021`.
+
+The generator now requires a **Roslyn 5.0 or newer compiler host**. C# 14 consumers
+require C# 14 language support; SDK **10.0.403 / Roslyn 5.9.0** is verified, including
+fresh packaged consumers. Older target frameworks remain usable for classic
+mappers with a compatible newer compiler host (verified `net8.0`, C# 12, SDK
+10.0.403). Older Roslyn 4.x hosts are no longer supported. IDE builds must use a
+compiler host meeting the same minimum; IDE versions were not separately tested.
+The analyzer itself still targets `netstandard2.0`.
+
+`AM0021` explains unsupported extension forms and skips the affected companion:
+generic blocks/methods, block/accessor bodies, query syntax (use LINQ method
+syntax), bound extension method groups (use an explicit lambda), static members,
+optional/params/ref arguments, ref-like receivers, ref returns, generated factory
+signature conflicts, and inaccessible expanded dependencies. Ordinary
+`Select(Map)` method groups retain their existing support.
+
+Null policies and the repeated-evaluation tradeoff remain unchanged. Generated
+expression correctness does not guarantee provider translation; the SQLite
+integration tests execute the documented scalar projection subset. See the
+[extension compatibility matrix](docs/extension-members-compatibility-matrix.md).
+
 ## Switch expressions: evaluation semantics
 
 AlephMapper lowers supported C# `switch` expressions to nested conditional
