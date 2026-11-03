@@ -666,6 +666,7 @@ The default `Ignore` policy removes null-conditional access from generated expre
 | Mapperly | Compile-time mapping generation from declarations and conventions | Expressions and updates derived from an existing implementation |
 | EntityFrameworkCore.Projectables | Projectable members expanded for EF Core | Complete mappings, predicates, updates, and explicit adaptation |
 | Expressionify | Expression expansion | Mapping-oriented companion generation |
+| [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp) | Compile-time expression trees for modern C# syntax and computed members, with query rewriting and EF Core integration | Handwritten mappings with generated projections, in-place updates, and explicit type adaptations |
 | LINQKit | Runtime/query-time expression composition and expansion | Compile-time expansion of statically known composition |
 
 ## AI Agent Skill
