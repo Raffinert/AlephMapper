@@ -30,7 +30,7 @@ internal sealed partial class InliningResolver
             double number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
             decimal number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
             _ => ParseExpression(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(
-                field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false))
+                field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false)!)
         };
         return ParenthesizedExpression(CastExpression(ParseTypeName(field.Type.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat)), ParenthesizedExpression(value)));

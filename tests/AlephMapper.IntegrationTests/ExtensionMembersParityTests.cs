@@ -45,6 +45,8 @@ public class ExtensionMembersParityTests
     {
         await Assert.That(ExtensionReviewMapper.CaptureExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Capture(10));
         await Assert.That(ExtensionReviewMapper.Capture(10)).IsEqualTo(14);
+        await Assert.That(ExtensionReviewMapper.NameExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Name(10));
+        await Assert.That(ExtensionReviewMapper.Name(10)).IsEqualTo("receiver");
         await Assert.That(ExtensionReviewMapper.StaticDependencyExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.StaticDependency(10));
         await Assert.That(ExtensionReviewMapper.NonfiniteExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Nonfinite(10));
         await Assert.That(ExtensionReviewMapper.Nonfinite(10)).IsTrue();
@@ -125,6 +127,7 @@ public static partial class ReviewExtensions
     public static int PublicOffset = 4;
     extension(int receiver)
     {
+        [Projectable] public string ReceiverName => nameof(receiver);
         [Projectable] public int Sum(int add) => new[] { 1 }.Sum(x => x + receiver + add);
         [Projectable] public bool WithNonfinite => double.IsNaN(receiver + NotANumber) && float.IsPositiveInfinity(receiver + Infinite);
         [Projectable] public int WithOffset => receiver + Offset + PublicOffset;
@@ -133,6 +136,7 @@ public static partial class ReviewExtensions
 }
 public static partial class ExtensionReviewMapper
 {
+    [Projectable] public static string Name(int n) => n.ReceiverName;
     [Projectable] public static bool Nonfinite(int x) => x.WithNonfinite;
     [Projectable] public static int Capture(int x) => x.Sum(3);
     [Projectable] public static int StaticDependency(int x) => x.WithOffset;
