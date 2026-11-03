@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>$(CompatibilityLanguageVersion)</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <WarningsAsErrors>$(WarningsAsErrors);CS9057;CS8032;CS8784;CS8785;AD0001</WarningsAsErrors>
+    <DefineConstants Condition="'$(ExpectedRoslynBand)' == '5.0'">$(DefineConstants);EXTENSION_MEMBERS</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AlephMapper" Version="$(PackageVersionUnderTest)" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="$(CompatibilityCompilerVersion)"
+                      PrivateAssets="all" Condition="'$(CompatibilityCompilerVersion)' != ''" />
+  </ItemGroup>
+  <Target Name="VerifySelectedAnalyzer" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_AlephMapperAnalyzer Include="@(Analyzer)" Condition="'%(Filename)' == 'AlephMapper'" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_AlephMapperAnalyzerPath>@(_AlephMapperAnalyzer)</_AlephMapperAnalyzerPath>
+    </PropertyGroup>
+    <Error Condition="'@(_AlephMapperAnalyzer->Count())' != '1'" Text="Expected exactly one AlephMapper analyzer, got @(_AlephMapperAnalyzer)." />
+    <Error Condition="!$([System.String]::Copy('$(_AlephMapperAnalyzerPath)').Contains('roslyn$(ExpectedRoslynBand)'))"
+           Text="Wrong analyzer band for $(CompilerApiVersion): @(_AlephMapperAnalyzer)" />
+    <Message Importance="High" Text="Verified $(CompilerApiVersion) selected @(_AlephMapperAnalyzer)" />
+  </Target>
+</Project>

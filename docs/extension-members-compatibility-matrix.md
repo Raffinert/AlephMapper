@@ -46,11 +46,14 @@ conditional/substitution architecture; no AM0020 or purity gate was introduced.
 Property catalog keys are IPropertySymbol identities; getter methods are stable
 recursion tokens alongside the existing method catalog, not unrelated methods.
 
-Compiler minimum: Roslyn5.0+ (independent API probe). Verified installed host:
-SDK10.0.403/Roslyn5.9.0. Fresh packaged CSharp14/net10 and classic CSharp12/net8
-consumers execute successfully without analyzer-load failures. IDE builds must
-meet the same host requirement; IDE versions were not separately tested.
-Older Roslyn4.x hosts are incompatible. Generator target stays netstandard2.0.
+Compiler/package support is now versioned: classic mappings use the Roslyn4.8
+asset on4.x hosts; CSharp14 extension features use the Roslyn5.0 asset on5.x hosts.
+Both assets remain netstandard2.0. Real compiler processes4.8.0,4.14.0,5.0.0 and the
+installed SDK10.0.403/Roslyn5.9 pass package selection and runtime checks.
+A net8 target under SDK10 alone did not establish4.x host compatibility; the old
+single5.0 package was reproduced failing with CS9057 on compiler4.14.
+See [multiversion evidence](roslyn-multiversion-plan.md). Hosts below4.8 remain
+unsupported. Individual IDE versions were not separately tested.
 
 Conceptual inventory: [ExpressiveSharp guide](https://github.com/EFNext/ExpressiveSharp/blob/main/docs/guide/extension-members.md)
 and [reference tests](https://github.com/EFNext/ExpressiveSharp/blob/main/tests/ExpressiveSharp.Generator.Tests/ExpressiveGenerator/ExtensionMemberTests.cs).

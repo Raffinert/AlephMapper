@@ -55,3 +55,14 @@ CS9316; a dedicated original-compilation regression records that restriction.
 Valid root nameof(ordinaryProperty) also has runtime coverage. Full191 passed;
 Release/Debug, pack and fresh net10/net8 consumers passed again. Final remote
 review cycle3 requested; no further automatic cycles will be started.
+
+## Owner-requested Roslyn multiversion follow-up
+
+The earlier5.0-only host requirement is superseded by docs/roslyn-multiversion-plan.md.
+The concern was reproduced as CS9057 on real compiler4.14. Shared-source analyzer
+assets now cover Roslyn4.8 and5.0 in one NuGet, with automatic SDK selection.
+Classic behavior executes on4.8/4.14; CSharp14 extensions execute on5.0/SDK5.9.
+Package tests verify a single selected analyzer, actual compiler binary/version
+and invocation, AM0019 retention, AM0020 absence, and runtime semantics. Full191
+existing tests pass without mapper snapshot changes. The package matrix is added
+to CI; no merge, release or publication is authorized by this follow-up.

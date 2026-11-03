@@ -211,13 +211,25 @@ Primitive, interface, struct, nullable-value and reference receivers are support
 `[Updatable]` and `[Adapt]` do not automatically apply to computed properties;
 direct requests on extension methods receive `AM0021`.
 
-The generator now requires a **Roslyn 5.0 or newer compiler host**. C# 14 consumers
-require C# 14 language support; SDK **10.0.403 / Roslyn 5.9.0** is verified, including
-fresh packaged consumers. Older target frameworks remain usable for classic
-mappers with a compatible newer compiler host (verified `net8.0`, C# 12, SDK
-10.0.403). Older Roslyn 4.x hosts are no longer supported. IDE builds must use a
-compiler host meeting the same minimum; IDE versions were not separately tested.
-The analyzer itself still targets `netstandard2.0`.
+The NuGet package selects a compatible analyzer automatically by the compiler
+host version (independent of the application's target framework):
+
+| Compiler host | Selected analyzer | Features |
+|---|---|---|
+| Roslyn 4.8 through 4.x | `analyzers/dotnet/roslyn4.8/cs/AlephMapper.dll` | Classic mappings, helpers, switches, Update and Adapt |
+| Roslyn 5.0 or newer | `analyzers/dotnet/roslyn5.0/cs/AlephMapper.dll` | Classic features plus C# 14 extension members |
+
+Both variants target `netstandard2.0` and share the mapping implementation.
+The package contains no compiler DLLs and needs no consumer-side version setting.
+Hosts below Roslyn 4.8 are outside the supported floor. IDE builds follow their
+compiler host version too; individual IDE versions were not separately tested.
+C# 14 source still requires a compiler/language version that supports C# 14.
+
+Package tests execute actual compilers **4.8.0, 4.14.0, 5.0.0**, and the installed
+SDK **10.0.403 / Roslyn 5.9**, asserting that exactly one correct analyzer is
+selected. The old single-5.0 package was reproduced failing on 4.14 with CS9057.
+The new package runs classic net8 consumers under 4.x and extension projections
+under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
 
 `AM0021` explains unsupported extension forms and skips the affected companion:
 generic blocks/methods, block/accessor bodies, query syntax (use LINQ method
