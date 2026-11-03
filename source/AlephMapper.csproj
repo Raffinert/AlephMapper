@@ -1,41 +1,33 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="Analyzer.Shared.props" />
 
   <PropertyGroup>
     <Authors>Yevhen Cherkes</Authors>
     <Copyright>Copyright 2025 - $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
     <Description>Your manual mapping companion.</Description>
     <DevelopmentDependency>true</DevelopmentDependency>
-    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <IsRoslynComponent>true</IsRoslynComponent>
-    <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);ALEPHMAPPER_ROSLYN5</DefineConstants>
     <PackageId>AlephMapper</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageVersion>0.7.4</PackageVersion>
-    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
-    <Version>$(PackageVersion)</Version>
-    <AssemblyVersion>$(PackageVersion).$(BuildNumber)</AssemblyVersion>
-    <FileVersion>$(AssemblyVersion)</FileVersion>
     <PackageTags>Mapping Companion</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <Title>Aleph Mapper</Title>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers\dotnet\cs\$(AssemblyName).dll" Visible="false" />
+    <None Include="bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/roslyn5.0/cs/$(AssemblyName).dll" Visible="false" />
+    <None Include="Roslyn4/bin/$(Configuration)/netstandard2.0/AlephMapper.dll" Pack="true" PackagePath="analyzers/dotnet/roslyn4.8/cs/AlephMapper.dll" Visible="false" />
+    <Compile Remove="Roslyn4/**" />
+    <ProjectReference Include="Roslyn4/AlephMapper.Roslyn4.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="../README.md" pack="true" PackagePath="." />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>

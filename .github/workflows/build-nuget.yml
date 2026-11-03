@@ -21,7 +21,9 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: |
+            8.0.x
+            10.0.400
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -37,6 +39,9 @@ jobs:
       - name: Build solution
         run: dotnet build AlephMapper.slnx --configuration Release --no-restore
 
+      - name: Verify packing without rebuilding
+        run: dotnet pack source/AlephMapper.csproj --configuration Release --no-build --no-restore --output artifacts/package-no-build
+
       - name: Run tests
         run: dotnet test AlephMapper.slnx --configuration Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results
 
@@ -50,6 +55,9 @@ jobs:
 
       - name: Pack NuGet package
         run: dotnet pack source/AlephMapper.csproj --configuration Release --no-restore -p:BuildNumber=${{ github.run_number }} --output artifacts/nuget
+
+      - name: Verify Roslyn compiler compatibility
+        run: python scripts/verify_roslyn_compatibility.py --package-dir artifacts/nuget
 
       - name: Verify package consumption
         shell: bash

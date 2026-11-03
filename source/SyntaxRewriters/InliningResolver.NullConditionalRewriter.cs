@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -188,6 +188,8 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
+        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && RoslynCompatibility.IsExtensionType(property.ContainingType))
+            return RewriteExtensionProperty(node, property, targetExpression, receiverAlreadyVisited: true);
         var memberAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name);
         return memberAccess.WithTriviaFrom(node);
     }

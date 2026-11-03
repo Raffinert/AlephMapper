@@ -22,10 +22,14 @@ internal sealed class MappingAnalysis(
     NullConditionalRewrite nullStrategy,
     CollectionPropertiesPolicy collectionPolicy,
     IReadOnlyList<string> usingDirectives,
-    IReadOnlyList<AdaptationAnalysis> adaptations)
+    IReadOnlyList<AdaptationAnalysis> adaptations,
+    ISymbol memberSymbol = null,
+    IParameterSymbol receiverSymbol = null)
 {
     public readonly INamedTypeSymbol ContainingType = containingType;
     public readonly IMethodSymbol MethodSymbol = methodSymbol;
+    public readonly ISymbol MemberSymbol = memberSymbol ?? methodSymbol;
+    public readonly IParameterSymbol ReceiverSymbol = receiverSymbol;
     public readonly string Name = name;
     public readonly IReadOnlyList<IParameterSymbol> Parameters = parameters;
     public readonly ITypeSymbol ParamType = parameters[0].Type;

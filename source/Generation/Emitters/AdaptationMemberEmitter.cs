@@ -71,6 +71,13 @@ internal static class AdaptationMemberEmitter
                 .WithoutLeadingTrivia()
                 .WithoutTrailingTrivia();
             context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
+            if (inliner.UnsupportedExtensions.FirstOrDefault() is var unsupportedExtension && unsupportedExtension.Member is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
+                    unsupportedExtension.Member.Locations.FirstOrDefault(), unsupportedExtension.Member.Name, unsupportedExtension.Reason));
+                continue;
+            }
+
             if (inliner.CircularReferences.Any())
             {
                 context.ReportDiagnostic(Diagnostic.Create(

@@ -7,12 +7,11 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 
-#if !DEBUG
 using AlephMapper.Diagnostics;
-#endif
 
 namespace AlephMapper.Generation;
 
@@ -29,12 +28,14 @@ internal static class MapperSourceOutput
             {
                 ClassDeclarationSyntax classDeclaration => classDeclaration,
                 MethodDeclarationSyntax { Parent: ClassDeclarationSyntax classDeclaration } => classDeclaration,
+                MethodDeclarationSyntax or PropertyDeclarationSyntax when RoslynCompatibility.IsExtensionMember(attributeContext.TargetNode) => attributeContext.TargetNode.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault(),
                 _ => null
             };
             var mapperType = attributeContext.TargetSymbol switch
             {
                 INamedTypeSymbol classSymbol => classSymbol,
-                IMethodSymbol methodSymbol => methodSymbol.ContainingType,
+                IMethodSymbol methodSymbol => RoslynCompatibility.IsExtensionType(methodSymbol.ContainingType) ? methodSymbol.ContainingType.ContainingType : methodSymbol.ContainingType,
+                IPropertySymbol propertySymbol when RoslynCompatibility.IsExtensionType(propertySymbol.ContainingType) => propertySymbol.ContainingType.ContainingType,
                 _ => null
             };
             if (mapperDeclaration is null || mapperType is null)
@@ -50,8 +51,7 @@ internal static class MapperSourceOutput
             }
 
             var mappings = CreateMapperAnalyses(compilation, mapperType, cancellationToken);
-            if (mappings.Count == 0 || !mappings.Any(static mapping =>
-                    (mapping.IsProjectable || mapping.IsUpdatable || mapping.Adaptations.Count > 0) && mapping.IsClassPartial))
+            if (mappings.Count == 0 && !mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType))
             {
                 return MapperGenerationResult.Empty;
             }
@@ -78,7 +78,7 @@ internal static class MapperSourceOutput
             return new MapperGenerationResult(
                 null,
                 null,
-                [CrashDiagnosticsReporter.CreateDiagnostic(exception)]);
+                ImmutableArray.Create(CrashDiagnosticsReporter.CreateDiagnostic(exception)));
         }
 #endif
     }
@@ -120,6 +120,11 @@ internal static class MapperSourceOutput
             }
 
             var semanticModel = compilation.GetSemanticModel(declaration.SyntaxTree);
+            foreach (var member in RoslynCompatibility.GetExtensionMembers(declaration))
+            {
+                var extension = MappingAnalysisFactory.CreateExtension(semanticModel, member, cancellationToken);
+                if (extension is not null) mappings.Add(extension);
+            }
             foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>()
                          .Where(static method => method.ExpressionBody is not null)
                          .OrderBy(static method => method.SpanStart))
@@ -143,6 +148,16 @@ internal static class MapperSourceOutput
         IMethodSymbol method,
         CancellationToken cancellationToken)
     {
+        if (RoslynCompatibility.IsExtensionType(method.ContainingType))
+        {
+            var symbol = method.AssociatedSymbol ?? (ISymbol)method;
+            foreach (var reference in symbol.DeclaringSyntaxReferences)
+            {
+                var syntax = reference.GetSyntax(cancellationToken);
+                return MappingAnalysisFactory.CreateExtension(compilation.GetSemanticModel(syntax.SyntaxTree), syntax, cancellationToken);
+            }
+            return null;
+        }
         foreach (var declarationReference in method.DeclaringSyntaxReferences
                      .OrderBy(static reference => reference.SyntaxTree.FilePath, StringComparer.Ordinal)
                      .ThenBy(static reference => reference.Span.Start))
@@ -193,6 +208,12 @@ internal static class MapperSourceOutput
             yield return CreateCandidate(mapperDeclaration, classKind);
         }
 
+        foreach (var member in RoslynCompatibility.GetExtensionMembers(mapperDeclaration))
+        {
+            var attributes = member switch { MethodDeclarationSyntax m => m.AttributeLists, PropertyDeclarationSyntax p => p.AttributeLists, _ => default };
+            if (ContainsAlephMapperAttribute(attributes, semanticModel, cancellationToken, out var kind))
+                yield return CreateCandidate(member, kind);
+        }
         foreach (var method in mapperDeclaration.Members.OfType<MethodDeclarationSyntax>())
         {
             if (ContainsAlephMapperAttribute(method.AttributeLists, semanticModel, cancellationToken, out var methodKind))
@@ -244,6 +265,18 @@ internal static class MapperSourceOutput
         MappingCatalog catalog)
     {
         var context = new MapperGenerationContext(mapperType, catalog);
+        foreach (var extensionType in mapperType.GetTypeMembers().Where(RoslynCompatibility.IsExtensionType))
+        foreach (var member in extensionType.GetMembers().Where(s => s is IPropertySymbol || s is IMethodSymbol { MethodKind: MethodKind.Ordinary }))
+        {
+            var unsupportedRequest = SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName);
+            if (!unsupportedRequest && !SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) &&
+                !SymbolHelpers.HasAttribute(mapperType, typeof(ProjectableAttribute).FullName)) continue;
+            var reason = unsupportedRequest ? "extension members support Projectable only; Updatable and Adapt requests are unsupported" :
+                MappingAnalysisFactory.ExtensionUnsupportedReason(member);
+            if (reason is not null) context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsupportedExtensionMember, member.Locations.FirstOrDefault(), member.Name, reason));
+        }
         foreach (var mapping in mappings)
         {
             if (!mapping.IsProjectable && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
@@ -251,12 +284,23 @@ internal static class MapperSourceOutput
                 continue;
             }
 
+            if (mapping.IsProjectable && mappings.Any(other => other != mapping && other.IsProjectable &&
+                (mapping.ReceiverSymbol is not null || other.ReceiverSymbol is not null) &&
+                mapping.Name == other.Name && mapping.MethodSymbol.TypeParameters.Length == other.MethodSymbol.TypeParameters.Length &&
+                mapping.Parameters.Skip(1).Select(p => p.Type).SequenceEqual(other.Parameters.Skip(1).Select(p => p.Type), SymbolEqualityComparer.Default)))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
+                    mapping.MemberSymbol.Locations.FirstOrDefault(), mapping.Name, "the generated factory signature conflicts with another mapping"));
+                continue;
+            }
             var details = new MappingMethodDetails(mapping);
             ProjectableMemberEmitter.Emit(details, context);
             AdaptationMemberEmitter.Emit(details, context);
             UpdatableMemberEmitter.Emit(details, context);
         }
 
+        if (context.Members.Length == 0 && mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType))
+            return new MapperGenerationResult(null, null, context.GetDiagnostics());
         var generatedFile = MapperFileEmitter.Render(context);
         return new MapperGenerationResult(generatedFile.HintName, generatedFile.Source, context.GetDiagnostics());
     }

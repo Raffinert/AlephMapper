@@ -26,12 +26,29 @@ internal sealed partial class InliningResolver(
     internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
     internal const string InlinedReturnCreationAnnotation = "AlephMapper.InlinedReturnCreation";
 
+    private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _lambdaVariables = new();
+    private bool _extensionExpansion;
+    private INamedTypeSymbol? _outputType;
+
+    public override SyntaxNode? Visit(SyntaxNode? node)
+    {
+        if (_outputType is null && node is not null && CanQuerySemanticModel(node))
+        {
+            var symbol = model.GetEnclosingSymbol(node.SpanStart);
+            _outputType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
+            if (_outputType is not null && RoslynCompatibility.IsExtensionType(_outputType)) _outputType = _outputType.ContainingType;
+        }
+        return base.Visit(node);
+    }
+
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
     private List<CircularReferenceInfo> _circularReferences = [];
     private Dictionary<IMethodSymbol, MappingAnalysis> _inlinedMethods = new(SymbolEqualityComparer.Default);
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
+    private List<(ISymbol Member, string Reason)> _unsupportedExtensions = [];
+    public IReadOnlyList<(ISymbol Member, string Reason)> UnsupportedExtensions => _unsupportedExtensions;
     // Only the currently visited switch arm owns these locals. Keep the original
     // Roslyn symbols, not their identifier text, to avoid collisions with callers.
     private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _switchPatternVariables = new();
@@ -85,6 +102,21 @@ internal sealed partial class InliningResolver(
             return base.VisitIdentifierName(node);
 
         var symbol = model.GetSymbolInfo(node).Symbol;
+        foreach (var variable in _lambdaVariables)
+            if (SymbolEqualityComparer.Default.Equals(symbol, variable.Symbol))
+                return variable.Replacement.WithTriviaFrom(node);
+        if (_extensionExpansion && symbol is { IsStatic: true, ContainingType: { } owner } &&
+            (symbol is IFieldSymbol or IPropertySymbol or IMethodSymbol) &&
+            !(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node))
+        {
+            if (symbol is IFieldSymbol { IsConst: true } field && field.Type.TypeKind != TypeKind.Enum)
+                return ExtensionConstant(field).WithTriviaFrom(node);
+            if (_outputType is not null && !model.Compilation.IsSymbolAccessibleWithin(symbol, _outputType))
+                _unsupportedExtensions.Add((symbol, "an expanded body references an inaccessible member"));
+            return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                ParseName(owner.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                IdentifierName(node.Identifier)).WithTriviaFrom(node);
+        }
         foreach (var patternVariable in _switchPatternVariables)
         {
             if (SymbolEqualityComparer.Default.Equals(symbol, patternVariable.Symbol))
@@ -176,12 +208,19 @@ internal sealed partial class InliningResolver(
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
+        if ((!forUpdateMethod || _extensionExpansion || parameterSubstitutions is { Count: > 0 } || _lambdaVariables.Count > 0) &&
+            CanQuerySemanticModel(node) && model.GetOperation(node) is Microsoft.CodeAnalysis.Operations.INameOfOperation &&
+            model.GetConstantValue(node) is { HasValue: true, Value: string name })
+            return LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(name)).WithTriviaFrom(node);
         if (node.Parent == null ||
             !CanQuerySemanticModel(node) ||
             model.GetSymbolInfo(node.Expression).Symbol is not IMethodSymbol invokedMethod)
         {
             return base.VisitInvocationExpression(node);
         }
+
+        if (RoslynCompatibility.IsExtensionType(invokedMethod.ContainingType))
+            return RewriteExtensionCall(node, invokedMethod);
 
         var args = node.ArgumentList.Arguments;
         var firstArgExpression = args.Count > 0 ? args[0].Expression : null;
@@ -192,6 +231,11 @@ internal sealed partial class InliningResolver(
             or AliasQualifiedNameSyntax)
         {
             var methodGroup = ResolveMethodGroupSymbol(firstArgExpression);
+            if (methodGroup is not null && RoslynCompatibility.IsExtensionType(methodGroup.ContainingType))
+            {
+                _unsupportedExtensions.Add((methodGroup, "bound extension method groups are not supported; use an explicit expression lambda"));
+                return node;
+            }
 
             if (methodGroup is { Parameters.Length: > 0 })
             {
@@ -232,7 +276,10 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals,
-                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
+                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                                    _unsupportedExtensions = _unsupportedExtensions,
+                                    _extensionExpansion = _extensionExpansion,
+                                    _outputType = _outputType
                                 }.Visit(callee.BodySyntax.Expression)!;
 
                             // Lambda parameters intentionally keep the callee's parameter names.
@@ -303,7 +350,10 @@ internal sealed partial class InliningResolver(
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals,
-                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                                    _unsupportedExtensions = _unsupportedExtensions,
+                                    _extensionExpansion = _extensionExpansion,
+                                    _outputType = _outputType
             }.Visit(callee2.BodySyntax.Expression)!;
 
             // Keep existing generated formatting unless grouping is needed for

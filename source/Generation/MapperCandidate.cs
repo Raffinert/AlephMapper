@@ -1,10 +1,12 @@
 #nullable enable
 
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Threading;
+using System.Linq;
 
 namespace AlephMapper.Generation;
 
@@ -38,6 +40,7 @@ internal sealed class MapperCandidate : IEquatable<MapperCandidate>
         {
             ClassDeclarationSyntax classDeclaration => classDeclaration,
             MethodDeclarationSyntax { Parent: ClassDeclarationSyntax classDeclaration } => classDeclaration,
+            MethodDeclarationSyntax or PropertyDeclarationSyntax when RoslynCompatibility.IsExtensionMember(node) => node.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault(),
             _ => null
         };
 
