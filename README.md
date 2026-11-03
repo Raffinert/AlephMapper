@@ -713,3 +713,7 @@ AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.co
 - [AutoMapper](https://automapper.org/)
 - [Mapster](https://github.com/MapsterMapper/Mapster)
 - [Facet](https://github.com/Tim-Maes/Facet)
+
+## Acknowledgment
+
+AlephMapper's extension-member and switch-expression implementations are heavily inspired by [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp).
