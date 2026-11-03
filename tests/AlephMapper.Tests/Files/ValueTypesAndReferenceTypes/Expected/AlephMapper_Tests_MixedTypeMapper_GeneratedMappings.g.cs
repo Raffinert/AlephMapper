@@ -8,7 +8,7 @@ using TUnit.Core;
 
 namespace AlephMapper.Tests;
 
-[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.0.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.1.0")]
 partial class MixedTypeMapper
 {
     /// <summary>
