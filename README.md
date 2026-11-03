@@ -174,6 +174,59 @@ Use the original method in memory:
 var person = PersonMapper.MapPerson(employee);
 ```
 
+## Switch expressions: evaluation semantics
+
+AlephMapper lowers supported C# `switch` expressions to nested conditional
+expressions so they can appear in LINQ expression trees. This deliberately
+matches the conditional-lowering behavior of ExpressiveSharp.
+
+**Important:** the input to a C# `switch` is ordinarily evaluated once, but
+lowering to conditional comparisons can evaluate the input **more than once**
+(for example, `source.Code.ToLower() switch { "a" => ..., "b" => ..., _ => ... }`).
+The generator does **not** reject these repeated input evaluations via
+`AM0019`. Prefer stable, side-effect-free expressions as switch inputs,
+especially for queries and methods with mutable state. EF Core translation
+depends on the provider.
+
+`AM0019` still prevents expression generation for unsupported or
+non-exhaustive patterns, including cases whose comparison semantics cannot
+be lowered correctly. Inlining helper methods likewise substitutes their
+arguments directly; an argument with side effects can be evaluated more than
+once, skipped, or evaluated in a different order. Prefer stable, side-effect-free
+arguments when generating projections.
+
+Supported patterns include scalar constants, relational/logical patterns, type and
+`var` bindings, nested/extended property patterns, fixed-length arrays and
+`List<T>`, non-capturing list slices, and positional records whose selected
+`Deconstruct` and component properties are compiler synthesized. Captures in
+switch arms bind to their actual member or element path, including in `when`.
+Nested switches and capture-free `is` patterns reuse the same lowering.
+
+Examples of the generated conditional shapes (formatting simplified):
+
+```csharp
+// input switch { { Quantity: > 100 } => 1, _ => 0 }
+((object)input != null && input.Quantity > 100) ? 1 : 0
+
+// items switch { [1, .., 3] => 1, _ => 0 }
+((object)items != null && items.Length >= 2
+    && items[0] == 1 && items[items.Length - 1] == 3) ? 1 : 0
+
+// point switch { (0, 0) => 1, _ => 0 } for record Point(int X, int Y)
+((object)point != null && point.X == 0 && point.Y == 0) ? 1 : 0
+```
+
+Repeated member/indexer reads share the evaluation tradeoff described above.
+SQL translation remains provider dependent; array/list and record support does
+not guarantee that a database provider can translate those expressions.
+
+An unguarded final `_` arm is required, including for otherwise exhaustive
+switches. `AM0019` also covers NaN constants, boxed/interface scalar comparisons,
+custom deconstruction, captured slices, unverified indexable collections,
+ref-return properties, `is` captures requiring an outer binding scope, and throw
+expressions. Update-only adaptation retains ordinary C# switch behavior.
+See the [tested support matrix](docs/switch-parity-matrix.md) for precise limits.
+
 ## Composing mappings and predicates
 
 Supported expression-bodied methods can call other mapping or helper methods. AlephMapper substitutes their arguments and expands their bodies into the generated expression:
@@ -420,7 +473,7 @@ This preserves EF Core's tracked instance:
 ```csharp
 var person = await dbContext.People.FindAsync(id);
 
-PersonMapper.Map(request, target: person);
+PersonMapper.Map(request, dest: person);
 
 await dbContext.SaveChangesAsync();
 ```

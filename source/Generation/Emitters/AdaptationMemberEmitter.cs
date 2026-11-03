@@ -80,6 +80,17 @@ internal static class AdaptationMemberEmitter
                 continue;
             }
 
+            // Update-only adaptations use the ordinary C# body below, not the lowered
+            // expression. A non-exhaustive switch is valid there and must retain its throw.
+            if ((generateMap || generateExpression) &&
+                inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UnsupportedSwitchPattern,
+                    unsupportedSwitch.Location, mapping.MethodSymbol.Name, unsupportedSwitch.Text));
+                continue;
+            }
+
             if ((generateMap || generateExpression) &&
                 inliner.UnsafeConditionalReceivers.FirstOrDefault() is { } unsafeReceiver)
             {

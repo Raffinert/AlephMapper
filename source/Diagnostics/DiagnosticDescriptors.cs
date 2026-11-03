@@ -163,6 +163,14 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor UnsupportedSwitchPattern = new(
+        "AM0019",
+        "Switch expression cannot be lowered without changing semantics",
+        "Expression generation for '{0}' skipped: unsupported or non-exhaustive switch pattern '{1}'",
+        "AlephMapper",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     public static DiagnosticDescriptor? GetById(string id) => id switch
     {
         "AM0001" => UpdatableValueTypeReturn,
@@ -183,6 +191,7 @@ public static class DiagnosticDescriptors
         "AM0016" => UnsafeNullConditionalReceiver,
         "AM0017" => UnsupportedNullConditionalExpression,
         "AM0018" => AdaptGenericMethodUnsupported,
+        "AM0019" => UnsupportedSwitchPattern,
         _ => null
     };
 }

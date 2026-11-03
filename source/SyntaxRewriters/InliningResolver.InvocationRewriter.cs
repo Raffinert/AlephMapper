@@ -19,7 +19,8 @@ internal sealed partial class InliningResolver(
     bool forUpdateMethod,
     NullConditionalRewrite rewriteSupport,
     NullablePolicy nullablePolicy,
-    ITypeSymbol? returnTypeToAnnotate = null)
+    ITypeSymbol? returnTypeToAnnotate = null,
+    IReadOnlyDictionary<IParameterSymbol, ExpressionSyntax>? parameterSubstitutions = null)
     : CSharpSyntaxRewriter
 {
     internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
@@ -30,11 +31,16 @@ internal sealed partial class InliningResolver(
     private Dictionary<IMethodSymbol, MappingAnalysis> _inlinedMethods = new(SymbolEqualityComparer.Default);
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
+    private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
+    // Only the currently visited switch arm owns these locals. Keep the original
+    // Roslyn symbols, not their identifier text, to avoid collisions with callers.
+    private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _switchPatternVariables = new();
     public IEnumerable<string> UsingDirectives => _inlinedMethods.SelectMany(il => il.Value.UsingDirectives).Distinct();
 
     public IReadOnlyList<CircularReferenceInfo> CircularReferences => _circularReferences;
     public IReadOnlyList<UnsafeConditionalReceiverInfo> UnsafeConditionalReceivers => _unsafeConditionalReceivers;
     public IReadOnlyList<UnsupportedNullConditionalInfo> UnsupportedNullConditionals => _unsupportedNullConditionals;
+    public IReadOnlyList<UnsupportedSwitchPatternInfo> UnsupportedSwitchPatterns => _unsupportedSwitchPatterns;
 
     private IMethodSymbol? ResolveMethodGroupSymbol(ExpressionSyntax expr)
     {
@@ -70,6 +76,103 @@ internal sealed partial class InliningResolver(
         var circularRef = new CircularReferenceInfo(method, _callStack.Append(method));
         _circularReferences.Add(circularRef);
     }
+
+    // Bind substitutions to Roslyn parameter symbols, not identifier text. In particular,
+    // 'person.Name' and a parameter named 'Name' must never be treated as the same symbol.
+    public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        if (!CanQuerySemanticModel(node))
+            return base.VisitIdentifierName(node);
+
+        var symbol = model.GetSymbolInfo(node).Symbol;
+        foreach (var patternVariable in _switchPatternVariables)
+        {
+            if (SymbolEqualityComparer.Default.Equals(symbol, patternVariable.Symbol))
+                return patternVariable.Replacement.WithTriviaFrom(node);
+        }
+
+        if (parameterSubstitutions is not null &&
+            symbol is IParameterSymbol parameter &&
+            parameterSubstitutions.TryGetValue(parameter, out var replacement))
+        {
+            // Parenthesize non-primary expressions to preserve operator precedence after inlining.
+            var value = replacement.WithoutTrivia();
+            if (value is not (IdentifierNameSyntax or MemberAccessExpressionSyntax or
+                ElementAccessExpressionSyntax or InvocationExpressionSyntax or
+                LiteralExpressionSyntax or ThisExpressionSyntax or BaseExpressionSyntax or
+                ParenthesizedExpressionSyntax))
+                value = ParenthesizedExpression(value);
+            return value.WithTriviaFrom(node);
+        }
+
+        return base.VisitIdentifierName(node);
+    }
+
+    // Invocation syntax behaves as a primary expression. Inserting a helper
+    // body may lower its precedence; group only when the containing operator
+    // would otherwise bind part of the helper body. This keeps prior generated
+    // snapshots stable where parentheses are unnecessary.
+    private static bool NeedsGroupingAtInlineSite(InvocationExpressionSyntax call, ExpressionSyntax body)
+    {
+        if (body is ParenthesizedExpressionSyntax)
+            return false;
+
+        if (call.Parent is BinaryExpressionSyntax parent)
+        {
+            if (body is not BinaryExpressionSyntax binary)
+                return body is ConditionalExpressionSyntax or AssignmentExpressionSyntax or
+                    IsPatternExpressionSyntax or SwitchExpressionSyntax;
+
+            var bodyPrecedence = BinaryPrecedence(binary.Kind());
+            var parentPrecedence = BinaryPrecedence(parent.Kind());
+            // Right-associative ?? requires grouping on the LEFT; other binary
+            // operators need grouping on the RIGHT when precedence is equal.
+            return bodyPrecedence < parentPrecedence ||
+                   bodyPrecedence == parentPrecedence &&
+                   (parent.IsKind(SyntaxKind.CoalesceExpression)
+                       ? parent.Left == call
+                       : parent.Right == call);
+        }
+
+        // A cast or unary operator binds more tightly than any binary/ternary
+        // expression. In a conditional test, a nested conditional or assignment
+        // must likewise be kept intact. Never rely on the pretty printer to
+        // recover lost parentheses from the rewritten syntax tree.
+        var composite = body is BinaryExpressionSyntax or ConditionalExpressionSyntax or
+            AssignmentExpressionSyntax or IsPatternExpressionSyntax or SwitchExpressionSyntax;
+        if (!composite)
+            return false;
+
+        return call.Parent switch
+        {
+            CastExpressionSyntax or PrefixUnaryExpressionSyntax or
+                PostfixUnaryExpressionSyntax or MemberAccessExpressionSyntax or
+                ElementAccessExpressionSyntax or IsPatternExpressionSyntax => true,
+            ConditionalExpressionSyntax conditional when conditional.Condition == call =>
+                body is ConditionalExpressionSyntax or AssignmentExpressionSyntax,
+            _ => false
+        };
+    }
+
+    private static int BinaryPrecedence(SyntaxKind kind) => kind switch
+    {
+        SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or
+            SyntaxKind.ModuloExpression => 13,
+        SyntaxKind.AddExpression or SyntaxKind.SubtractExpression => 12,
+        SyntaxKind.LeftShiftExpression or SyntaxKind.RightShiftExpression or
+            SyntaxKind.UnsignedRightShiftExpression => 11,
+        SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression or
+            SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression or
+            SyntaxKind.IsExpression or SyntaxKind.AsExpression => 10,
+        SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression => 9,
+        SyntaxKind.BitwiseAndExpression => 8,
+        SyntaxKind.ExclusiveOrExpression => 7,
+        SyntaxKind.BitwiseOrExpression => 6,
+        SyntaxKind.LogicalAndExpression => 5,
+        SyntaxKind.LogicalOrExpression => 4,
+        SyntaxKind.CoalesceExpression => 3,
+        _ => 0
+    };
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
@@ -111,7 +214,12 @@ internal sealed partial class InliningResolver(
                             .Select(p => Parameter(Identifier(p.Name)))
                             .ToArray();
 
-                        // Add method to call stack before inlining
+                        // Rewriting the receiver is not recursion into the method-group
+                        // callee. Do it before pushing the callee on the call stack,
+                        // so Select(Normalize).Select(Normalize) is accepted.
+                        var rewrittenReceiver = (ExpressionSyntax)Visit(node.Expression)!;
+
+                        // Only the lambda body is an expansion of this callee.
                         _callStack.Add(normalizedMethod);
                         try
                         {
@@ -123,17 +231,12 @@ internal sealed partial class InliningResolver(
                                     _circularReferences = _circularReferences,
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
-                                    _unsupportedNullConditionals = _unsupportedNullConditionals
+                                    _unsupportedNullConditionals = _unsupportedNullConditionals,
+                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
                                 }.Visit(callee.BodySyntax.Expression)!;
 
-                            var substitutions = callee.Parameters.ToDictionary(
-                                p => p.Name,
-                                p => (ExpressionSyntax)IdentifierName(p.Name));
-
-                            var substitutedBody =
-                                (ExpressionSyntax)new ParameterSubstitutionRewriter(substitutions)
-                                    .Visit(inlinedBody)!
-                                    .WithoutTrivia();
+                            // Lambda parameters intentionally keep the callee's parameter names.
+                            var substitutedBody = inlinedBody.WithoutTrivia();
 
                             LambdaExpressionSyntax lambda;
                             if (lambdaParams.Length == 1)
@@ -148,7 +251,8 @@ internal sealed partial class InliningResolver(
 
                             lambda = lambda.WithArrowToken(lambda.ArrowToken.WithLeadingTrivia(Space).WithTrailingTrivia(Space));
                             var newArgs = SeparatedList([args[0].WithExpression(lambda)]);
-                            return node.WithArgumentList(node.ArgumentList.WithArguments(newArgs));
+                            return node.WithExpression(rewrittenReceiver)
+                                .WithArgumentList(node.ArgumentList.WithArguments(newArgs));
                         }
                         finally
                         {
@@ -174,7 +278,7 @@ internal sealed partial class InliningResolver(
             return node.WithArgumentList((ArgumentListSyntax)Visit(node.ArgumentList)!);
         }
 
-        if (!TryBuildParameterSubstitutions(node, invokedMethod, args, out var substitutionsMap, out var conditionalAccessExpression))
+        if (!TryBuildParameterSubstitutions(node, invokedMethod, callee2.MethodSymbol, args, out var substitutionsMap, out var conditionalAccessExpression))
         {
             return base.VisitInvocationExpression(node)?.WithoutTrivia();
         }
@@ -192,18 +296,37 @@ internal sealed partial class InliningResolver(
         try
         {
             _inlinedMethods[directCallMethod] = callee2;
-            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee2.ReturnType)
+            var inlinedBody2 = (ExpressionSyntax)new InliningResolver(callee2.SemanticModel, catalog, forUpdateMethod, rewriteSupport, nullablePolicy, callee2.ReturnType, substitutionsMap)
             {
                 _callStack = _callStack,
                 _circularReferences = _circularReferences,
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
-                _unsupportedNullConditionals = _unsupportedNullConditionals
+                _unsupportedNullConditionals = _unsupportedNullConditionals,
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
             }.Visit(callee2.BodySyntax.Expression)!;
 
-            var substituted = ((ExpressionSyntax)new ParameterSubstitutionRewriter(substitutionsMap)
-                .Visit(inlinedBody2)!)
-                .WithoutTrivia();
+            // Keep existing generated formatting unless grouping is needed for
+            // operator precedence (e.g. AddOne(x) * 2 must become (x + 1) * 2).
+            var substituted = inlinedBody2.WithoutTrivia();
+
+            // Inlining removes the callee's return boundary. That boundary can
+            // perform an implicit conversion (e.g. int -> long) which changes the
+            // type of the surrounding arithmetic. Preserve the conversion before
+            // embedding the helper body into its caller.
+            var returnConversion = callee2.SemanticModel.GetTypeInfo(callee2.BodySyntax.Expression);
+            if (returnConversion.Type is { } expressionType &&
+                returnConversion.ConvertedType is { } convertedType &&
+                !SymbolEqualityComparer.Default.Equals(expressionType, convertedType) &&
+                SymbolEqualityComparer.Default.Equals(convertedType, callee2.ReturnType))
+            {
+                var returnType = ParseTypeName(TypeDisplay.ForSymbol(
+                    callee2.ReturnType, callee2.ReturnType.NullableAnnotation, nullablePolicy));
+                substituted = CastExpression(returnType, ParenthesizedExpression(substituted));
+            }
+
+            if (NeedsGroupingAtInlineSite(node, substituted))
+                substituted = ParenthesizedExpression(substituted);
 
             if (conditionalAccessExpression)
             {
@@ -219,23 +342,34 @@ internal sealed partial class InliningResolver(
         }
     }
 
+    private ExpressionSyntax PreserveArgumentConversion(ExpressionSyntax? original, ExpressionSyntax rewritten,
+        ITypeSymbol? expectedType = null)
+    {
+        if (original is null || !CanQuerySemanticModel(original)) return rewritten;
+        var info = model.GetTypeInfo(original);
+        var converted = expectedType ?? info.ConvertedType;
+        if (converted is null || SymbolEqualityComparer.Default.Equals(info.Type, converted)) return rewritten;
+        return ParenthesizedExpression(CastExpression(ParseTypeName(TypeDisplay.ForSymbol(
+            converted, converted.NullableAnnotation, nullablePolicy)), ParenthesizedExpression(rewritten)));
+    }
+
     private bool TryBuildParameterSubstitutions(
         InvocationExpressionSyntax node,
         IMethodSymbol invokedMethod,
+        IMethodSymbol calleeMethod,
         SeparatedSyntaxList<ArgumentSyntax> args,
-        out Dictionary<string, ExpressionSyntax> substitutions,
+        out Dictionary<IParameterSymbol, ExpressionSyntax> substitutions,
         out bool conditionalAccessExpression)
     {
-        substitutions = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
+        substitutions = new Dictionary<IParameterSymbol, ExpressionSyntax>(SymbolEqualityComparer.Default);
         conditionalAccessExpression = false;
 
         // When an extension method is called via dot syntax (e.g. address.ToDto()),
         // Roslyn returns the "reduced" form where Parameters does NOT include the 'this' parameter.
         // We need the original definition's parameters (which include 'this') for correct substitution.
         var isReducedExtension = invokedMethod.IsExtensionMethod && invokedMethod.ReducedFrom != null;
-        var parameters = isReducedExtension
-            ? invokedMethod.ReducedFrom!.Parameters
-            : invokedMethod.Parameters;
+        // Keys must refer to symbols in the callee's source syntax tree.
+        var parameters = calleeMethod.Parameters;
 
         if (parameters.Length == 0)
         {
@@ -270,7 +404,9 @@ internal sealed partial class InliningResolver(
                 return false;
             }
 
-            substitutions[parameters[0].Name] = receiver;
+            substitutions[parameters[0]] = PreserveArgumentConversion(
+                node.Expression is MemberAccessExpressionSyntax access ? access.Expression : null,
+                receiver, invokedMethod.ReceiverType);
             nextParamIndex = 1;
         }
 
@@ -297,7 +433,7 @@ internal sealed partial class InliningResolver(
             }
 
             var rewrittenArg = (ExpressionSyntax)(Visit(arg.Expression) ?? arg.Expression);
-            substitutions[targetParam.Name] = rewrittenArg;
+            substitutions[targetParam] = PreserveArgumentConversion(arg.Expression, rewrittenArg);
         }
 
         // Ensure all parameters are covered (no optional/default handling for now)
