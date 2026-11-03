@@ -34,6 +34,26 @@ internal sealed partial class InliningResolver
         finally { while (count-- > 0) _lambdaVariables.Pop(); }
     }
 
+    public override SyntaxNode? VisitAnonymousObjectMemberDeclarator(AnonymousObjectMemberDeclaratorSyntax node)
+    {
+        var rewritten = (AnonymousObjectMemberDeclaratorSyntax)base.VisitAnonymousObjectMemberDeclarator(node)!;
+        if (node.NameEquals is not null || node.Parent is not AnonymousObjectCreationExpressionSyntax creation ||
+            !CanQuerySemanticModel(creation) ||
+            model.GetOperation(creation) is not Microsoft.CodeAnalysis.Operations.IAnonymousObjectCreationOperation operation)
+            return rewritten;
+        var index = creation.Initializers.IndexOf(node);
+        if (index < 0 || operation.Initializers[index] is not Microsoft.CodeAnalysis.Operations.ISimpleAssignmentOperation
+            { Target: Microsoft.CodeAnalysis.Operations.IPropertyReferenceOperation property }) return rewritten;
+        var inferredName = rewritten.Expression switch
+        {
+            IdentifierNameSyntax name => name.Identifier.ValueText,
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            _ => null
+        };
+        if (inferredName == property.Property.Name) return rewritten;
+        return rewritten.WithNameEquals(NameEquals(IdentifierName(Identifier("@" + property.Property.Name))));
+    }
+
     private ParameterSyntax RenameLambdaParameter(ParameterSyntax parameter, ref int count)
     {
         if (parameterSubstitutions is null || !CanQuerySemanticModel(parameter) ||

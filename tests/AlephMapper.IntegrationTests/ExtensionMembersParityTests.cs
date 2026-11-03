@@ -68,6 +68,17 @@ public class ExtensionMembersParityTests
     }
 
     [Test]
+    public async Task Renamed_lambda_preserves_anonymous_members_and_root_nameof()
+    {
+        var values = new[] { 1, 2, 3 };
+        await Assert.That(ExtensionReviewMapper.AnonymousNameExpression().Compile()(values)).IsEqualTo(ExtensionReviewMapper.AnonymousName(values));
+        await Assert.That(ExtensionReviewMapper.AnonymousName(values)).IsEqualTo(4);
+        var order = new ExtensionOrder();
+        await Assert.That(ExtensionReviewMapper.RootNameExpression().Compile()(order)).IsEqualTo(ExtensionReviewMapper.RootName(order));
+        await Assert.That(ExtensionReviewMapper.RootName(order)).IsEqualTo("Amount");
+    }
+
+    [Test]
     public async Task CSharp14_projection_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -152,6 +163,9 @@ public static partial class ExtensionReviewMapper
     [Projectable] public static int GenericDependency(int n) => n.WithGenericOffset;
     [Projectable] public static int ClassicName(int[] values) => ClassicHelper(values.Length);
     private static int ClassicHelper(int n) => new[] { 1 }.Sum(Length => n + nameof(Length).Length);
+    [Projectable] public static string RootName(ExtensionOrder order) => nameof(order.Amount);
+    [Projectable] public static int AnonymousName(int[] values) => AnonymousHelper(values.Length);
+    private static int AnonymousHelper(int n) => new[] { 1 }.Select(Length => new { Length, Value = n }).Sum(v => v.Length + v.Value);
     [Projectable] public static string Name(int n) => n.ReceiverName;
     [Projectable] public static bool Nonfinite(int x) => x.WithNonfinite;
     [Projectable] public static int Capture(int x) => x.Sum(3);

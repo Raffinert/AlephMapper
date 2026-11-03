@@ -179,6 +179,13 @@ public class ExtensionMemberTests
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
+    [Test]
+    public async Task CSharp14_compiler_rejects_nameof_extension_member_in_original_source()
+    {
+        var compilation = await Compile("public class Node {} public static class Ext { extension(Node n) { public int Value => 1; } public static string Name(Node n) => nameof(n.Value); }");
+        await Assert.That(compilation.GetDiagnostics().Any(d => d.Id == "CS9316")).IsTrue();
+    }
+
     internal static async Task<(GeneratorRunResult Result, Compilation Output)> Generate(string source)
     {
         var compilation = await Compile(source);

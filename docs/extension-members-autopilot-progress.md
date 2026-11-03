@@ -25,7 +25,7 @@
 - `dotnet restore AlephMapper.slnx`: pass.
 - `dotnet build AlephMapper.slnx -c Release --no-restore`: pass, zero errors; existing nullable warnings visible.
 - `dotnet build AlephMapper.slnx -c Debug --no-restore`: pass, zero errors; nullable warnings visible.
-- `dotnet test AlephMapper.slnx -c Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results`: 189 passed, 0 failed, 0 skipped.
+- `dotnet test AlephMapper.slnx -c Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results`: 191 passed, 0 failed, 0 skipped.
 - `dotnet pack source/AlephMapper.csproj -c Release --no-restore -o artifacts/nuget`: pass, local0.7.4 artifact only (version unchanged, no publication).
 - Fresh isolated package caches: CSharp14/net10 consumer restores and executes property/method/combined expression comparisons; classic CSharp12/net8 consumer restores and executes. No CS9057 or analyzer assembly-load failures. Both use the final packed analyzer without direct Roslyn references.
 - `git diff --check`: pass.
@@ -45,3 +45,13 @@ static methods by their bound containing type. Added qualified/unqualified priva
 generic dependency negatives. Full189 passed; Release/Debug, pack and fresh net10
 and net8 package-consumer programs rechecked successfully. Requested remote review
 of the corrected head; final CI status is recorded on the PR.
+
+Remote review cycle2: preserved inferred anonymous-object member names from bound
+IAnonymousObjectCreationOperation properties when alpha-renaming expressions;
+added runtime compilation regression (result4). Root nameof folding now runs for
+expression projections too, while retaining ordinary Update output formatting.
+The review's nameof(extensionProperty) source is itself rejected by CSharp14 with
+CS9316; a dedicated original-compilation regression records that restriction.
+Valid root nameof(ordinaryProperty) also has runtime coverage. Full191 passed;
+Release/Debug, pack and fresh net10/net8 consumers passed again. Final remote
+review cycle3 requested; no further automatic cycles will be started.
