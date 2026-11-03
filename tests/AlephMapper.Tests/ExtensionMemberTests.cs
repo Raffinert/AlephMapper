@@ -124,10 +124,70 @@ public class ExtensionMemberTests
     }
 
     [Test]
-    public async Task Unsupported_extension_update_request_is_not_silently_ignored()
+    public async Task CSharp14_extension_method_generates_projection_update_and_adapted_companions()
     {
-        var (result, _) = await Generate("using AlephMapper; public static partial class Ext { extension(int n) { [Updatable] public int Value() => n+1; } }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        const string source = """
+            using AlephMapper;
+
+            public sealed class Person { public string Name { get; set; } = ""; }
+            public sealed class Employee { public string Name { get; set; } = ""; }
+            public sealed class PersonDto { public string Name { get; set; } = ""; }
+            public sealed class EmployeeDto { public string Name { get; set; } = ""; }
+
+            public static partial class Ext
+            {
+                extension(Person person)
+                {
+                    [Projectable]
+                    [Updatable]
+                    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee",
+                        Generate = AdaptGeneration.Map | AdaptGeneration.Expression | AdaptGeneration.Update)]
+                    public PersonDto Map(string suffix) => new() { Name = person.Name + suffix };
+                }
+
+                public static bool Check()
+                {
+                    var person = new Person { Name = "Person" };
+                    var destination = new PersonDto { Name = "old" };
+                    var updated = Map(person, "!", destination);
+
+                    var employee = new Employee { Name = "Employee" };
+                    var employeeDestination = new EmployeeDto { Name = "old" };
+                    var mapped = MapEmployee(employee, "?");
+                    var adaptedUpdated = MapEmployee(employee, "#", employeeDestination);
+
+                    return ReferenceEquals(destination, updated)
+                        && updated.Name == "Person!"
+                        && MapExpression("!").Compile()(person).Name == "Person!"
+                        && mapped.Name == "Employee?"
+                        && ReferenceEquals(employeeDestination, adaptedUpdated)
+                        && adaptedUpdated.Name == "Employee#"
+                        && MapEmployeeExpression("?").Compile()(employee).Name == "Employee?";
+                }
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single(s => s.HintName.EndsWith("GeneratedMappings.g.cs")).SourceText.ToString();
+        await Assert.That(generated).Contains("MapEmployeeExpression");
+        await Assert.That(generated).Contains("MapEmployee(");
+        await Assert.That(generated).Contains("PersonDto dest");
+
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Ext")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
+    public async Task Unsupported_scalar_extension_update_reports_value_type_diagnostic()
+    {
+        var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(int n) { [Updatable] public int Value() => n+1; } }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0001")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsFalse();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
     [Test]
