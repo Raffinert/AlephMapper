@@ -63,7 +63,7 @@ For further recipes, read [projections.md](references/projections.md), [updates-
 
 ## Installation and verification
 
-The documented package is `AlephMapper` 0.7.4, packaged as a compile-time analyzer/source generator targeting `netstandard2.0`. Its consumer compiler host must be compatible with `Microsoft.CodeAnalysis` 4.14 or later; verify requirements for the installed version. A `PackageReference` used in a library should configure generator assets appropriately (see the repository README).
+The documented package is `AlephMapper` 0.8.0, packaged as a compile-time analyzer/source generator targeting `netstandard2.0`. It supports Roslyn 4.8 and later through versioned analyzer assets; C# 14 extension members require Roslyn 5.0 or later. Verify requirements for the installed version. A `PackageReference` used in a library should configure generator assets appropriately (see the repository README).
 
 Inspect compiler diagnostics (`AM0001`–`AM0018` as applicable) and, when debugging, emit compiler-generated files. Verify generated signatures rather than inventing them. Do not treat a generated code compilation failure as an EF translation problem.
 
