@@ -22,3 +22,5 @@ AM0015 | AlephMapper | Error | Adapted generated member fails Roslyn rebinding.
 AM0016 | AlephMapper | Warning | Null-conditional receiver cannot be safely rewritten.
 AM0017 | AlephMapper | Warning | Null-conditional access is unsupported in expression trees.
 AM0018 | AlephMapper | Warning | Adaptation of generic mapping methods is unsupported.
+
+AM0021 | AlephMapper | Warning | Extension member cannot be projected; diagnostic supplies the unsupported reason.

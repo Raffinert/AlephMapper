@@ -54,6 +54,46 @@ internal static class MappingAnalysisFactory
             GetAdaptations(methodSymbol));
     }
 
+    internal static string? ExtensionUnsupportedReason(ISymbol member, bool requirePartial = true)
+    {
+        var type = member.ContainingType;
+        var receiver = type.ExtensionParameter;
+        if (member.IsStatic || receiver is null) return "static members or unnamed receivers are unsupported";
+        if (type.TypeParameters.Length != 0 || member is IMethodSymbol { IsGenericMethod: true })
+            return "generic extension blocks and methods are not supported yet";
+        if (receiver.RefKind != RefKind.None || receiver.Type.IsRefLikeType)
+            return "ref/in/out or ref-like receivers cannot be projected";
+        if (requirePartial && !type.ContainingType.DeclaringSyntaxReferences.All(r => r.GetSyntax() is ClassDeclarationSyntax c &&
+                c.Modifiers.Any(SyntaxKind.StaticKeyword) && c.Modifiers.Any(SyntaxKind.PartialKeyword)))
+            return "the outer class must be static partial";
+        if (member is IMethodSymbol method && (method.ReturnsVoid || method.ReturnsByRef || method.ReturnsByRefReadonly ||
+            method.Parameters.Any(p => p.RefKind != RefKind.None || p.IsOptional || p.IsParams)))
+            return "void/ref returns, ref parameters, optional parameters and params are unsupported";
+        if (member is IPropertySymbol property && (property.ReturnsByRef || property.ReturnsByRefReadonly || property.SetMethod is not null))
+            return "only value-returning getter-only properties are supported";
+        var syntax = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax is not MethodDeclarationSyntax { ExpressionBody: not null } and
+            not PropertyDeclarationSyntax { ExpressionBody: not null })
+            return "an expression body is required";
+        return null;
+    }
+
+    internal static MappingAnalysis? CreateExtension(SemanticModel model, SyntaxNode syntax, CancellationToken token)
+    {
+        if (syntax.Parent is not ExtensionBlockDeclarationSyntax || model.GetDeclaredSymbol(syntax, token) is not { } member ||
+            ExtensionUnsupportedReason(member, SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(member.ContainingType.ContainingType, typeof(ProjectableAttribute).FullName)) is not null) return null;
+        var receiver = member.ContainingType.ExtensionParameter!;
+        var outer = member.ContainingType.ContainingType;
+        var method = member as IMethodSymbol ?? ((IPropertySymbol)member).GetMethod!;
+        var body = syntax is MethodDeclarationSyntax m ? m.ExpressionBody! : ((PropertyDeclarationSyntax)syntax).ExpressionBody!;
+        return new MappingAnalysis(outer, method, member.Name,
+            new[] { receiver }.Concat(method.Parameters).ToArray(), method.ReturnType, body, model,
+            SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) || SymbolHelpers.HasAttribute(outer, typeof(ProjectableAttribute).FullName),
+            false, true, GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
+            CollectionPropertiesPolicy.Skip, ExtractUsingDirectives(syntax), [], member, receiver);
+    }
+
     private static bool HasAttribute(INamedTypeSymbol classSymbol, IMethodSymbol methodSymbol, string attributeName)
     {
         return SymbolHelpers.HasAttribute(classSymbol, attributeName) ||

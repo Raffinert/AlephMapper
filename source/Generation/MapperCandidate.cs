@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Threading;
+using System.Linq;
 
 namespace AlephMapper.Generation;
 
@@ -38,6 +39,8 @@ internal sealed class MapperCandidate : IEquatable<MapperCandidate>
         {
             ClassDeclarationSyntax classDeclaration => classDeclaration,
             MethodDeclarationSyntax { Parent: ClassDeclarationSyntax classDeclaration } => classDeclaration,
+            MethodDeclarationSyntax { Parent: ExtensionBlockDeclarationSyntax } or
+            PropertyDeclarationSyntax { Parent: ExtensionBlockDeclarationSyntax } => node.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault(),
             _ => null
         };
 

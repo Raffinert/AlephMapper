@@ -32,6 +32,8 @@ internal sealed partial class InliningResolver(
     private List<UnsafeConditionalReceiverInfo> _unsafeConditionalReceivers = [];
     private List<UnsupportedNullConditionalInfo> _unsupportedNullConditionals = [];
     private List<UnsupportedSwitchPatternInfo> _unsupportedSwitchPatterns = [];
+    private List<(ISymbol Member, string Reason)> _unsupportedExtensions = [];
+    public IReadOnlyList<(ISymbol Member, string Reason)> UnsupportedExtensions => _unsupportedExtensions;
     // Only the currently visited switch arm owns these locals. Keep the original
     // Roslyn symbols, not their identifier text, to avoid collisions with callers.
     private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _switchPatternVariables = new();
@@ -183,6 +185,9 @@ internal sealed partial class InliningResolver(
             return base.VisitInvocationExpression(node);
         }
 
+        if (invokedMethod.ContainingType.IsExtension)
+            return RewriteExtensionCall(node, invokedMethod);
+
         var args = node.ArgumentList.Arguments;
         var firstArgExpression = args.Count > 0 ? args[0].Expression : null;
         var isConditionalAccess = node.Parent is ConditionalAccessExpressionSyntax;
@@ -232,7 +237,8 @@ internal sealed partial class InliningResolver(
                                     _inlinedMethods = _inlinedMethods,
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals,
-                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
+                                    _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                                    _unsupportedExtensions = _unsupportedExtensions
                                 }.Visit(callee.BodySyntax.Expression)!;
 
                             // Lambda parameters intentionally keep the callee's parameter names.
@@ -303,7 +309,8 @@ internal sealed partial class InliningResolver(
                 _inlinedMethods = _inlinedMethods,
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals,
-                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns
+                _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
+                                    _unsupportedExtensions = _unsupportedExtensions
             }.Visit(callee2.BodySyntax.Expression)!;
 
             // Keep existing generated formatting unless grouping is needed for

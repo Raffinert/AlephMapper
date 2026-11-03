@@ -188,6 +188,8 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
+        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && property.ContainingType.IsExtension)
+            return RewriteExtensionProperty(node, property, targetExpression, receiverAlreadyVisited: true);
         var memberAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name);
         return memberAccess.WithTriviaFrom(node);
     }

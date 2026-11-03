@@ -12,6 +12,8 @@ internal sealed partial class InliningResolver
 {
     public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
     {
+        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && property.ContainingType.IsExtension)
+            return RewriteExtensionProperty(node, property, node.Expression);
         var rewritten = (MemberAccessExpressionSyntax?)base.VisitMemberAccessExpression(node);
         if (rewritten == null ||
             !CanQuerySemanticModel(node) ||

@@ -171,6 +171,11 @@ public static class DiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor UnsupportedExtensionMember = new(
+        "AM0021", "Extension member cannot be projected",
+        "Expression generation for extension member '{0}' skipped: {1}",
+        "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
     public static DiagnosticDescriptor? GetById(string id) => id switch
     {
         "AM0001" => UpdatableValueTypeReturn,
@@ -192,6 +197,7 @@ public static class DiagnosticDescriptors
         "AM0017" => UnsupportedNullConditionalExpression,
         "AM0018" => AdaptGenericMethodUnsupported,
         "AM0019" => UnsupportedSwitchPattern,
+        "AM0021" => UnsupportedExtensionMember,
         _ => null
     };
 }

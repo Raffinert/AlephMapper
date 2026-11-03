@@ -21,6 +21,13 @@ internal static class ProjectableMemberEmitter
             .WithoutTrailingTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
 
+        if (inliner.UnsupportedExtensions.FirstOrDefault() is var unsupportedExtension && unsupportedExtension.Member is not null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
+                unsupportedExtension.Member.Locations.FirstOrDefault(), unsupportedExtension.Member.Name, unsupportedExtension.Reason));
+            return;
+        }
+
         if (inliner.CircularReferences.Any())
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -59,6 +66,17 @@ internal static class ProjectableMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
+        if (mapping.ReceiverSymbol is not null &&
+            (context.GeneratedMemberSignatures.Contains(MethodSignature.Build(expressionMethodName,
+                details.ExtraExpressionParameterTypeNames, details.MethodTypeParameterCount)) ||
+             context.MapperType.GetMembers(expressionMethodName).OfType<IMethodSymbol>().Any(m =>
+                 m.Parameters.Select(p => p.Type.ToDisplayString()).SequenceEqual(mapping.Parameters.Skip(1).Select(p => p.Type.ToDisplayString())))))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
+                mapping.MemberSymbol.Locations.FirstOrDefault(), mapping.Name, "the generated factory signature conflicts with another member"));
+            return;
+        }
+
         context.GeneratedMemberSignatures.Add(MethodSignature.Build(
             expressionMethodName,
             details.ExtraExpressionParameterTypeNames,
