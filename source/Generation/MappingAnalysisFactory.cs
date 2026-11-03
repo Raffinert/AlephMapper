@@ -47,11 +47,53 @@ internal static class MappingAnalysisFactory
             semanticModel,
             HasAttribute(classSymbol, methodSymbol, typeof(ProjectableAttribute).FullName),
             HasAttribute(classSymbol, methodSymbol, typeof(UpdatableAttribute).FullName),
-            classDeclaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword)),
             GetNullStrategy(methodSymbol) ?? GetNullStrategy(classSymbol) ?? NullConditionalRewrite.Ignore,
             GetCollectionPropertiesPolicy(methodSymbol) ?? GetCollectionPropertiesPolicy(classSymbol) ?? CollectionPropertiesPolicy.Skip,
             ExtractUsingDirectives(methodDeclaration),
             GetAdaptations(methodSymbol));
+    }
+
+    internal static string? ExtensionUnsupportedReason(ISymbol member, bool requirePartial = true)
+    {
+        var type = member.ContainingType;
+        var receiver = RoslynCompatibility.GetExtensionReceiver(type);
+        if (member.IsStatic || receiver is null) return "static members or unnamed receivers are unsupported";
+        if (type.TypeParameters.Length != 0 || member is IMethodSymbol { IsGenericMethod: true })
+            return "generic extension blocks and methods are not supported yet";
+        if (receiver.RefKind != RefKind.None || receiver.Type.IsRefLikeType)
+            return "ref/in/out or ref-like receivers cannot be projected";
+        if (requirePartial && !MapperDeclarationValidator.IsEligible(type.ContainingType))
+            return MapperDeclarationValidator.RequiredDeclaration;
+        if (member is IMethodSymbol method && (method.ReturnsVoid || method.ReturnsByRef || method.ReturnsByRefReadonly ||
+            method.Parameters.Any(p => p.RefKind != RefKind.None || p.IsOptional || p.IsParams)))
+            return "void/ref returns, ref parameters, optional parameters and params are unsupported";
+        if (member is IPropertySymbol property && (property.ReturnsByRef || property.ReturnsByRefReadonly || property.SetMethod is not null))
+            return "only value-returning getter-only properties are supported";
+        var syntax = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax is not MethodDeclarationSyntax { ExpressionBody: not null } and
+            not PropertyDeclarationSyntax { ExpressionBody: not null })
+            return "an expression body is required";
+        if (syntax.DescendantNodes().OfType<QueryExpressionSyntax>().Any())
+            return "query syntax is unsupported in extension bodies; use LINQ method syntax";
+        if (syntax.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>().Any(lambda => lambda.Body is BlockSyntax || lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword)))
+            return "block-bodied or async anonymous functions cannot be projected";
+        return null;
+    }
+
+    internal static MappingAnalysis? CreateExtension(SemanticModel model, SyntaxNode syntax, CancellationToken token)
+    {
+        if (!RoslynCompatibility.IsExtensionMember(syntax) || model.GetDeclaredSymbol(syntax, token) is not { } member ||
+            ExtensionUnsupportedReason(member, SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
+                SymbolHelpers.HasAttribute(member.ContainingType.ContainingType, typeof(ProjectableAttribute).FullName)) is not null) return null;
+        var receiver = RoslynCompatibility.GetExtensionReceiver(member.ContainingType)!;
+        var outer = member.ContainingType.ContainingType;
+        var method = member as IMethodSymbol ?? ((IPropertySymbol)member).GetMethod!;
+        var body = syntax is MethodDeclarationSyntax m ? m.ExpressionBody! : ((PropertyDeclarationSyntax)syntax).ExpressionBody!;
+        return new MappingAnalysis(outer, method, member.Name,
+            new[] { receiver }.Concat(method.Parameters).ToArray(), method.ReturnType, body, model,
+            SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) || SymbolHelpers.HasAttribute(outer, typeof(ProjectableAttribute).FullName),
+            false, GetNullStrategy(member) ?? GetNullStrategy(outer) ?? NullConditionalRewrite.Ignore,
+            CollectionPropertiesPolicy.Skip, ExtractUsingDirectives(syntax), [], member, receiver);
     }
 
     private static bool HasAttribute(INamedTypeSymbol classSymbol, IMethodSymbol methodSymbol, string attributeName)

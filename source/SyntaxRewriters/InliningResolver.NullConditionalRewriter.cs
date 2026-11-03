@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -24,7 +24,7 @@ internal partial class InliningResolver
             {
                 if (!forUpdateMethod)
                 {
-                    _unsupportedNullConditionals.Add(new UnsupportedNullConditionalInfo(node));
+                    _context.UnsupportedNullConditionals.Add(new UnsupportedNullConditionalInfo(node));
                 }
 
                 _conditionalAccessExpressionsStack.Push(node.Expression);
@@ -34,16 +34,16 @@ internal partial class InliningResolver
                 return rewritten;
             }
 
-            var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+            var targetExpression = (ExpressionSyntax)(Visit(node.Expression) ?? node.Expression);
             if (rewriteSupport == NullConditionalRewrite.Rewrite &&
                 !CanSafelyRepeat(targetExpression))
             {
-                _unsafeConditionalReceivers.Add(new UnsafeConditionalReceiverInfo(node.Expression));
+                _context.UnsafeConditionalReceivers.Add(new UnsafeConditionalReceiverInfo(node.Expression));
             }
 
             _conditionalAccessExpressionsStack.Push(targetExpression);
 
-            var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
+            var rewrittenWhenNotNull = (ExpressionSyntax)(Visit(node.WhenNotNull) ?? node.WhenNotNull);
             rewrittenWhenNotNull = CreateMemberAccessFromDotPrefixedExpression(targetExpression, rewrittenWhenNotNull);
 
             if (rewriteSupport is NullConditionalRewrite.Ignore)
@@ -107,6 +107,7 @@ internal partial class InliningResolver
         return expression switch
         {
             IdentifierNameSyntax => true,
+            LiteralExpressionSyntax => true,
             ThisExpressionSyntax => true,
             BaseExpressionSyntax => true,
             MemberAccessExpressionSyntax memberAccess => CanSafelyRepeat(memberAccess.Expression),
@@ -119,6 +120,19 @@ internal partial class InliningResolver
             ConditionalAccessExpressionSyntax conditional =>
                 CanSafelyRepeat(conditional.Expression) &&
                 CanSafelyRepeat(conditional.WhenNotNull),
+            // Nested null-conditional rewriting synthesizes stable ternaries and
+            // null checks. Recognize them rather than rejecting the same stable
+            // receiver merely because the syntax has already been lowered.
+            ConditionalExpressionSyntax conditional =>
+                CanSafelyRepeat(conditional.Condition) &&
+                CanSafelyRepeat(conditional.WhenTrue) &&
+                CanSafelyRepeat(conditional.WhenFalse),
+            BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression) ||
+                binary.IsKind(SyntaxKind.NotEqualsExpression) ||
+                binary.IsKind(SyntaxKind.CoalesceExpression) ||
+                binary.IsKind(SyntaxKind.LogicalAndExpression) ||
+                binary.IsKind(SyntaxKind.LogicalOrExpression) =>
+                    CanSafelyRepeat(binary.Left) && CanSafelyRepeat(binary.Right),
             _ => false
         };
     }
@@ -174,6 +188,8 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
+        if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IPropertySymbol property && RoslynCompatibility.IsExtensionType(property.ContainingType))
+            return RewriteExtensionProperty(node, property, targetExpression, receiverAlreadyVisited: true);
         var memberAccess = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name);
         return memberAccess.WithTriviaFrom(node);
     }
@@ -186,7 +202,11 @@ internal partial class InliningResolver
         }
 
         var targetExpression = _conditionalAccessExpressionsStack.Peek();
-        return ElementAccessExpression(targetExpression, node.ArgumentList);
+        // The index arguments still belong to the original bound syntax tree.
+        // Visit them before rebuilding the element access, so arguments referring
+        // to parameters of an inlined helper receive symbol-aware substitutions.
+        var rewrittenArguments = (BracketedArgumentListSyntax)Visit(node.ArgumentList)!;
+        return ElementAccessExpression(targetExpression, rewrittenArguments);
     }
 
     // Binary expressions are handled in the CollectionExpressionRewriter partial to avoid duplication.

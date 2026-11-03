@@ -21,12 +21,27 @@ internal static class ProjectableMemberEmitter
             .WithoutTrailingTrivia();
         context.AddUsings(inliner.UsingDirectives.Concat(mapping.UsingDirectives));
 
+        if (inliner.UnsupportedExtensions.FirstOrDefault() is var unsupportedExtension && unsupportedExtension.Member is not null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedExtensionMember,
+                unsupportedExtension.Member.Locations.FirstOrDefault(), unsupportedExtension.Member.Name, unsupportedExtension.Reason));
+            return;
+        }
+
         if (inliner.CircularReferences.Any())
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.ProjectableCircularReferences,
                 mapping.MethodSymbol.Locations.FirstOrDefault(),
                 mapping.MethodSymbol.Name));
+            return;
+        }
+
+        if (inliner.UnsupportedSwitchPatterns.FirstOrDefault() is { } unsupportedSwitch)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                DiagnosticDescriptors.UnsupportedSwitchPattern,
+                unsupportedSwitch.Location, mapping.MethodSymbol.Name, unsupportedSwitch.Text));
             return;
         }
 
@@ -51,10 +66,15 @@ internal static class ProjectableMemberEmitter
         }
 
         var expressionMethodName = mapping.Name + "Expression";
-        context.GeneratedMemberSignatures.Add(MethodSignature.Build(
-            expressionMethodName,
-            details.ExtraExpressionParameterTypeNames,
-            details.MethodTypeParameterCount));
+        var signature = MethodSignature.Build(expressionMethodName, mapping.Parameters.Skip(1).Select(p => p.Type), mapping.MethodSymbol.Arity);
+        if (!context.MemberSignatures.TryReserve([signature], out var conflict))
+        {
+            var descriptor = mapping.ReceiverSymbol is not null
+                ? DiagnosticDescriptors.UnsupportedExtensionMember : DiagnosticDescriptors.GeneratedMemberConflict;
+            context.ReportDiagnostic(Diagnostic.Create(descriptor, mapping.MemberSymbol.Locations.FirstOrDefault(),
+                mapping.Name, "the generated factory signature conflicts with another member: " + conflict));
+            return;
+        }
         var nullStrategyDescription = mapping.NullStrategy switch
         {
             NullConditionalRewrite.None => "Null-conditional operators are preserved as-is in the expression tree.",

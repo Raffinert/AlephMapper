@@ -1,4 +1,3 @@
-using AlephMapper.Adaptation;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -19,13 +18,12 @@ internal sealed class MapperGenerationContext(
 
     public INamedTypeSymbol MapperType { get; } = mapperType;
     public MappingCatalog MappingsByMethod { get; } = mappingsByMethod;
-    public AdaptationMemberPlanner AdaptationMembers { get; } = new(mapperType);
+    public GeneratedMemberRegistry MemberSignatures { get; } = new(mapperType);
     public HashSet<string> UsingDirectives { get; } = new(StringComparer.Ordinal);
-    public HashSet<string> GeneratedMemberSignatures { get; } = new(StringComparer.Ordinal);
     public StringBuilder Members { get; } = new();
     private List<GenerationDiagnostic> Diagnostics { get; } = new();
 
-    public ImmutableArray<GenerationDiagnostic> GetDiagnostics() => [.. Diagnostics];
+    public ImmutableArray<GenerationDiagnostic> GetDiagnostics() => Diagnostics.ToImmutableArray();
 
     public void ReportDiagnostic(Diagnostic diagnostic) => Diagnostics.Add(GenerationDiagnostic.From(diagnostic));
 

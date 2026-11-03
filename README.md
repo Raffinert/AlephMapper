@@ -72,7 +72,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.7.4">
+<PackageReference Include="AlephMapper" Version="0.8.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -82,7 +82,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.7.4" />
+<PackageVersion Include="AlephMapper" Version="0.8.0" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
@@ -103,7 +103,7 @@ When referencing the generator directly from source:
 
 ### Compiler compatibility
 
-AlephMapper 0.7.4 requires a Roslyn compiler host compatible with `Microsoft.CodeAnalysis` 4.14 or later. This version uses Roslyn's embedded-marker support so its generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+AlephMapper 0.8.0 supports Roslyn 4.8 and later through versioned analyzer assets. Roslyn 4.8 through 4.x supports classic mappings, switch lowering, Update and Adapt; Roslyn 5.0 and later additionally supports C# 14 extension members. The compiler automatically selects one compatible analyzer. Generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
 
 ### Migration: `[Expressive]` to `[Projectable]`
 
@@ -173,6 +173,132 @@ Use the original method in memory:
 ```csharp
 var person = PersonMapper.MapPerson(employee);
 ```
+
+## C# 14 extension members
+
+C# 14 instance methods and expression-bodied getter-only properties in extension
+blocks can generate ordinary static expression factories in the outer `static
+partial` class. The receiver is the expression input; ordinary method arguments
+become factory arguments.
+
+```csharp
+public static partial class OrderExtensions
+{
+    // Classic extension method remains supported.
+    [Projectable]
+    public static decimal Twice(this Order order) => order.Amount * 2m;
+
+    extension(Order order)
+    {
+        [Projectable]
+        public decimal AmountWithTax => order.Amount * 1.25m;
+
+        [Projectable]
+        public string Label(int min) => order.Amount >= min ? "high" : "low";
+    }
+}
+
+// Expression<Func<Order, decimal>>
+var tax = OrderExtensions.AmountWithTaxExpression();
+// Expression<Func<Order, string>>
+var label = OrderExtensions.LabelExpression(100);
+```
+
+Nested source-defined extension accesses/calls are expanded by symbol identity,
+including classic/C# 14 composition, switch bodies, and nested LINQ method calls.
+Primitive, interface, struct, nullable-value and reference receivers are supported.
+`[Projectable]` on the outer class includes supported extension members.
+`[Updatable]` and `[Adapt]` do not automatically apply to computed properties;
+direct requests on extension methods receive `AM0021`.
+
+The NuGet package selects a compatible analyzer automatically by the compiler
+host version (independent of the application's target framework):
+
+| Compiler host | Selected analyzer | Features |
+|---|---|---|
+| Roslyn 4.8 through 4.x | `analyzers/dotnet/roslyn4.8/cs/AlephMapper.dll` | Classic mappings, helpers, switches, Update and Adapt |
+| Roslyn 5.0 or newer | `analyzers/dotnet/roslyn5.0/cs/AlephMapper.dll` | Classic features plus C# 14 extension members |
+
+Both variants target `netstandard2.0` and share the mapping implementation.
+The package contains no compiler DLLs and needs no consumer-side version setting.
+Hosts below Roslyn 4.8 are outside the supported floor. IDE builds follow their
+compiler host version too; individual IDE versions were not separately tested.
+C# 14 source still requires a compiler/language version that supports C# 14.
+
+Package tests execute actual compilers **4.8.0, 4.14.0, 5.0.0**, and the installed
+SDK **10.0.403 / Roslyn 5.9**, asserting that exactly one correct analyzer is
+selected. The old single-5.0 package was reproduced failing on 4.14 with CS9057.
+The new package runs classic net8 consumers under 4.x and extension projections
+under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
+
+Mapper classes must be `static partial`. `AM0022` skips a classic mapper with an invalid declaration.
+`AM0023` skips a classic expression companion that conflicts with an existing member.
+Companion overload checks distinguish nullable value types such as `int` and `int?`, while ignoring nullable reference annotations.
+
+`AM0021` explains unsupported extension forms and skips the affected companion:
+generic blocks/methods, block/accessor bodies, query syntax (use LINQ method
+syntax), bound extension method groups (use an explicit lambda), static members,
+optional/params/ref arguments, ref-like receivers, ref returns, generated factory
+signature conflicts, and inaccessible expanded dependencies. Ordinary
+`Select(Map)` method groups retain their existing support.
+
+Null policies and the repeated-evaluation tradeoff remain unchanged. Generated
+expression correctness does not guarantee provider translation; the SQLite
+integration tests execute the documented scalar projection subset. See the
+[extension compatibility matrix](docs/extension-members-compatibility-matrix.md).
+
+## Switch expressions: evaluation semantics
+
+AlephMapper lowers supported C# `switch` expressions to nested conditional
+expressions so they can appear in LINQ expression trees. This deliberately
+matches the conditional-lowering behavior of ExpressiveSharp.
+
+**Important:** the input to a C# `switch` is ordinarily evaluated once, but
+lowering to conditional comparisons can evaluate the input **more than once**
+(for example, `source.Code.ToLower() switch { "a" => ..., "b" => ..., _ => ... }`).
+The generator does **not** reject these repeated input evaluations via
+`AM0019`. Prefer stable, side-effect-free expressions as switch inputs,
+especially for queries and methods with mutable state. EF Core translation
+depends on the provider.
+
+`AM0019` still prevents expression generation for unsupported or
+non-exhaustive patterns, including cases whose comparison semantics cannot
+be lowered correctly. Inlining helper methods likewise substitutes their
+arguments directly; an argument with side effects can be evaluated more than
+once, skipped, or evaluated in a different order. Prefer stable, side-effect-free
+arguments when generating projections.
+
+Supported patterns include scalar constants, relational/logical patterns, type and
+`var` bindings, nested/extended property patterns, fixed-length arrays and
+`List<T>`, non-capturing list slices, and positional records whose selected
+`Deconstruct` and component properties are compiler synthesized. Captures in
+switch arms bind to their actual member or element path, including in `when`.
+Nested switches and capture-free `is` patterns reuse the same lowering.
+
+Examples of the generated conditional shapes (formatting simplified):
+
+```csharp
+// input switch { { Quantity: > 100 } => 1, _ => 0 }
+((object)input != null && input.Quantity > 100) ? 1 : 0
+
+// items switch { [1, .., 3] => 1, _ => 0 }
+((object)items != null && items.Length >= 2
+    && items[0] == 1 && items[items.Length - 1] == 3) ? 1 : 0
+
+// point switch { (0, 0) => 1, _ => 0 } for record Point(int X, int Y)
+((object)point != null && point.X == 0 && point.Y == 0) ? 1 : 0
+```
+
+Repeated member/indexer reads share the evaluation tradeoff described above.
+SQL translation remains provider dependent; array/list and record support does
+not guarantee that a database provider can translate those expressions.
+
+An unguarded final `_` arm is required, including for otherwise exhaustive
+switches. `AM0019` also covers NaN constants, boxed/interface scalar comparisons,
+custom deconstruction, captured slices, unverified indexable collections,
+ref-return properties, `is` captures requiring an outer binding scope, and throw
+expressions. Update-only adaptation retains ordinary C# switch behavior.
+See the [tested support matrix](docs/switch-parity-matrix.md) for precise limits.
 
 ## Composing mappings and predicates
 
@@ -420,7 +546,7 @@ This preserves EF Core's tracked instance:
 ```csharp
 var person = await dbContext.People.FindAsync(id);
 
-PersonMapper.Map(request, target: person);
+PersonMapper.Map(request, dest: person);
 
 await dbContext.SaveChangesAsync();
 ```
@@ -587,3 +713,7 @@ AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.co
 - [AutoMapper](https://automapper.org/)
 - [Mapster](https://github.com/MapsterMapper/Mapster)
 - [Facet](https://github.com/Tim-Maes/Facet)
+
+## Acknowledgment
+
+AlephMapper's extension-member and switch-expression implementations are heavily inspired by [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp).

@@ -1,4 +1,5 @@
 using AlephMapper.Generation;
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
 
 namespace AlephMapper;
@@ -14,7 +15,7 @@ public sealed class AlephSourceGenerator : IIncrementalGenerator
     {
         context.RegisterPostInitializationOutput(static postInitializationContext =>
         {
-            postInitializationContext.AddEmbeddedAttributeDefinition();
+            RoslynCompatibility.AddEmbeddedAttributeDefinition(postInitializationContext);
             AttributeSourceEmitter.AddAttributes(postInitializationContext);
         });
 

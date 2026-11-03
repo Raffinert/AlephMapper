@@ -68,9 +68,12 @@ internal sealed partial class InliningResolver
         var typeArguments = node.TypeArgumentList.Arguments
             .Zip(rewritten.TypeArgumentList.Arguments, GetFullyQualifiedTypeSyntax)
             .ToList();
-        return rewritten.WithTypeArgumentList(
-            rewritten.TypeArgumentList.WithArguments(
-                Microsoft.CodeAnalysis.CSharp.SyntaxFactory.SeparatedList(typeArguments)));
+        rewritten = rewritten.WithTypeArgumentList(rewritten.TypeArgumentList.WithArguments(
+            Microsoft.CodeAnalysis.CSharp.SyntaxFactory.SeparatedList(typeArguments)));
+        var symbol = CanQuerySemanticModel(node) ? model.GetSymbolInfo(node).Symbol : null;
+        if (TryRewriteExpandedName(node, rewritten, symbol, out var expandedReference))
+            return expandedReference;
+        return rewritten;
     }
 
     private TypeSyntax GetFullyQualifiedTypeSyntax(TypeSyntax originalType, TypeSyntax rewrittenType)

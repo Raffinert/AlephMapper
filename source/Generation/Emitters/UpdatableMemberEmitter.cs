@@ -54,6 +54,14 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
+        var signature = MethodSignature.Build(mapping.Name, mapping.Parameters.Select(p => p.Type).Append(mapping.ReturnType), mapping.MethodSymbol.Arity);
+        if (!context.MemberSignatures.TryReserve([signature], out var conflict))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratedMemberConflict,
+                mapping.MemberSymbol.Locations.FirstOrDefault(), mapping.Name, "generated update conflicts with " + conflict));
+            return;
+        }
+
         context.AppendMember(members =>
         {
             members.AppendLine("    /// <summary>");

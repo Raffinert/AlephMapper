@@ -37,7 +37,7 @@ internal enum NullConditionalRewrite
 /// Marks a class to generate projectable companion methods.
 /// </summary>
 [Embedded]
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 internal sealed class ProjectableAttribute : Attribute
 {
     /// <summary>
