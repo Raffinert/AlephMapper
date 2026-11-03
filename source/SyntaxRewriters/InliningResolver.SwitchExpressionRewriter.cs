@@ -138,6 +138,8 @@ internal sealed partial class InliningResolver
             VarPatternSyntax variable => BindDesignation(variable.Designation, governing, bindings)
                 ? LiteralExpression(SyntaxKind.TrueLiteralExpression) : null,
 
+            ListPatternSyntax list => ConvertList(list, governing, bindings),
+
             RecursivePatternSyntax recursive => ConvertRecursive(recursive, governing, bindings),
 
             RelationalPatternSyntax relational => ConvertRelationalPattern(relational, governing),
@@ -236,6 +238,47 @@ internal sealed partial class InliningResolver
         }
         return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, receiver,
             IdentifierName(Identifier("@" + symbol.Name)));
+    }
+
+    private ExpressionSyntax? ConvertList(ListPatternSyntax pattern, ExpressionSyntax input,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        if (!CanQuerySemanticModel(pattern) || model.GetOperation(pattern) is not IListPatternOperation operation)
+            return null;
+        var isArray = operation.InputType is IArrayTypeSymbol { Rank: 1, IsSZArray: true };
+        var isList = operation.InputType is INamedTypeSymbol named && named.OriginalDefinition.Name == "List" &&
+            named.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
+            operation.LengthSymbol is IPropertySymbol { Name: "Count" } &&
+            operation.IndexerSymbol is IPropertySymbol indexer && indexer.Parameters.Length == 1 &&
+            indexer.Parameters[0].Type.SpecialType == SpecialType.System_Int32;
+        if (!isArray && !isList) return null;
+        var sliceIndex = -1;
+        for (var i = 0; i < pattern.Patterns.Count; i++)
+        {
+            if (pattern.Patterns[i] is not SlicePatternSyntax slice) continue;
+            if (sliceIndex >= 0 || slice.Pattern is not null) return null;
+            sliceIndex = i;
+        }
+        var length = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, input,
+            IdentifierName(isArray ? "Length" : "Count"));
+        var fixedCount = pattern.Patterns.Count - (sliceIndex >= 0 ? 1 : 0);
+        var condition = And(NonNull(input), PadBinaryOperator(BinaryExpression(
+            sliceIndex >= 0 ? SyntaxKind.GreaterThanOrEqualExpression : SyntaxKind.EqualsExpression,
+            length, LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(fixedCount)))));
+        for (var i = 0; i < pattern.Patterns.Count; i++)
+        {
+            if (i == sliceIndex) continue;
+            ExpressionSyntax index = LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(i));
+            if (sliceIndex >= 0 && i > sliceIndex)
+                index = PadBinaryOperator(BinaryExpression(SyntaxKind.SubtractExpression, length,
+                    LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(pattern.Patterns.Count - i))));
+            var element = ElementAccessExpression(input,
+                BracketedArgumentList(SingletonSeparatedList(Argument(index))));
+            var lowered = ConvertPattern(pattern.Patterns[i], element, bindings);
+            if (lowered is null) return null;
+            condition = And(condition, lowered);
+        }
+        return BindDesignation(pattern.Designation, input, bindings) ? condition : null;
     }
 
     private ExpressionSyntax? ConvertConstantPattern(ConstantPatternSyntax constant, ExpressionSyntax governing)

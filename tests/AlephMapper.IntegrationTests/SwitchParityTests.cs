@@ -24,6 +24,19 @@ public class SwitchParityTests
     }
 
     [Test]
+    public async Task List_patterns_match_original_at_length_boundaries()
+    {
+        int[]?[] samples = [null, [], [0], [1], [1, 3], [1, 2, 3], [1, 2, 3, 4], [-1, 3]];
+        foreach (var sample in samples)
+        {
+            await Assert.That(SwitchParityMapper.ArrayExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.Array(sample));
+            await Assert.That(SwitchParityMapper.SliceExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.Slice(sample));
+            await Assert.That(SwitchParityMapper.SuffixExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.Suffix(sample));
+            await Assert.That(SwitchParityMapper.ListExpression().Compile()(sample?.ToList())).IsEqualTo(SwitchParityMapper.List(sample?.ToList()));
+        }
+    }
+
+    [Test]
     public async Task Property_pattern_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -47,6 +60,14 @@ public class SwitchDog : SwitchNode { }
 
 public static partial class SwitchParityMapper
 {
+    [Projectable] public static int Array(int[]? value) => value switch
+        { [] => 0, [var x] when x > 0 => x, [1, 3] => 13, _ => -1 };
+    [Projectable] public static int Slice(int[]? value) => value switch
+        { [1, .., 3] => 13, [1, ..] => 1, [..] => 0, _ => -1 };
+    [Projectable] public static int Suffix(int[]? value) => value switch
+        { [.., var last] when last > 0 => last, _ => -1 };
+    [Projectable] public static int List(List<int>? value) => value switch
+        { [] => 0, [var first, .., var last] when first > 0 => first + last, _ => -1 };
     [Projectable] public static int Var(SwitchNode? value) => value switch { var x when x == null => 1, _ => 0 };
     [Projectable] public static int Type(SwitchNode? value) => value switch { SwitchDog => 2, _ => 0 };
     [Projectable] public static int Empty(SwitchNode? value) => value switch { {} => 1, _ => 0 };

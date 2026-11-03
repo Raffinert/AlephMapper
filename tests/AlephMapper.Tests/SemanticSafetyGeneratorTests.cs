@@ -266,6 +266,32 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsTrue();
     }
 
+    [Test]
+    [Arguments("[]")]
+    [Arguments("[var x] when x > 0")]
+    [Arguments("[1, .., 3]")]
+    [Arguments("[.., > 0]")]
+    public async Task List_patterns_generate_compilable_expressions(string pattern)
+    {
+        var source = "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int[] value) => value switch { " + pattern + " => 1, _ => 0 }; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("int[]", "[.. var rest]")]
+    [Arguments("Node", "(var x, var y)")]
+    public async Task Unsupported_patterns_are_diagnosed_without_crashing(string type, string pattern)
+    {
+        var source = "using AlephMapper; public class Node { public void Deconstruct(out int x, out int y) { x=1; y=2; } } public static partial class Mapper { [Projectable] public static int Map(" + type + " value) => value switch { " + pattern + " => 1, _ => 0 }; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
     private static async Task<(GeneratorRunResult Result, Compilation Output)> GenerateAndCompile(string source)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
