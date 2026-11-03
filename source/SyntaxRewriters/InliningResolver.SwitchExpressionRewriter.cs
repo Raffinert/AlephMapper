@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -131,6 +132,14 @@ internal sealed partial class InliningResolver
             // 'is T' preserves inheritance and handles null, unlike GetType() == typeof(T).
             DeclarationPatternSyntax declaration => ConvertDeclaration(declaration, governing, bindings),
 
+            TypePatternSyntax type => PadBinaryOperator(BinaryExpression(
+                SyntaxKind.IsExpression, governing, type.Type)),
+
+            VarPatternSyntax variable => BindDesignation(variable.Designation, governing, bindings)
+                ? LiteralExpression(SyntaxKind.TrueLiteralExpression) : null,
+
+            RecursivePatternSyntax recursive => ConvertRecursive(recursive, governing, bindings),
+
             RelationalPatternSyntax relational => ConvertRelationalPattern(relational, governing),
 
             ParenthesizedPatternSyntax parenthesized =>
@@ -149,6 +158,86 @@ internal sealed partial class InliningResolver
             _ => null
         };
 
+    private bool BindDesignation(VariableDesignationSyntax? designation, ExpressionSyntax input,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        if (designation is null or DiscardDesignationSyntax) return true;
+        if (designation is not SingleVariableDesignationSyntax single ||
+            !CanQuerySemanticModel(single) || model.GetDeclaredSymbol(single) is not ILocalSymbol local)
+            return false;
+        bindings.Add(local, input);
+        return true;
+    }
+
+    private static ExpressionSyntax And(ExpressionSyntax left, ExpressionSyntax right) =>
+        ParenthesizedExpression(PadBinaryOperator(BinaryExpression(SyntaxKind.LogicalAndExpression, left, right)));
+
+    private static ExpressionSyntax NonNull(ExpressionSyntax input) =>
+        PadBinaryOperator(BinaryExpression(SyntaxKind.NotEqualsExpression,
+            ParenthesizedExpression(CastExpression(PredefinedType(Token(SyntaxKind.ObjectKeyword)), input)),
+            LiteralExpression(SyntaxKind.NullLiteralExpression)));
+
+    private ExpressionSyntax? ConvertRecursive(RecursivePatternSyntax pattern, ExpressionSyntax input,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        if (!CanQuerySemanticModel(pattern) || model.GetOperation(pattern) is not IRecursivePatternOperation operation)
+            return null;
+        // Positional lowering is handled separately, only for verified synthesized record members.
+        if (pattern.PositionalPatternClause is not null) return null;
+        return ConvertRecursiveOperation(operation, pattern.Type, pattern.Designation, input, bindings);
+    }
+
+    private ExpressionSyntax? ConvertRecursiveOperation(IRecursivePatternOperation operation, TypeSyntax? type,
+        VariableDesignationSyntax? designation, ExpressionSyntax input, Dictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        var matched = input;
+        ExpressionSyntax condition;
+        if (type is not null)
+        {
+            condition = PadBinaryOperator(BinaryExpression(SyntaxKind.IsExpression, input, type));
+            matched = ParenthesizedExpression(CastExpression(type, input));
+        }
+        else condition = NonNull(input);
+        if (operation.MatchedType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+            matched = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, matched, IdentifierName("Value"));
+        foreach (var property in operation.PropertySubpatterns)
+        {
+            var path = PropertyPath(property.Member, matched, ref condition);
+            if (path is null) return null;
+            var lowered = property.Pattern is IRecursivePatternOperation implicitRecursive && property.Pattern.Syntax is not RecursivePatternSyntax
+                ? ConvertRecursiveOperation(implicitRecursive, null, null, path, bindings)
+                : property.Pattern.Syntax is PatternSyntax nested ? ConvertPattern(nested, path, bindings) : null;
+            if (lowered is null) return null;
+            condition = And(condition, lowered);
+        }
+        return BindDesignation(designation, matched, bindings) ? condition : null;
+    }
+
+    // The bound operation supplies extended member chains, including inherited and
+    // hidden members. Each intermediate receiver is guarded before its next access.
+    private ExpressionSyntax? PropertyPath(IOperation operation, ExpressionSyntax root, ref ExpressionSyntax condition)
+    {
+        ISymbol symbol;
+        IOperation? instance;
+        switch (operation)
+        {
+            case IPropertyReferenceOperation property when !property.Property.IsIndexer && property.Property.GetMethod is not null:
+                symbol = property.Property; instance = property.Instance; break;
+            case IFieldReferenceOperation field:
+                symbol = field.Field; instance = field.Instance; break;
+            default: return null;
+        }
+        var receiver = root;
+        if (instance is not null && instance is not IInstanceReferenceOperation)
+        {
+            receiver = PropertyPath(instance, root, ref condition);
+            if (receiver is null) return null;
+            condition = And(condition, NonNull(receiver));
+        }
+        return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, receiver,
+            IdentifierName(Identifier("@" + symbol.Name)));
+    }
+
     private ExpressionSyntax? ConvertConstantPattern(ConstantPatternSyntax constant, ExpressionSyntax governing)
     {
         // C# constant patterns match NaN, whereas == returns false for NaN.
@@ -163,6 +252,11 @@ internal sealed partial class InliningResolver
                  value.Value is float f && float.IsNaN(f)))
                 return null;
         }
+
+        // A type-only pattern may be parsed as a constant until semantic binding.
+        if (CanQuerySemanticModel(constant.Expression) && model.GetSymbolInfo(constant.Expression).Symbol is ITypeSymbol type)
+            return PadBinaryOperator(BinaryExpression(SyntaxKind.IsExpression, governing,
+                ParseTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))));
 
         var compared = governing;
         if (constant.Expression.IsKind(SyntaxKind.NullLiteralExpression))

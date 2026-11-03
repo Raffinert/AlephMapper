@@ -250,6 +250,22 @@ public class SemanticSafetyGeneratorTests
             .Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
+    [Test]
+    [Arguments("value switch { var x when x == null => 1, _ => 0 }")]
+    [Arguments("value switch { Node => 1, _ => 0 }")]
+    [Arguments("value switch { { Child: Node c } when c.Score > 0 => c.Score, _ => 0 }")]
+    [Arguments("value switch { { Child.Score: > 0 } => 1, _ => 0 }")]
+    [Arguments("value switch { { } => 1, _ => 0 }")]
+    public async Task New_patterns_generate_compilable_expressions(string expression)
+    {
+        var source = "using AlephMapper; public class Node { public Node Child {get;set;} public int Score {get;set;} } " +
+            "public static partial class Mapper { [Projectable] public static int Map(Node value) => " + expression + "; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsTrue();
+    }
+
     private static async Task<(GeneratorRunResult Result, Compilation Output)> GenerateAndCompile(string source)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
