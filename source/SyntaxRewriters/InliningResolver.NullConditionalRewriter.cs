@@ -34,7 +34,7 @@ internal partial class InliningResolver
                 return rewritten;
             }
 
-            var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+            var targetExpression = (ExpressionSyntax)(Visit(node.Expression) ?? node.Expression);
             if (rewriteSupport == NullConditionalRewrite.Rewrite &&
                 !CanSafelyRepeat(targetExpression))
             {
@@ -43,7 +43,7 @@ internal partial class InliningResolver
 
             _conditionalAccessExpressionsStack.Push(targetExpression);
 
-            var rewrittenWhenNotNull = (ExpressionSyntax)Visit(node.WhenNotNull);
+            var rewrittenWhenNotNull = (ExpressionSyntax)(Visit(node.WhenNotNull) ?? node.WhenNotNull);
             rewrittenWhenNotNull = CreateMemberAccessFromDotPrefixedExpression(targetExpression, rewrittenWhenNotNull);
 
             if (rewriteSupport is NullConditionalRewrite.Ignore)
