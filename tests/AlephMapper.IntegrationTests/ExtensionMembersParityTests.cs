@@ -38,6 +38,19 @@ public class ExtensionMembersParityTests
     }
 
     [Test]
+    public async Task Receiver_substitutions_do_not_capture_lambda_names_or_lose_static_binding()
+    {
+        await Assert.That(ExtensionReviewMapper.CaptureExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Capture(10));
+        await Assert.That(ExtensionReviewMapper.Capture(10)).IsEqualTo(14);
+        await Assert.That(ExtensionReviewMapper.StaticDependencyExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.StaticDependency(10));
+        var derived = new ExtensionDerived { Value = 99 };
+        ((ExtensionBase)derived).Value = 3;
+        await Assert.That(ExtensionReviewMapper.ConditionalExpression().Compile()(derived)).IsEqualTo(3);
+        await Assert.That(ExtensionReviewMapper.ConditionalExpression().Compile()(null)).IsNull();
+        await Assert.That(ExtensionReviewMapper.ConditionalIgnoreExpression().Compile()(derived)).IsEqualTo(3);
+    }
+
+    [Test]
     public async Task CSharp14_projection_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -86,11 +99,34 @@ public static partial class OrderExtensions
     private static decimal ReadAmount(ExtensionOrder order) => order.AmountWithTax;
     [Projectable] public static ExtensionDto ToDto(ExtensionOrder order) => new(order.Id, order.AmountWithTax, order.Label(100));
     [Projectable] public static decimal Classic(this ExtensionOrder order) => order.AmountWithTax + 1;
-    [Projectable] public static decimal Named(ExtensionOrder order) => order.Subtract(right: 2, left: 7);
+    [Projectable] public static decimal Named(ExtensionOrder order) => order.Subtract(right: 2, left: 7) + order.Subtract(left: 7, 2);
 }
 public static partial class ScalarExtensions
 {
     extension(ExtensionPoint point) { [Projectable] public int Sum => point.X + point.Y; }
     extension(int n) { [Projectable] public int Squared => n*n; }
     extension(IExtensionEntity entity) { [Projectable] public string InterfaceLabel => "#" + entity.Id; }
+}
+
+public class ExtensionBase { public int Value { get; set; } }
+public class ExtensionDerived : ExtensionBase { public new int Value { get; set; } }
+public static partial class ReviewExtensions
+{
+    private const int Offset = 3;
+    public static int PublicOffset = 4;
+    extension(int receiver)
+    {
+        [Projectable] public int Sum(int add) => new[] { 1 }.Sum(x => x + receiver + add);
+        [Projectable] public int WithOffset => receiver + Offset + PublicOffset;
+    }
+    extension(ExtensionBase receiver) { [Projectable] public int Score => receiver.Value; }
+}
+public static partial class ExtensionReviewMapper
+{
+    [Projectable] public static int Capture(int x) => x.Sum(3);
+    [Projectable] public static int StaticDependency(int x) => x.WithOffset;
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+    public static int? Conditional(ExtensionDerived? value) => value?.Score;
+    [Projectable(NullConditionalRewrite = NullConditionalRewrite.Ignore)]
+    public static int? ConditionalIgnore(ExtensionDerived? value) => value?.Score;
 }

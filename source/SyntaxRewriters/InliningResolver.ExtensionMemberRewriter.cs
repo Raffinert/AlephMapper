@@ -7,6 +7,7 @@ using AlephMapper.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AlephMapper.SyntaxRewriters;
@@ -27,13 +28,12 @@ internal sealed partial class InliningResolver
         }
         if (receiver is null) return UnsupportedExtension(node, method);
         var substitutions = BindExtensionReceiver(mapping, receiver, alreadyVisited);
-        var next = 0;
         foreach (var argument in node.ArgumentList.Arguments)
         {
-            var parameter = argument.NameColon is { } name
-                ? mapping.MethodSymbol.Parameters.FirstOrDefault(p => p.Name == name.Name.Identifier.ValueText)
-                : next < mapping.MethodSymbol.Parameters.Length ? mapping.MethodSymbol.Parameters[next++] : null;
-            if (parameter is null) return UnsupportedExtension(node, method);
+            if (model.GetOperation(argument) is not IArgumentOperation { Parameter: { } boundParameter } ||
+                boundParameter.Ordinal >= mapping.MethodSymbol.Parameters.Length)
+                return UnsupportedExtension(node, method);
+            var parameter = mapping.MethodSymbol.Parameters[boundParameter.Ordinal];
             substitutions[parameter] = PreserveArgumentConversion(argument.Expression, (ExpressionSyntax)Visit(argument.Expression)!);
         }
         if (substitutions.Count != mapping.Parameters.Count) return UnsupportedExtension(node, method);
@@ -51,6 +51,10 @@ internal sealed partial class InliningResolver
         ExpressionSyntax receiver, bool alreadyVisited)
     {
         var rewritten = alreadyVisited ? receiver : (ExpressionSyntax)Visit(receiver)!;
+        if (alreadyVisited)
+            rewritten = ParenthesizedExpression(CastExpression(ParseTypeName(TypeDisplay.ForSymbol(
+                mapping.ReceiverSymbol.Type, mapping.ReceiverSymbol.NullableAnnotation, nullablePolicy)),
+                ParenthesizedExpression(rewritten)));
         return new Dictionary<IParameterSymbol, ExpressionSyntax>(SymbolEqualityComparer.Default)
         {
             [mapping.ReceiverSymbol] = PreserveArgumentConversion(alreadyVisited ? null : receiver, rewritten, mapping.ReceiverSymbol.Type)
@@ -85,7 +89,9 @@ internal sealed partial class InliningResolver
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals,
                 _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                _unsupportedExtensions = _unsupportedExtensions
+                _unsupportedExtensions = _unsupportedExtensions,
+                _extensionExpansion = true,
+                _outputType = _outputType
             };
             var body = (ExpressionSyntax)resolver.Visit(mapping.BodySyntax.Expression)!;
             var info = mapping.SemanticModel.GetTypeInfo(mapping.BodySyntax.Expression);

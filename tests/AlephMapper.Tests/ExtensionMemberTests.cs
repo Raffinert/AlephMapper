@@ -49,6 +49,7 @@ public class ExtensionMemberTests
     [Arguments("public static int Value => 3;")]
     [Arguments("public int Value(int x = 1) => n+x;")]
     [Arguments("public T Value<T>(T x) => x;")]
+    [Arguments("public int Value() => System.Linq.Enumerable.Sum(new[]{n}, x => { return x; });")]
     public async Task Unsupported_extension_members_report_AM0021_and_isolate_failure(string declaration)
     {
         var source = "using AlephMapper; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " [Projectable] public int Good => n+1; } }";
@@ -97,6 +98,39 @@ public class ExtensionMemberTests
     {
         await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0021")).IsNotNull();
         await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0020")).IsNull();
+    }
+
+    [Test]
+    public async Task Escaped_receiver_and_factory_argument_names_compile()
+    {
+        var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(int @event) { [Projectable] public int Value(int @class) => @event + @class; } }");
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("private static int Offset => 3;", "Offset")]
+    [Arguments("private static int Offset() { return 3; }", "Offset()")]
+    public async Task Inaccessible_extension_dependencies_are_diagnosed(string declaration, string use)
+    {
+        var (result, output) = await Generate("using AlephMapper; public static partial class Ext { " + declaration + " extension(int n) { [Projectable] public int Value => n + " + use + "; } } public static partial class Mapper { [Projectable] public static int Map(int n) => n.Value; }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Unsupported_extension_update_request_is_not_silently_ignored()
+    {
+        var (result, _) = await Generate("using AlephMapper; public static partial class Ext { extension(int n) { [Updatable] public int Value() => n+1; } }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+    }
+
+    [Test]
+    public async Task Bound_extension_method_groups_report_diagnostic()
+    {
+        var (result, output) = await Generate("using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { public int Add(int x) => n+x; } [Projectable] public static int[] Map(int[] input) => input.Select((1).Add).ToArray(); }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
     internal static async Task<(GeneratorRunResult Result, Compilation Output)> Generate(string source)

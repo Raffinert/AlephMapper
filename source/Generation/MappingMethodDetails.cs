@@ -22,17 +22,17 @@ internal sealed class MappingMethodDetails
             .ToArray();
         DestinationTypeName = TypeDisplay.ForSymbol(mapping.ReturnType, mapping.ReturnType.NullableAnnotation, nullablePolicy);
         SourceTypeName = TypeDisplay.ForSymbol(mapping.ParamType, mapping.ParamType.NullableAnnotation, nullablePolicy);
-        SourceName = mapping.Parameters[0].Name;
+        SourceName = Escape(mapping.Parameters[0].Name);
         MethodParameterList = string.Join(", ", ParameterTypeNames);
         MethodParameterListWithNames = string.Join(", ", mapping.Parameters.Select(parameter =>
-            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {parameter.Name}"));
+            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {Escape(parameter.Name)}"));
         ExtraExpressionParameterTypeNames = ParameterTypeNames.Skip(1).ToArray();
         ExtraExpressionParameterListWithNames = string.Join(", ", mapping.Parameters.Skip(1).Select(parameter =>
-            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {parameter.Name}"));
+            $"{TypeDisplay.ForSymbol(parameter.Type, parameter.NullableAnnotation, nullablePolicy)} {Escape(parameter.Name)}"));
         LambdaParameters = mapping.Parameters.Count == 1
-            ? mapping.Parameters[0].Name
-            : "(" + string.Join(", ", mapping.Parameters.Select(parameter => parameter.Name)) + ")";
-        ProjectionLambdaParameter = mapping.Parameters[0].Name;
+            ? Escape(mapping.Parameters[0].Name)
+            : "(" + string.Join(", ", mapping.Parameters.Select(parameter => Escape(parameter.Name))) + ")";
+        ProjectionLambdaParameter = Escape(mapping.Parameters[0].Name);
         MethodTypeParameterList = mapping.MethodSymbol.TypeParameters.Length == 0
             ? string.Empty
             : "<" + string.Join(", ", mapping.MethodSymbol.TypeParameters.Select(static parameter => parameter.Name)) + ">";
@@ -56,6 +56,9 @@ internal sealed class MappingMethodDetails
     public int MethodTypeParameterCount { get; }
     public IReadOnlyList<string> MethodConstraintClauses { get; }
     public NullablePolicy NullablePolicy { get; }
+
+    private static string Escape(string name) => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) !=
+        Microsoft.CodeAnalysis.CSharp.SyntaxKind.None ? "@" + name : name;
 
     private static IReadOnlyList<string> BuildConstraintClauses(
         ImmutableArray<ITypeParameterSymbol> typeParameters,

@@ -75,6 +75,8 @@ internal static class MappingAnalysisFactory
         if (syntax is not MethodDeclarationSyntax { ExpressionBody: not null } and
             not PropertyDeclarationSyntax { ExpressionBody: not null })
             return "an expression body is required";
+        if (syntax.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>().Any(lambda => lambda.Body is BlockSyntax || lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword)))
+            return "block-bodied or async anonymous functions cannot be projected";
         return null;
     }
 

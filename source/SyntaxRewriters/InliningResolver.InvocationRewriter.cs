@@ -26,6 +26,21 @@ internal sealed partial class InliningResolver(
     internal const string InlinedConditionalAnnotation = "AlephMapper.InlinedConditional";
     internal const string InlinedReturnCreationAnnotation = "AlephMapper.InlinedReturnCreation";
 
+    private readonly Stack<(ISymbol Symbol, ExpressionSyntax Replacement)> _lambdaVariables = new();
+    private bool _extensionExpansion;
+    private INamedTypeSymbol? _outputType;
+
+    public override SyntaxNode? Visit(SyntaxNode? node)
+    {
+        if (_outputType is null && node is not null && CanQuerySemanticModel(node))
+        {
+            var symbol = model.GetEnclosingSymbol(node.SpanStart);
+            _outputType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
+            if (_outputType?.IsExtension == true) _outputType = _outputType.ContainingType;
+        }
+        return base.Visit(node);
+    }
+
     private HashSet<IMethodSymbol> _callStack = new(SymbolEqualityComparer.Default);
     private List<CircularReferenceInfo> _circularReferences = [];
     private Dictionary<IMethodSymbol, MappingAnalysis> _inlinedMethods = new(SymbolEqualityComparer.Default);
@@ -87,6 +102,22 @@ internal sealed partial class InliningResolver(
             return base.VisitIdentifierName(node);
 
         var symbol = model.GetSymbolInfo(node).Symbol;
+        foreach (var variable in _lambdaVariables)
+            if (SymbolEqualityComparer.Default.Equals(symbol, variable.Symbol))
+                return variable.Replacement.WithTriviaFrom(node);
+        if (_extensionExpansion && symbol is { IsStatic: true, ContainingType: { } owner } &&
+            (symbol is IFieldSymbol or IPropertySymbol or IMethodSymbol) &&
+            !(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node))
+        {
+            if (symbol is IFieldSymbol { IsConst: true } field && field.Type.TypeKind != TypeKind.Enum)
+                return ParseExpression(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(
+                    field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false)).WithTriviaFrom(node);
+            if (_outputType is not null && !model.Compilation.IsSymbolAccessibleWithin(symbol, _outputType))
+                _unsupportedExtensions.Add((symbol, "an expanded body references an inaccessible member"));
+            return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                ParseName(owner.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                IdentifierName(node.Identifier)).WithTriviaFrom(node);
+        }
         foreach (var patternVariable in _switchPatternVariables)
         {
             if (SymbolEqualityComparer.Default.Equals(symbol, patternVariable.Symbol))
@@ -197,6 +228,11 @@ internal sealed partial class InliningResolver(
             or AliasQualifiedNameSyntax)
         {
             var methodGroup = ResolveMethodGroupSymbol(firstArgExpression);
+            if (methodGroup?.ContainingType.IsExtension == true)
+            {
+                _unsupportedExtensions.Add((methodGroup, "bound extension method groups are not supported; use an explicit expression lambda"));
+                return node;
+            }
 
             if (methodGroup is { Parameters.Length: > 0 })
             {
@@ -238,7 +274,9 @@ internal sealed partial class InliningResolver(
                                     _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                                     _unsupportedNullConditionals = _unsupportedNullConditionals,
                                     _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                                    _unsupportedExtensions = _unsupportedExtensions
+                                    _unsupportedExtensions = _unsupportedExtensions,
+                                    _extensionExpansion = _extensionExpansion,
+                                    _outputType = _outputType
                                 }.Visit(callee.BodySyntax.Expression)!;
 
                             // Lambda parameters intentionally keep the callee's parameter names.
@@ -310,7 +348,9 @@ internal sealed partial class InliningResolver(
                 _unsafeConditionalReceivers = _unsafeConditionalReceivers,
                 _unsupportedNullConditionals = _unsupportedNullConditionals,
                 _unsupportedSwitchPatterns = _unsupportedSwitchPatterns,
-                                    _unsupportedExtensions = _unsupportedExtensions
+                                    _unsupportedExtensions = _unsupportedExtensions,
+                                    _extensionExpansion = _extensionExpansion,
+                                    _outputType = _outputType
             }.Visit(callee2.BodySyntax.Expression)!;
 
             // Keep existing generated formatting unless grouping is needed for
