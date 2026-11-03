@@ -91,6 +91,31 @@ public class ExtensionMembersParityTests
     }
 
     [Test]
+    public async Task CSharp14_extension_update_and_adapt_companions_preserve_destinations()
+    {
+        var order = new ExtensionOrder { Id = 7, Amount = 12m };
+        var destination = new ExtensionObjectDto { Id = -1, Amount = -1m };
+        var updated = ExtensionMappingCompanions.ToObjectDto(order, 3, destination);
+
+        await Assert.That(ReferenceEquals(updated, destination)).IsTrue();
+        await Assert.That(destination.Id).IsEqualTo(10);
+        await Assert.That(destination.Amount).IsEqualTo(12m);
+        await Assert.That(ExtensionMappingCompanions.ToObjectDtoExpression(3).Compile()(order).Id).IsEqualTo(10);
+
+        var alternative = new AlternativeOrder { Id = 11, Amount = 8m };
+        var mapped = ExtensionMappingCompanions.ToAlternativeDto(alternative, 2);
+        await Assert.That(mapped.Id).IsEqualTo(13);
+        await Assert.That(mapped.Amount).IsEqualTo(8m);
+        await Assert.That(ExtensionMappingCompanions.ToAlternativeDtoExpression(2).Compile()(alternative).Id).IsEqualTo(13);
+
+        var alternativeDestination = new AlternativeOrderDto { Id = -1, Amount = -1m };
+        var alternativeUpdated = ExtensionMappingCompanions.ToAlternativeDto(alternative, 4, alternativeDestination);
+        await Assert.That(ReferenceEquals(alternativeUpdated, alternativeDestination)).IsTrue();
+        await Assert.That(alternativeDestination.Id).IsEqualTo(15);
+        await Assert.That(alternativeDestination.Amount).IsEqualTo(8m);
+    }
+
+    [Test]
     public async Task CSharp14_projection_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -102,6 +127,44 @@ public class ExtensionMembersParityTests
         var actual = await context.Orders.OrderBy(o => o.Id).Select(OrderExtensions.ToDtoExpression()).ToListAsync();
         var expected = (await context.Orders.OrderBy(o => o.Id).ToListAsync()).Select(OrderExtensions.ToDto);
         await Assert.That(actual).IsEquivalentTo(expected);
+
+        var objectDtos = await context.Orders.OrderBy(o => o.Id)
+            .Select(ExtensionMappingCompanions.ToObjectDtoExpression(5)).ToListAsync();
+        await Assert.That(objectDtos.Select(dto => dto.Id)).IsEquivalentTo(new[] { 6, 7 });
+    }
+}
+
+public sealed class ExtensionObjectDto
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public sealed class AlternativeOrder
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public sealed class AlternativeOrderDto
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public static partial class ExtensionMappingCompanions
+{
+    extension(ExtensionOrder order)
+    {
+        [Projectable]
+        [Updatable]
+        [Adapt(typeof(AlternativeOrder), typeof(AlternativeOrderDto), Name = "ToAlternativeDto",
+            Generate = AdaptGeneration.Map | AdaptGeneration.Expression | AdaptGeneration.Update)]
+        public ExtensionObjectDto ToObjectDto(int offset) => new()
+        {
+            Id = order.Id + offset,
+            Amount = order.Amount
+        };
     }
 }
 
