@@ -208,8 +208,8 @@ internal sealed partial class InliningResolver(
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (_extensionExpansion && CanQuerySemanticModel(node) &&
-            model.GetOperation(node) is Microsoft.CodeAnalysis.Operations.INameOfOperation &&
+        if ((_extensionExpansion || parameterSubstitutions is { Count: > 0 } || _lambdaVariables.Count > 0) &&
+            CanQuerySemanticModel(node) && model.GetOperation(node) is Microsoft.CodeAnalysis.Operations.INameOfOperation &&
             model.GetConstantValue(node) is { HasValue: true, Value: string name })
             return LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(name)).WithTriviaFrom(node);
         if (node.Parent == null ||

@@ -58,6 +58,16 @@ public class ExtensionMembersParityTests
     }
 
     [Test]
+    public async Task Classic_lambda_renaming_preserves_nameof_and_generic_static_binding()
+    {
+        var values = new[] { 1, 2, 3 };
+        await Assert.That(ExtensionReviewMapper.ClassicNameExpression().Compile()(values)).IsEqualTo(ExtensionReviewMapper.ClassicName(values));
+        await Assert.That(ExtensionReviewMapper.ClassicName(values)).IsEqualTo(9);
+        await Assert.That(ExtensionReviewMapper.GenericDependencyExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.GenericDependency(10));
+        await Assert.That(ExtensionReviewMapper.GenericDependency(10)).IsEqualTo(13);
+    }
+
+    [Test]
     public async Task CSharp14_projection_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -125,8 +135,10 @@ public static partial class ReviewExtensions
     private const double NotANumber = double.NaN;
     private const float Infinite = float.PositiveInfinity;
     public static int PublicOffset = 4;
+    public static int GenericOffset<T>() { return 3; }
     extension(int receiver)
     {
+        [Projectable] public int WithGenericOffset => receiver + GenericOffset<int>();
         [Projectable] public string ReceiverName => nameof(receiver);
         [Projectable] public int Sum(int add) => new[] { 1 }.Sum(x => x + receiver + add);
         [Projectable] public bool WithNonfinite => double.IsNaN(receiver + NotANumber) && float.IsPositiveInfinity(receiver + Infinite);
@@ -136,6 +148,10 @@ public static partial class ReviewExtensions
 }
 public static partial class ExtensionReviewMapper
 {
+    public static int GenericOffset<T>() { return 99; }
+    [Projectable] public static int GenericDependency(int n) => n.WithGenericOffset;
+    [Projectable] public static int ClassicName(int[] values) => ClassicHelper(values.Length);
+    private static int ClassicHelper(int n) => new[] { 1 }.Sum(Length => n + nameof(Length).Length);
     [Projectable] public static string Name(int n) => n.ReceiverName;
     [Projectable] public static bool Nonfinite(int x) => x.WithNonfinite;
     [Projectable] public static int Capture(int x) => x.Sum(3);

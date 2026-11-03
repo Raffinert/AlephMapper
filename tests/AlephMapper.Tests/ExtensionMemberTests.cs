@@ -114,6 +114,8 @@ public class ExtensionMemberTests
     [Arguments("private static int Offset() { return 3; }", "Offset()")]
     [Arguments("private static int Offset => 3;", "Ext.Offset")]
     [Arguments("private static int Offset() { return 3; }", "Ext.Offset()")]
+    [Arguments("private static int Offset<T>() { return 3; }", "Offset<int>()")]
+    [Arguments("private static int Offset<T>() { return 3; }", "Ext.Offset<int>()")]
     public async Task Inaccessible_extension_dependencies_are_diagnosed(string declaration, string use)
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { " + declaration + " extension(int n) { [Projectable] public int Value => n + " + use + "; } } public static partial class Mapper { [Projectable] public static int Map(int n) => n.Value; }");

@@ -25,7 +25,7 @@
 - `dotnet restore AlephMapper.slnx`: pass.
 - `dotnet build AlephMapper.slnx -c Release --no-restore`: pass, zero errors; existing nullable warnings visible.
 - `dotnet build AlephMapper.slnx -c Debug --no-restore`: pass, zero errors; nullable warnings visible.
-- `dotnet test AlephMapper.slnx -c Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results`: 186 passed, 0 failed, 0 skipped.
+- `dotnet test AlephMapper.slnx -c Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results`: 189 passed, 0 failed, 0 skipped.
 - `dotnet pack source/AlephMapper.csproj -c Release --no-restore -o artifacts/nuget`: pass, local0.7.4 artifact only (version unchanged, no publication).
 - Fresh isolated package caches: CSharp14/net10 consumer restores and executes property/method/combined expression comparisons; classic CSharp12/net8 consumer restores and executes. No CS9057 or analyzer assembly-load failures. Both use the final packed analyzer without direct Roslyn references.
 - `git diff --check`: pass.
@@ -33,3 +33,15 @@
 - Main remains3fcc1a76b1bec0f4f6eacda49add93c8879e0350; integration remainsd154572081ba338c790f63f17605a98392dbe333.
 
 Owner gate: extension-members PR has NOT been merged. Await explicit approval to merge into dev_v0_8_0. CI and remote review status are reported in the PR and final handoff separately from local checks.
+
+## GitHub PR review follow-up
+
+PR57 targets dev_v0_8_0 and remains open. CI run41689329495 passed on713c68d.
+The first remote review found two P2 issues beyond the three local review cycles:
+classic-lambda nameof constants after alpha-renaming, and unqualified generic static
+dependencies. Both reproduced in Classic_lambda_renaming_preserves_nameof_and_generic_static_binding;
+fixed original nameof folding for any substitution scope and qualified generic
+static methods by their bound containing type. Added qualified/unqualified private
+generic dependency negatives. Full189 passed; Release/Debug, pack and fresh net10
+and net8 package-consumer programs rechecked successfully. Requested remote review
+of the corrected head; final CI status is recorded on the PR.

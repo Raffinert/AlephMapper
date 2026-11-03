@@ -27,7 +27,7 @@ Evidence: [generator tests](../tests/AlephMapper.Tests/ExtensionMemberTests.cs),
 | Ignore / Rewrite null strategy | Existing behavior plus receiver conversion | Pass | Pass | Not asserted | Nested receivers and Base/Derived hidden member regression |
 | None null strategy | Skip expression | Pass | N/A | N/A | AM0017; NullConditional_None_keeps_its_diagnostic_for_extension_members |
 | Lambda name collision | Symbol-based alpha-renaming | Pass | Pass | Not asserted | Capture returns14, not5 |
-| Static dependencies, nonfinite constants, nameof | Bound symbols / original constant value | Pass | Pass | Not asserted | StaticDependency, Nonfinite, Name runtime regressions |
+| Static dependencies, nonfinite constants, nameof | Bound symbols / original constant value | Pass | Pass | Not asserted | StaticDependency, Nonfinite, Name and Classic_lambda_renaming_preserves_nameof_and_generic_static_binding runtime regressions |
 | Inaccessible qualified/unqualified dependency | Skip affected companion | Pass | N/A | N/A | AM0021; Inaccessible_extension_dependencies_are_diagnosed |
 | Escaped receiver/factory argument | Escaped identifiers | Pass | Not separately run | N/A | Escaped_receiver_and_factory_argument_names_compile |
 | Partial files, class/member attributes, repeat run | One deterministic file | Pass | N/A | N/A | Extension_members_in_partial_files_generate_once_and_deterministically |
