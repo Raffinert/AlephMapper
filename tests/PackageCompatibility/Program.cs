@@ -43,6 +43,13 @@ public static partial class Extensions
         [Projectable] public int Squared => value * value;
         [Projectable] public int Add(int amount) => value + amount;
     }
+    extension(Source source)
+    {
+        [Projectable, Updatable]
+        [Adapt(typeof(OtherSource), typeof(OtherDestination), Name = "CopyOther",
+            Generate = AdaptGeneration.Map | AdaptGeneration.Expression | AdaptGeneration.Update)]
+        public Destination Copy(string prefix) => new() { Name = prefix + source.Name, Number = source.Number };
+    }
     [Projectable] public static int Composed(Source value) => value.Number.Squared + value.Number.Add(3);
 }
 #endif
@@ -78,6 +85,19 @@ public static class Program
             Equal(Extensions.SquaredExpression().Compile()(n), n.Squared);
             Equal(Extensions.AddExpression(3).Compile()(n), n.Add(3));
             Equal(Extensions.ComposedExpression().Compile()(source), Extensions.Composed(source));
+            var copied = new Destination();
+            Equal(ReferenceEquals(Extensions.Copy(source, "!", copied), copied), true);
+            Equal(copied.Name, "!Ada");
+            Equal(copied.Number, n);
+            Equal(Extensions.CopyExpression("!").Compile()(source).Name, "!Ada");
+            var otherSource = new OtherSource { Name = "Grace", Number = n };
+            var copiedOther = Extensions.CopyOther(otherSource, "?");
+            Equal(copiedOther.Name, "?Grace");
+            Equal(Extensions.CopyOtherExpression("?").Compile()(otherSource).Name, "?Grace");
+            var otherDestination = new OtherDestination();
+            Equal(ReferenceEquals(Extensions.CopyOther(otherSource, "!", otherDestination), otherDestination), true);
+            Equal(otherDestination.Name, "!Grace");
+            Equal(otherDestination.Number, n);
 #endif
         }
         Equal(Mapper.GradeExpression().Compile()(null), Mapper.Grade(null));
