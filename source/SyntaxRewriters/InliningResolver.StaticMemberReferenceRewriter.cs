@@ -17,6 +17,13 @@ internal sealed partial class InliningResolver
         if (CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is IMethodSymbol method &&
             method.ContainingType.IsExtension && !(node.Parent is InvocationExpressionSyntax invocation && invocation.Expression == node))
             return UnsupportedExtension(node, method);
+        if (_extensionExpansion && CanQuerySemanticModel(node) && model.GetSymbolInfo(node).Symbol is { } dependency)
+        {
+            if (dependency is IFieldSymbol { IsConst: true } field && field.Type.TypeKind != TypeKind.Enum)
+                return ExtensionConstant(field).WithTriviaFrom(node);
+            if (_outputType is not null && !model.Compilation.IsSymbolAccessibleWithin(dependency, _outputType))
+                _unsupportedExtensions.Add((dependency, "an expanded body references an inaccessible member"));
+        }
         var rewritten = (MemberAccessExpressionSyntax?)base.VisitMemberAccessExpression(node);
         if (rewritten == null ||
             !CanQuerySemanticModel(node) ||

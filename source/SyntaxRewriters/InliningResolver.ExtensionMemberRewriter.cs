@@ -14,6 +14,28 @@ namespace AlephMapper.SyntaxRewriters;
 
 internal sealed partial class InliningResolver
 {
+    private static ExpressionSyntax ExtensionConstant(IFieldSymbol field)
+    {
+        ExpressionSyntax value = field.ConstantValue switch
+        {
+            null => LiteralExpression(SyntaxKind.NullLiteralExpression),
+            string text => LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(text)),
+            char character => LiteralExpression(SyntaxKind.CharacterLiteralExpression, Literal(character)),
+            bool boolean => LiteralExpression(boolean ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression),
+            float number when float.IsNaN(number) || float.IsInfinity(number) => ParseExpression(
+                "global::System.Single." + (float.IsNaN(number) ? "NaN" : number > 0 ? "PositiveInfinity" : "NegativeInfinity")),
+            double number when double.IsNaN(number) || double.IsInfinity(number) => ParseExpression(
+                "global::System.Double." + (double.IsNaN(number) ? "NaN" : number > 0 ? "PositiveInfinity" : "NegativeInfinity")),
+            float number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
+            double number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
+            decimal number => LiteralExpression(SyntaxKind.NumericLiteralExpression, Literal(number)),
+            _ => ParseExpression(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(
+                field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false))
+        };
+        return ParenthesizedExpression(CastExpression(ParseTypeName(field.Type.ToDisplayString(
+            SymbolDisplayFormat.FullyQualifiedFormat)), ParenthesizedExpression(value)));
+    }
+
     private SyntaxNode RewriteExtensionCall(InvocationExpressionSyntax node, IMethodSymbol method)
     {
         if (node.Parent is ConditionalAccessExpressionSyntax && rewriteSupport == NullConditionalRewrite.None)

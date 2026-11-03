@@ -299,6 +299,8 @@ internal static class MapperSourceOutput
             UpdatableMemberEmitter.Emit(details, context);
         }
 
+        if (context.Members.Length == 0 && mapperType.GetTypeMembers().Any(t => t.IsExtension))
+            return new MapperGenerationResult(null, null, context.GetDiagnostics());
         var generatedFile = MapperFileEmitter.Render(context);
         return new MapperGenerationResult(generatedFile.HintName, generatedFile.Source, context.GetDiagnostics());
     }

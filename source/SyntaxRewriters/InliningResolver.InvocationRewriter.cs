@@ -110,8 +110,7 @@ internal sealed partial class InliningResolver(
             !(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node))
         {
             if (symbol is IFieldSymbol { IsConst: true } field && field.Type.TypeKind != TypeKind.Enum)
-                return ParseExpression(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(
-                    field.ConstantValue, quoteStrings: true, useHexadecimalNumbers: false)).WithTriviaFrom(node);
+                return ExtensionConstant(field).WithTriviaFrom(node);
             if (_outputType is not null && !model.Compilation.IsSymbolAccessibleWithin(symbol, _outputType))
                 _unsupportedExtensions.Add((symbol, "an expanded body references an inaccessible member"));
             return MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,

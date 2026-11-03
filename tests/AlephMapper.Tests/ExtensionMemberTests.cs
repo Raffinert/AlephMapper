@@ -32,7 +32,7 @@ public class ExtensionMemberTests
     [Arguments("public int Scale(int factor) => n*factor;", "ScaleExpression(4).Compile()(3) == 12")]
     public async Task CSharp14_extension_factories_compile_and_match_source(string declaration, string check)
     {
-        var source = "using AlephMapper; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " } public static bool Check() => " + check + "; }";
+        var source = "using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " } public static bool Check() => " + check + "; }";
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
@@ -50,9 +50,10 @@ public class ExtensionMemberTests
     [Arguments("public int Value(int x = 1) => n+x;")]
     [Arguments("public T Value<T>(T x) => x;")]
     [Arguments("public int Value() => System.Linq.Enumerable.Sum(new[]{n}, x => { return x; });")]
+    [Arguments("public System.Collections.Generic.IEnumerable<int> Value => from x in new[]{1} select x+n;")]
     public async Task Unsupported_extension_members_report_AM0021_and_isolate_failure(string declaration)
     {
-        var source = "using AlephMapper; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " [Projectable] public int Good => n+1; } }";
+        var source = "using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " [Projectable] public int Good => n+1; } }";
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
@@ -111,6 +112,8 @@ public class ExtensionMemberTests
     [Test]
     [Arguments("private static int Offset => 3;", "Offset")]
     [Arguments("private static int Offset() { return 3; }", "Offset()")]
+    [Arguments("private static int Offset => 3;", "Ext.Offset")]
+    [Arguments("private static int Offset() { return 3; }", "Ext.Offset()")]
     public async Task Inaccessible_extension_dependencies_are_diagnosed(string declaration, string use)
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { " + declaration + " extension(int n) { [Projectable] public int Value => n + " + use + "; } } public static partial class Mapper { [Projectable] public static int Map(int n) => n.Value; }");
@@ -128,8 +131,49 @@ public class ExtensionMemberTests
     [Test]
     public async Task Bound_extension_method_groups_report_diagnostic()
     {
-        var (result, output) = await Generate("using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { public int Add(int x) => n+x; } [Projectable] public static int[] Map(int[] input) => input.Select((1).Add).ToArray(); }");
+        var (result, output) = await Generate("using AlephMapper; using System.Linq; public static partial class Ext { extension(string n) { public int Add(int x) => n.Length+x; } [Projectable] public static int[] Map(int[] input) => input.Select(string.Empty.Add).ToArray(); }");
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+    }
+
+    [Test]
+    public async Task Extension_members_resolve_by_symbol_across_namespaces()
+    {
+        const string source = """
+            using AlephMapper;
+            using A;
+            using B;
+            namespace A {
+                public class Left { public int Number {get;set;} }
+                public static partial class Ext { extension(Left n) { [Projectable] public int Value => n.Number*2; } }
+            }
+            namespace B {
+                public class Right { public int Number {get;set;} }
+                public static partial class Ext { extension(Right n) { [Projectable] public int Value => n.Number*3; } }
+            }
+            public class Input { public Left Left {get;set;} public Right Right {get;set;} }
+            public static partial class Mapper { [Projectable] public static int Map(Input input) => input.Left.Value + input.Right.Value; }
+            """;
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs").SourceText.ToString())
+            .DoesNotContain(".Value");
+    }
+
+    [Test]
+    public async Task NullConditional_None_keeps_its_diagnostic_for_extension_members()
+    {
+        var (result, output) = await Generate("using AlephMapper; public class Node {} public static partial class Ext { extension(Node n) { public int Score => 1; } [Projectable(NullConditionalRewrite=NullConditionalRewrite.None)] public static int? Map(Node n) => n?.Score; }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0017")).IsTrue();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Missing_partial_outer_class_has_actionable_diagnostic()
+    {
+        var (result, output) = await Generate("using AlephMapper; public static class Ext { extension(int n) { [Projectable] public int Value => n+1; } }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021" && d.GetMessage().Contains("partial"))).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 

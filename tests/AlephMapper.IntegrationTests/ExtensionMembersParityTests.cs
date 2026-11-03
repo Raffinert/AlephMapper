@@ -17,6 +17,7 @@ public class ExtensionMembersParityTests
             await Assert.That(OrderExtensions.ComposedExpression().Compile()(order)).IsEqualTo(order.Composed);
             await Assert.That(OrderExtensions.ClassicExpression().Compile()(order)).IsEqualTo(order.Classic());
             await Assert.That(OrderExtensions.NamedExpression().Compile()(order)).IsEqualTo(OrderExtensions.Named(order));
+            await Assert.That(OrderExtensions.TimesExpression(2L).Compile()(order)).IsEqualTo(order.Times(2L));
             await Assert.That(ScalarExtensions.SquaredExpression().Compile()(value)).IsEqualTo(value.Squared);
             await Assert.That(ScalarExtensions.InterfaceLabelExpression().Compile()(order)).IsEqualTo(((IExtensionEntity)order).InterfaceLabel);
         }
@@ -31,6 +32,8 @@ public class ExtensionMembersParityTests
         await Assert.That(OrderExtensions.RewriteExpression().Compile()(order)).IsEqualTo(OrderExtensions.Rewrite(order));
         order.Other = null;
         await Assert.That(OrderExtensions.RewriteExpression().Compile()(order)).IsEqualTo(OrderExtensions.Rewrite(order));
+        foreach (var sample in new int?[] { null, -1, 3 })
+            await Assert.That(ScalarExtensions.OrZeroExpression().Compile()(sample)).IsEqualTo(sample.OrZero);
         foreach (var sample in new[] { new ExtensionPoint(2, 3), new ExtensionPoint(-1, 4) })
             await Assert.That(ScalarExtensions.SumExpression().Compile()(sample)).IsEqualTo(sample.Sum);
         var input = new[] { new ExtensionOrder { Amount = 3 }, new ExtensionOrder { Amount = 8 } };
@@ -43,6 +46,8 @@ public class ExtensionMembersParityTests
         await Assert.That(ExtensionReviewMapper.CaptureExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Capture(10));
         await Assert.That(ExtensionReviewMapper.Capture(10)).IsEqualTo(14);
         await Assert.That(ExtensionReviewMapper.StaticDependencyExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.StaticDependency(10));
+        await Assert.That(ExtensionReviewMapper.NonfiniteExpression().Compile()(10)).IsEqualTo(ExtensionReviewMapper.Nonfinite(10));
+        await Assert.That(ExtensionReviewMapper.Nonfinite(10)).IsTrue();
         var derived = new ExtensionDerived { Value = 99 };
         ((ExtensionBase)derived).Value = 3;
         await Assert.That(ExtensionReviewMapper.ConditionalExpression().Compile()(derived)).IsEqualTo(3);
@@ -88,6 +93,7 @@ public static partial class OrderExtensions
         [Projectable] public string Label(int min) => order.Amount switch { _ when order.Amount >= min => "high", _ => "low" };
         [Projectable] public decimal Composed => order.AmountWithTax + order.Times(2) + order.Classic();
         [Projectable] public decimal Times(int factor) => order.Amount * factor;
+        [Projectable] public decimal Times(long factor) => order.Amount * factor;
         [Projectable] public decimal Subtract(int left, int right) => order.Amount + left - right;
     }
     [Projectable] public static decimal Nested(ExtensionOrder order) => order.Other!.Composed * 2;
@@ -103,6 +109,7 @@ public static partial class OrderExtensions
 }
 public static partial class ScalarExtensions
 {
+    extension(int? n) { [Projectable] public int OrZero => n ?? 0; }
     extension(ExtensionPoint point) { [Projectable] public int Sum => point.X + point.Y; }
     extension(int n) { [Projectable] public int Squared => n*n; }
     extension(IExtensionEntity entity) { [Projectable] public string InterfaceLabel => "#" + entity.Id; }
@@ -113,16 +120,20 @@ public class ExtensionDerived : ExtensionBase { public new int Value { get; set;
 public static partial class ReviewExtensions
 {
     private const int Offset = 3;
+    private const double NotANumber = double.NaN;
+    private const float Infinite = float.PositiveInfinity;
     public static int PublicOffset = 4;
     extension(int receiver)
     {
         [Projectable] public int Sum(int add) => new[] { 1 }.Sum(x => x + receiver + add);
+        [Projectable] public bool WithNonfinite => double.IsNaN(receiver + NotANumber) && float.IsPositiveInfinity(receiver + Infinite);
         [Projectable] public int WithOffset => receiver + Offset + PublicOffset;
     }
     extension(ExtensionBase receiver) { [Projectable] public int Score => receiver.Value; }
 }
 public static partial class ExtensionReviewMapper
 {
+    [Projectable] public static bool Nonfinite(int x) => x.WithNonfinite;
     [Projectable] public static int Capture(int x) => x.Sum(3);
     [Projectable] public static int StaticDependency(int x) => x.WithOffset;
     [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
