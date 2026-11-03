@@ -284,6 +284,9 @@ public class SemanticSafetyGeneratorTests
     [Arguments("Node", "(var x, var y)")]
     [Arguments("Node", "{ Boxed: > 0 }")]
     [Arguments("object", "1")]
+    [Arguments("System.IComparable", "1")]
+    [Arguments("System.IComparable", "> 0")]
+    [Arguments("System.Enum", "System.DayOfWeek.Monday")]
     [Arguments("string", "[_, ..]")]
     public async Task Unsupported_patterns_are_diagnosed_without_crashing(string type, string pattern)
     {
@@ -301,6 +304,42 @@ public class SemanticSafetyGeneratorTests
         const string source = "using AlephMapper; public record Point(int X, int Y); public static partial class Mapper { [Projectable] public static int Map(Point value) => value switch { Point(var x, > 0) when x > 0 => x, _ => 0 }; }";
         var (result, compilation) = await GenerateAndCompile(source);
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Expression")]
+    [Arguments("Map | AdaptGeneration.Expression")]
+    public async Task Property_patterns_work_in_adapted_expression_paths(string flags)
+    {
+        var source = "using AlephMapper; public class A { public int Score {get;set;} } public class B { public int Score {get;set;} } public class D { public int Score {get;set;} } public class E { public int Score {get;set;} } " +
+            "public static partial class Mapper { [Adapt(typeof(B), typeof(E), Name=\"Other\", Generate=AdaptGeneration." + flags + ")] public static D Map(A value) => new() { Score = value switch { { Score: > 0 } => 1, _ => 0 } }; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019" || d.Id == "AM0004")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("OtherExpression"))).IsTrue();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("value switch { 1 => throw new System.Exception(), _ => 0 }")]
+    [Arguments("value is int x ? x : 0")]
+    [Arguments("value switch { var x => x }")]
+    public async Task Unrepresentable_expression_shapes_report_AM0019(string expression)
+    {
+        var (result, compilation) = await GenerateAndCompile("using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => " + expression + "; }");
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Ref_return_property_pattern_reports_AM0019()
+    {
+        const string source = "using AlephMapper; public class Node { private int x=1; public ref int X => ref x; } public static partial class Mapper { [Projectable] public static int Map(Node value) => value switch { { X: > 0 } => 1, _ => 0 }; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsFalse();
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 

@@ -30,20 +30,6 @@ internal sealed partial class InliningResolver
             return node;
         }
 
-        // Pattern matching can narrow an object-typed input for relational
-        // comparisons; a plain 'object > int' comparison cannot. Reject until
-        // the lowering can introduce the required type tests/conversions.
-        var inputType = CanQuerySemanticModel(node.GoverningExpression)
-            ? model.GetTypeInfo(node.GoverningExpression).Type
-            : null;
-        if (inputType is { SpecialType: SpecialType.System_Object or SpecialType.System_ValueType } &&
-            node.Arms.Any(arm => arm.Pattern.DescendantNodesAndSelf()
-                .OfType<RelationalPatternSyntax>().Any()))
-        {
-            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
-            return node;
-        }
-
         var switchText = node.ToFullString();
         var multiline = switchText.IndexOf('\n') >= 0 || switchText.IndexOf('\r') >= 0;
 
@@ -281,7 +267,8 @@ internal sealed partial class InliningResolver
         IOperation? instance;
         switch (operation)
         {
-            case IPropertyReferenceOperation property when !property.Property.IsIndexer && property.Property.GetMethod is not null:
+            case IPropertyReferenceOperation property when !property.Property.IsIndexer && property.Property.GetMethod is not null &&
+                !property.Property.ReturnsByRef && !property.Property.ReturnsByRefReadonly:
                 symbol = property.Property; instance = property.Instance; break;
             case IFieldReferenceOperation field:
                 symbol = field.Field; instance = field.Instance; break;
@@ -339,6 +326,18 @@ internal sealed partial class InliningResolver
         return BindDesignation(pattern.Designation, input, bindings) ? condition : null;
     }
 
+    private static bool IsScalarPatternInput(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+        return type.TypeKind == TypeKind.Enum || type.SpecialType is
+            SpecialType.System_Boolean or SpecialType.System_Char or SpecialType.System_String or
+            SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16 or
+            SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64 or
+            SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal or
+            SpecialType.System_IntPtr or SpecialType.System_UIntPtr;
+    }
+
     private ExpressionSyntax? ConvertConstantPattern(ConstantPatternSyntax constant, ExpressionSyntax governing)
     {
         // C# constant patterns match NaN, whereas == returns false for NaN.
@@ -362,7 +361,7 @@ internal sealed partial class InliningResolver
         var compared = governing;
         if (!constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) && CanQuerySemanticModel(constant) &&
             model.GetOperation(constant) is IConstantPatternOperation op &&
-            op.InputType.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType)
+            !IsScalarPatternInput(op.InputType))
             return null;
         if (constant.Expression.IsKind(SyntaxKind.NullLiteralExpression))
         {
@@ -380,7 +379,14 @@ internal sealed partial class InliningResolver
         Dictionary<ISymbol, ExpressionSyntax> bindings)
     {
         var left = ConvertPattern(binary.Left, governing, bindings);
-        var right = ConvertPattern(binary.Right, governing, bindings);
+        var rightInput = governing;
+        if (binary.OperatorToken.IsKind(SyntaxKind.AndKeyword) && CanQuerySemanticModel(binary.Left) &&
+            model.GetOperation(binary.Left) is IPatternOperation leftOperation &&
+            !SymbolEqualityComparer.Default.Equals(leftOperation.InputType, leftOperation.NarrowedType))
+            rightInput = ParenthesizedExpression(CastExpression(
+                ParseTypeName(AlephMapper.Helpers.TypeDisplay.ForSymbol(leftOperation.NarrowedType,
+                    leftOperation.NarrowedType.NullableAnnotation, nullablePolicy)), governing));
+        var right = ConvertPattern(binary.Right, rightInput, bindings);
         if (left is null || right is null)
             return null;
 
@@ -401,7 +407,7 @@ internal sealed partial class InliningResolver
     private ExpressionSyntax? ConvertRelationalPattern(RelationalPatternSyntax relational, ExpressionSyntax governing)
     {
         if (!CanQuerySemanticModel(relational) || model.GetOperation(relational) is not IRelationalPatternOperation op ||
-            op.InputType.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType)
+            !IsScalarPatternInput(op.InputType))
             return null;
         var kind = relational.OperatorToken.Kind() switch
         {

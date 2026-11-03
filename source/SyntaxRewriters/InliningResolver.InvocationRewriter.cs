@@ -342,6 +342,17 @@ internal sealed partial class InliningResolver(
         }
     }
 
+    private ExpressionSyntax PreserveArgumentConversion(ExpressionSyntax? original, ExpressionSyntax rewritten,
+        ITypeSymbol? expectedType = null)
+    {
+        if (original is null || !CanQuerySemanticModel(original)) return rewritten;
+        var info = model.GetTypeInfo(original);
+        var converted = expectedType ?? info.ConvertedType;
+        if (converted is null || SymbolEqualityComparer.Default.Equals(info.Type, converted)) return rewritten;
+        return ParenthesizedExpression(CastExpression(ParseTypeName(TypeDisplay.ForSymbol(
+            converted, converted.NullableAnnotation, nullablePolicy)), ParenthesizeCompositeExpression(rewritten)));
+    }
+
     private bool TryBuildParameterSubstitutions(
         InvocationExpressionSyntax node,
         IMethodSymbol invokedMethod,
@@ -393,7 +404,9 @@ internal sealed partial class InliningResolver(
                 return false;
             }
 
-            substitutions[parameters[0]] = receiver;
+            substitutions[parameters[0]] = PreserveArgumentConversion(
+                node.Expression is MemberAccessExpressionSyntax access ? access.Expression : null,
+                receiver, invokedMethod.ReceiverType);
             nextParamIndex = 1;
         }
 
@@ -420,7 +433,7 @@ internal sealed partial class InliningResolver(
             }
 
             var rewrittenArg = (ExpressionSyntax)(Visit(arg.Expression) ?? arg.Expression);
-            substitutions[targetParam] = rewrittenArg;
+            substitutions[targetParam] = PreserveArgumentConversion(arg.Expression, rewrittenArg);
         }
 
         // Ensure all parameters are covered (no optional/default handling for now)

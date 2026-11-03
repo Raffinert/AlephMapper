@@ -19,7 +19,16 @@ public class SwitchParityTests
                 .GetMethod(method.Name + "Expression")!.Invoke(null, null)!;
             var compiled = expression.Compile();
             foreach (var sample in samples)
-                await Assert.That(compiled(sample)).IsEqualTo((int)method.Invoke(null, [sample])!);
+            {
+                static (int? Value, Type? Error) Outcome(Func<int> action)
+                {
+                    try { return (action(), null); }
+                    catch (System.Reflection.TargetInvocationException e) { return (null, e.InnerException!.GetType()); }
+                    catch (Exception e) { return (null, e.GetType()); }
+                }
+                await Assert.That(Outcome(() => compiled(sample)))
+                    .IsEqualTo(Outcome(() => (int)method.Invoke(null, [sample])!));
+            }
         }
     }
 
@@ -34,6 +43,19 @@ public class SwitchParityTests
             await Assert.That(SwitchParityMapper.SuffixExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.Suffix(sample));
             await Assert.That(SwitchParityMapper.ListExpression().Compile()(sample?.ToList())).IsEqualTo(SwitchParityMapper.List(sample?.ToList()));
         }
+    }
+
+    [Test]
+    public async Task Inlined_property_pattern_preserves_base_member_binding()
+    {
+        var value = new SwitchDog();
+        ((SwitchNode)value).Score = 3;
+        await Assert.That(SwitchParityMapper.HiddenMemberExpression().Compile()(value)).IsEqualTo(3);
+        await Assert.That(SwitchParityMapper.HiddenMember(value)).IsEqualTo(3);
+        ((SwitchNode)value).Child = new() { Score = 1 };
+        value.Child = new() { Score = 9 };
+        await Assert.That(SwitchParityMapper.HiddenPathExpression().Compile()(value)).IsEqualTo(1);
+        await Assert.That(SwitchParityMapper.HiddenPath(value)).IsEqualTo(1);
     }
 
     [Test]
@@ -82,10 +104,11 @@ public class SwitchNode
     public SwitchNode? Child { get; set; }
     public int Score { get; set; }
     public string? Name { get; set; }
+    public int Dangerous => Score < 0 ? throw new InvalidOperationException() : Score;
 }
 public record SwitchPoint(int X, int Y);
 public readonly record struct SwitchValuePoint(int X, int Y);
-public class SwitchDog : SwitchNode { }
+public class SwitchDog : SwitchNode { public int Age { get; set; } = 5; public new int Score { get; set; } = 99; public new SwitchNode? Child { get; set; } }
 
 public static partial class SwitchParityMapper
 {
@@ -113,6 +136,13 @@ public static partial class SwitchParityMapper
         { [.., var last] when last > 0 => last, _ => -1 };
     [Projectable] public static int List(List<int>? value) => value switch
         { [] => 0, [var first, .., var last] when first > 0 => first + last, _ => -1 };
+    [Projectable] public static int HiddenPath(SwitchDog value) => BaseChild(value);
+    private static int BaseChild(SwitchNode value) => value.Child switch { { Score: 1 } => 1, _ => 0 };
+    [Projectable] public static int HiddenMember(SwitchDog value) => BaseProperty(value);
+    private static int BaseProperty(SwitchNode value) => value switch { { Score: var x } => x, _ => -1 };
+    [Projectable] public static int ThrowingGetter(SwitchNode? value) => value switch { { Dangerous: > 0 } => 1, _ => 0 };
+    [Projectable] public static int Narrowing(SwitchNode? value) => value switch
+        { SwitchDog and { Age: > 0 } => 1, _ => 0 };
     [Projectable] public static int Var(SwitchNode? value) => value switch { var x when x == null => 1, _ => 0 };
     [Projectable] public static int Type(SwitchNode? value) => value switch { SwitchDog => 2, _ => 0 };
     [Projectable] public static int Empty(SwitchNode? value) => value switch { {} => 1, _ => 0 };
