@@ -72,7 +72,7 @@ dotnet add package AlephMapper
 Using `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.8.0">
+<PackageReference Include="AlephMapper" Version="0.8.1">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -82,7 +82,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.8.0" />
+<PackageVersion Include="AlephMapper" Version="0.8.1" />
 
 <!-- Project file -->
 <PackageReference Include="AlephMapper">
@@ -103,7 +103,7 @@ When referencing the generator directly from source:
 
 ### Compiler compatibility
 
-AlephMapper 0.8.0 supports Roslyn 4.8 and later through versioned analyzer assets. Roslyn 4.8 through 4.x supports classic mappings, switch lowering, Update and Adapt; Roslyn 5.0 and later additionally supports C# 14 extension members. The compiler automatically selects one compatible analyzer. Generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
+AlephMapper 0.8.1 supports Roslyn 4.8 and later through versioned analyzer assets. Roslyn 4.8 through 4.x supports classic mappings, switch lowering, Update and Adapt; Roslyn 5.0 and later additionally supports C# 14 extension members. The compiler automatically selects one compatible analyzer. Generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
 
 ### Migration: `[Expressive]` to `[Projectable]`
 
@@ -204,12 +204,47 @@ var tax = OrderExtensions.AmountWithTaxExpression();
 var label = OrderExtensions.LabelExpression(100);
 ```
 
+For a C# 14 instance method returning an object, add `[Updatable]` and
+`[Adapt]` to generate the same companions available for classic mappings:
+
+```csharp
+public static partial class PersonExtensions
+{
+    extension(Person person)
+    {
+        [Projectable, Updatable]
+        [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee",
+            Generate = AdaptGeneration.Map | AdaptGeneration.Expression | AdaptGeneration.Update)]
+        public PersonDto Map() => new()
+        {
+            Name = person.FirstName + " " + person.LastName
+        };
+    }
+}
+
+var personProjection = PersonExtensions.MapExpression(); // Expression<Func<Person, PersonDto>>
+PersonExtensions.Map(person, existingPersonDto);         // update existing destination
+var employeeDto = PersonExtensions.MapEmployee(employee);
+var employeeProjection = PersonExtensions.MapEmployeeExpression();
+PersonExtensions.MapEmployee(employee, existingEmployeeDto); // adapted update
+```
+
+The generated methods are ordinary static members of `PersonExtensions`; the
+C# 14 receiver becomes their first source parameter. The adapted types must
+expose the source members and writable destination members used by the template.
+Value-type results still cannot use update-in-place semantics (`AM0001`).
+See the [extension compatibility matrix](docs/extension-members-compatibility-matrix.md)
+for supported forms and limitations.
+
 Nested source-defined extension accesses/calls are expanded by symbol identity,
 including classic/C# 14 composition, switch bodies, and nested LINQ method calls.
 Primitive, interface, struct, nullable-value and reference receivers are supported.
-`[Projectable]` on the outer class includes supported extension members.
-`[Updatable]` and `[Adapt]` do not automatically apply to computed properties;
-direct requests on extension methods receive `AM0021`.
+`[Projectable]` on the outer class includes supported extension members. Supported
+C# 14 **instance extension methods** can also declare `[Updatable]` and `[Adapt]`;
+these generate static update/adaptation companions in the outer partial class.
+Extension properties remain projection-only. `[Updatable]` on the outer class
+continues to apply to classic mapping methods, not automatically to extension
+members.
 
 The NuGet package selects a compatible analyzer automatically by the compiler
 host version (independent of the application's target framework):
@@ -217,7 +252,7 @@ host version (independent of the application's target framework):
 | Compiler host | Selected analyzer | Features |
 |---|---|---|
 | Roslyn 4.8 through 4.x | `analyzers/dotnet/roslyn4.8/cs/AlephMapper.dll` | Classic mappings, helpers, switches, Update and Adapt |
-| Roslyn 5.0 or newer | `analyzers/dotnet/roslyn5.0/cs/AlephMapper.dll` | Classic features plus C# 14 extension members |
+| Roslyn 5.0 or newer | `analyzers/dotnet/roslyn5.0/cs/AlephMapper.dll` | Classic features plus C# 14 extension projections, updates, and adaptations |
 
 Both variants target `netstandard2.0` and share the mapping implementation.
 The package contains no compiler DLLs and needs no consumer-side version setting.
@@ -228,8 +263,8 @@ C# 14 source still requires a compiler/language version that supports C# 14.
 Package tests execute actual compilers **4.8.0, 4.14.0, 5.0.0**, and the installed
 SDK **10.0.403 / Roslyn 5.9**, asserting that exactly one correct analyzer is
 selected. The old single-5.0 package was reproduced failing on 4.14 with CS9057.
-The new package runs classic net8 consumers under 4.x and extension projections
-under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
+The new package runs classic net8 consumers under 4.x and C# 14 extension
+projections, updates, and adaptations under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
 
 Mapper classes must be `static partial`. `AM0022` skips a classic mapper with an invalid declaration.
 `AM0023` skips a classic expression companion that conflicts with an existing member.
@@ -615,8 +650,9 @@ Adaptation is explicit: AlephMapper does not scan for compatible types. Invalid 
 | `[Projectable]` | `<MethodName>Expression(...)` returning `Expression<Func<TSource, TDestination>>` |
 | `[Updatable]` | An overload with a final destination parameter named `dest` |
 | `[Adapt]` | The requested adapted map, expression, and/or update members |
+| C# 14 instance extension method | `[Projectable]`, `[Updatable]`, and `[Adapt]` produce static companions in the outer partial class, with the receiver as the source parameter |
 
-Attributes can be applied to individual methods. `[Projectable]` and `[Updatable]` can also be applied to the containing class.
+Attributes can be applied to individual classic mapping methods. `[Projectable]` and `[Updatable]` can also be applied to the containing class. For C# 14 extension members, `[Projectable]` supports instance methods and getter-only expression properties; `[Updatable]` and `[Adapt]` are supported on instance methods only.
 
 AlephMapper is best suited to object initializers, predicates, constructor calls, member access, conversions, LINQ operations, and small expression-bodied methods that it can inline. Not every valid C# construct can be represented in an expression tree, and not every expression-tree operation can be translated by every query provider.
 
