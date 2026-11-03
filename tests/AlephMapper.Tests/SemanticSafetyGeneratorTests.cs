@@ -282,13 +282,25 @@ public class SemanticSafetyGeneratorTests
     [Test]
     [Arguments("int[]", "[.. var rest]")]
     [Arguments("Node", "(var x, var y)")]
+    [Arguments("Node", "{ Boxed: > 0 }")]
+    [Arguments("object", "1")]
+    [Arguments("string", "[_, ..]")]
     public async Task Unsupported_patterns_are_diagnosed_without_crashing(string type, string pattern)
     {
-        var source = "using AlephMapper; public class Node { public void Deconstruct(out int x, out int y) { x=1; y=2; } } public static partial class Mapper { [Projectable] public static int Map(" + type + " value) => value switch { " + pattern + " => 1, _ => 0 }; }";
+        var source = "using AlephMapper; public class Node { public object Boxed {get;set;} public void Deconstruct(out int x, out int y) { x=1; y=2; } } public static partial class Mapper { [Projectable] public static int Map(" + type + " value) => value switch { " + pattern + " => 1, _ => 0 }; }";
         var (result, compilation) = await GenerateAndCompile(source);
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Synthesized_record_positional_pattern_generates_compilable_expression()
+    {
+        const string source = "using AlephMapper; public record Point(int X, int Y); public static partial class Mapper { [Projectable] public static int Map(Point value) => value switch { Point(var x, > 0) when x > 0 => x, _ => 0 }; }";
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsTrue();
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 

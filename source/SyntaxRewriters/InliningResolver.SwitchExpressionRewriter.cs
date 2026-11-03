@@ -54,7 +54,7 @@ internal sealed partial class InliningResolver
         // A binary/conditional governing expression must be grouped before being
         // embedded in a pattern comparison, e.g. (a && b) == false, not a && b == false.
         governing = ParenthesizeCompositeExpression(governing);
-        ExpressionSyntax currentExpression = VisitClean(node.Arms[node.Arms.Count - 1].Expression);
+        ExpressionSyntax currentExpression = VisitSwitchArm(node.Arms[node.Arms.Count - 1].Expression);
 
         foreach (var arm in node.Arms.Reverse().Skip(1))
         {
@@ -75,7 +75,7 @@ internal sealed partial class InliningResolver
                     pushedPatternVariables++;
                 }
 
-                var armExpression = VisitClean(arm.Expression);
+                var armExpression = VisitSwitchArm(arm.Expression);
                 if (arm.WhenClause is not null)
                 {
                     // A helper can inline to an OR/coalescing/conditional expression.
@@ -95,6 +95,39 @@ internal sealed partial class InliningResolver
         }
 
         return currentExpression;
+    }
+
+    private ExpressionSyntax VisitSwitchArm(ExpressionSyntax original)
+    {
+        var expression = VisitClean(original);
+        if (CanQuerySemanticModel(original))
+        {
+            var info = model.GetTypeInfo(original);
+            if (info.ConvertedType is { } converted &&
+                !SymbolEqualityComparer.Default.Equals(info.Type, converted))
+                expression = CastExpression(ParseTypeName(AlephMapper.Helpers.TypeDisplay.ForSymbol(
+                    converted, converted.NullableAnnotation, nullablePolicy)), ParenthesizedExpression(expression));
+        }
+        return expression;
+    }
+
+    public override SyntaxNode? VisitIsPatternExpression(IsPatternExpressionSyntax node)
+    {
+        if (forUpdateMethod) return base.VisitIsPatternExpression(node);
+        var lowered = LowerPattern(node.Pattern, ParenthesizeCompositeExpression(VisitClean(node.Expression)));
+        // Captures used outside the pattern need a wider lexical binding scope.
+        if (lowered is null || lowered.Bindings.Count != 0)
+        {
+            _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node.Pattern));
+            return node;
+        }
+        return ParenthesizeCompositeExpression(lowered.Condition);
+    }
+
+    public override SyntaxNode? VisitThrowExpression(ThrowExpressionSyntax node)
+    {
+        if (!forUpdateMethod) _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(node));
+        return base.VisitThrowExpression(node);
     }
 
     private sealed class PatternLoweringResult(ExpressionSyntax condition,
@@ -184,8 +217,6 @@ internal sealed partial class InliningResolver
     {
         if (!CanQuerySemanticModel(pattern) || model.GetOperation(pattern) is not IRecursivePatternOperation operation)
             return null;
-        // Positional lowering is handled separately, only for verified synthesized record members.
-        if (pattern.PositionalPatternClause is not null) return null;
         return ConvertRecursiveOperation(operation, pattern.Type, pattern.Designation, input, bindings);
     }
 
@@ -199,9 +230,36 @@ internal sealed partial class InliningResolver
             condition = PadBinaryOperator(BinaryExpression(SyntaxKind.IsExpression, input, type));
             matched = ParenthesizedExpression(CastExpression(type, input));
         }
-        else condition = NonNull(input);
-        if (operation.MatchedType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        else condition = operation.InputType.IsValueType &&
+            operation.InputType.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
+                ? LiteralExpression(SyntaxKind.TrueLiteralExpression) : NonNull(input);
+        if (type is null && operation.InputType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
             matched = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, matched, IdentifierName("Value"));
+        if (!operation.DeconstructionSubpatterns.IsEmpty)
+        {
+            if (operation.MatchedType is not INamedTypeSymbol { IsRecord: true } record ||
+                operation.DeconstructSymbol is not IMethodSymbol { IsImplicitlyDeclared: true } deconstruct ||
+                deconstruct.Parameters.Length != operation.DeconstructionSubpatterns.Length)
+                return null;
+            for (var i = 0; i < deconstruct.Parameters.Length; i++)
+            {
+                var parameter = deconstruct.Parameters[i];
+                var property = record.GetMembers(parameter.Name).OfType<IPropertySymbol>().SingleOrDefault();
+                // Only compiler-synthesized positional properties have parameter syntax.
+                // A user-written getter can differ from the selected Deconstruct behavior.
+                if (property is null || property.IsStatic || property.GetMethod is null ||
+                    !property.DeclaringSyntaxReferences.Any(r => r.GetSyntax() is ParameterSyntax) ||
+                    property.DeclaringSyntaxReferences.Any(r => r.GetSyntax() is not ParameterSyntax) ||
+                    !SymbolEqualityComparer.Default.Equals(property.Type, parameter.Type) ||
+                    operation.DeconstructionSubpatterns[i].Syntax is not PatternSyntax nested)
+                    return null;
+                var member = MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, matched,
+                    IdentifierName(Identifier("@" + property.Name)));
+                var lowered = ConvertPattern(nested, member, bindings);
+                if (lowered is null) return null;
+                condition = And(condition, lowered);
+            }
+        }
         foreach (var property in operation.PropertySubpatterns)
         {
             var path = PropertyPath(property.Member, matched, ref condition);
@@ -302,6 +360,10 @@ internal sealed partial class InliningResolver
                 ParseTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))));
 
         var compared = governing;
+        if (!constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) && CanQuerySemanticModel(constant) &&
+            model.GetOperation(constant) is IConstantPatternOperation op &&
+            op.InputType.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType)
+            return null;
         if (constant.Expression.IsKind(SyntaxKind.NullLiteralExpression))
         {
             // A C# null pattern doesn't invoke an overloaded == operator.
@@ -338,6 +400,9 @@ internal sealed partial class InliningResolver
 
     private ExpressionSyntax? ConvertRelationalPattern(RelationalPatternSyntax relational, ExpressionSyntax governing)
     {
+        if (!CanQuerySemanticModel(relational) || model.GetOperation(relational) is not IRelationalPatternOperation op ||
+            op.InputType.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType)
+            return null;
         var kind = relational.OperatorToken.Kind() switch
         {
             SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,

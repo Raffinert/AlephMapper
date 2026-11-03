@@ -37,6 +37,33 @@ public class SwitchParityTests
     }
 
     [Test]
+    public async Task Record_patterns_match_original()
+    {
+        foreach (var sample in new SwitchPoint?[] { null, new(0, 0), new(2, 3), new(-1, 3), new(3, -1) })
+            await Assert.That(SwitchParityMapper.PointExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.Point(sample));
+        foreach (var sample in new[] { new SwitchValuePoint(0, 0), new SwitchValuePoint(2, 3), new SwitchValuePoint(-1, 2) })
+            await Assert.That(SwitchParityMapper.ValuePointExpression().Compile()(sample)).IsEqualTo(SwitchParityMapper.ValuePoint(sample));
+    }
+
+    [Test]
+    public async Task Nullable_constants_results_and_nested_scopes_match_original()
+    {
+        foreach (var x in new int?[] { null, -1, 0, 1, 4 })
+        {
+            await Assert.That(SwitchParityMapper.NullableIntExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.NullableInt(x));
+            await Assert.That(SwitchParityMapper.ResultExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.Result(x));
+        }
+        foreach (var x in new decimal?[] { null, -1m, 0m, 1m, 4m })
+            await Assert.That(SwitchParityMapper.DecimalExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.Decimal(x));
+        foreach (var x in new char?[] { null, 'a', 'b' })
+            await Assert.That(SwitchParityMapper.CharExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.Char(x));
+        foreach (var x in new DayOfWeek?[] { null, DayOfWeek.Monday, DayOfWeek.Friday })
+            await Assert.That(SwitchParityMapper.EnumExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.Enum(x));
+        foreach (var x in new SwitchValuePoint?[] { null, new(1, 2), new(-1, 2) })
+            await Assert.That(SwitchParityMapper.NullablePointExpression().Compile()(x)).IsEqualTo(SwitchParityMapper.NullablePoint(x));
+    }
+
+    [Test]
     public async Task Property_pattern_executes_in_SQLite()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -56,10 +83,28 @@ public class SwitchNode
     public int Score { get; set; }
     public string? Name { get; set; }
 }
+public record SwitchPoint(int X, int Y);
+public readonly record struct SwitchValuePoint(int X, int Y);
 public class SwitchDog : SwitchNode { }
 
 public static partial class SwitchParityMapper
 {
+    [Projectable] public static int Point(SwitchPoint? value) => value switch
+        { SwitchPoint(0, 0) => 0, SwitchPoint(var x, > 0) when x > 0 => x, _ => -1 };
+    [Projectable] public static int ValuePoint(SwitchValuePoint value) => value switch
+        { (0, 0) => 0, (var x, > 0) when x > 0 => x, _ => -1 };
+    [Projectable] public static int NullableInt(int? x) => x switch { null => -1, 1 => 1, > 1 and < 5 => 2, _ => 0 };
+    [Projectable] public static object? Result(int? x) => x switch { null => null, 1 => 1, _ => 2L };
+    [Projectable] public static int Decimal(decimal? x) => x switch { null => -1, 1m => 1, >= 2m => 2, _ => 0 };
+    [Projectable] public static int Char(char? x) => x switch { null => -1, 'a' => 1, _ => 0 };
+    [Projectable] public static int Enum(DayOfWeek? x) => x switch { null => -1, DayOfWeek.Monday => 1, _ => 0 };
+    [Projectable] public static int NullablePoint(SwitchValuePoint? value) => value switch { { X: > 0 } => 1, _ => 0 };
+    [Projectable] public static int IsGuard(SwitchNode? value) => value switch
+        { {} when value is { Name: not null } => 1, _ => 0 };
+    [Projectable] public static int NestedSwitch(SwitchNode? value) => value switch
+        { { Child: SwitchNode c } => c switch { { Score: > 0 } d => d.Score + c.Score, _ => -1 }, _ => -2 };
+    [Projectable] public static int NestedElements(SwitchNode? value) => new[] { value } switch
+        { [{ Child: SwitchNode c }] when c.Score > 0 => c.Score, _ => -1 };
     [Projectable] public static int Array(int[]? value) => value switch
         { [] => 0, [var x] when x > 0 => x, [1, 3] => 13, _ => -1 };
     [Projectable] public static int Slice(int[]? value) => value switch
