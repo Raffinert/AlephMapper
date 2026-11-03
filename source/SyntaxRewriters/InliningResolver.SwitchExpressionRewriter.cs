@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -56,39 +57,22 @@ internal sealed partial class InliningResolver
 
         foreach (var arm in node.Arms.Reverse().Skip(1))
         {
-            var condition = ConvertPattern(arm.Pattern, governing);
-            if (condition is null)
+            var lowered = LowerPattern(arm.Pattern, governing);
+            if (lowered is null)
             {
                 _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(arm.Pattern));
                 return node;
             }
 
-            // ConvertPattern accepts declaration patterns inside parentheses and
-            // logical wrappers. Bind every declaration-local symbol from the original
-            // pattern (not just an arm whose outermost node is a declaration).
-            // Identifier spelling is not sufficient: a substituted caller argument
-            // can have the same name as the pattern local.
+            var condition = lowered.Condition;
             var pushedPatternVariables = 0;
             try
             {
-                foreach (var declaration in arm.Pattern.DescendantNodesAndSelf()
-                             .OfType<DeclarationPatternSyntax>())
+                foreach (var binding in lowered.Bindings)
                 {
-                    if (declaration.Designation is not SingleVariableDesignationSyntax designation)
-                        continue;
-
-                    if (!CanQuerySemanticModel(designation) ||
-                        model.GetDeclaredSymbol(designation) is not ILocalSymbol local)
-                    {
-                        _unsupportedSwitchPatterns.Add(new UnsupportedSwitchPatternInfo(declaration));
-                        return node;
-                    }
-
-                    var cast = ParenthesizedExpression(CastExpression(declaration.Type, governing));
-                    _switchPatternVariables.Push((local, cast));
+                    _switchPatternVariables.Push((binding.Key, binding.Value));
                     pushedPatternVariables++;
                 }
-
 
                 var armExpression = VisitClean(arm.Expression);
                 if (arm.WhenClause is not null)
@@ -112,27 +96,53 @@ internal sealed partial class InliningResolver
         return currentExpression;
     }
 
-    private ExpressionSyntax? ConvertPattern(PatternSyntax pattern, ExpressionSyntax governing) =>
+    private sealed class PatternLoweringResult(ExpressionSyntax condition,
+        IReadOnlyDictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        public ExpressionSyntax Condition { get; } = condition;
+        public IReadOnlyDictionary<ISymbol, ExpressionSyntax> Bindings { get; } = bindings;
+    }
+
+    private PatternLoweringResult? LowerPattern(PatternSyntax pattern, ExpressionSyntax input)
+    {
+        var bindings = new Dictionary<ISymbol, ExpressionSyntax>(SymbolEqualityComparer.Default);
+        var condition = ConvertPattern(pattern, input, bindings);
+        return condition is null ? null : new PatternLoweringResult(condition, bindings);
+    }
+
+    private ExpressionSyntax? ConvertDeclaration(DeclarationPatternSyntax pattern, ExpressionSyntax input,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
+    {
+        if (pattern.Designation is SingleVariableDesignationSyntax designation)
+        {
+            if (!CanQuerySemanticModel(designation) || model.GetDeclaredSymbol(designation) is not ILocalSymbol local)
+                return null;
+            bindings.Add(local, ParenthesizedExpression(CastExpression(pattern.Type, input)));
+        }
+        return PadBinaryOperator(BinaryExpression(SyntaxKind.IsExpression, input, pattern.Type));
+    }
+
+    private ExpressionSyntax? ConvertPattern(PatternSyntax pattern, ExpressionSyntax governing,
+        Dictionary<ISymbol, ExpressionSyntax> bindings) =>
         pattern switch
         {
             ConstantPatternSyntax constant => ConvertConstantPattern(constant, governing),
 
             // 'is T' preserves inheritance and handles null, unlike GetType() == typeof(T).
-            DeclarationPatternSyntax declaration => PadBinaryOperator(BinaryExpression(
-                SyntaxKind.IsExpression, governing, declaration.Type)),
+            DeclarationPatternSyntax declaration => ConvertDeclaration(declaration, governing, bindings),
 
             RelationalPatternSyntax relational => ConvertRelationalPattern(relational, governing),
 
             ParenthesizedPatternSyntax parenthesized =>
-                ConvertPattern(parenthesized.Pattern, governing),
+                ConvertPattern(parenthesized.Pattern, governing, bindings),
 
             BinaryPatternSyntax binary when
                 binary.OperatorToken.IsKind(SyntaxKind.AndKeyword) ||
                 binary.OperatorToken.IsKind(SyntaxKind.OrKeyword) =>
-                ConvertBinaryPattern(binary, governing),
+                ConvertBinaryPattern(binary, governing, bindings),
 
             UnaryPatternSyntax unary when unary.OperatorToken.IsKind(SyntaxKind.NotKeyword) =>
-                ConvertNotPattern(unary, governing),
+                ConvertNotPattern(unary, governing, bindings),
 
             DiscardPatternSyntax => LiteralExpression(SyntaxKind.TrueLiteralExpression),
 
@@ -167,10 +177,11 @@ internal sealed partial class InliningResolver
             SyntaxKind.EqualsExpression, compared, VisitClean(constant.Expression)));
     }
 
-    private ExpressionSyntax? ConvertBinaryPattern(BinaryPatternSyntax binary, ExpressionSyntax governing)
+    private ExpressionSyntax? ConvertBinaryPattern(BinaryPatternSyntax binary, ExpressionSyntax governing,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
     {
-        var left = ConvertPattern(binary.Left, governing);
-        var right = ConvertPattern(binary.Right, governing);
+        var left = ConvertPattern(binary.Left, governing, bindings);
+        var right = ConvertPattern(binary.Right, governing, bindings);
         if (left is null || right is null)
             return null;
 
@@ -180,9 +191,10 @@ internal sealed partial class InliningResolver
         return ParenthesizedExpression(PadBinaryOperator(BinaryExpression(kind, left, right)));
     }
 
-    private ExpressionSyntax? ConvertNotPattern(UnaryPatternSyntax unary, ExpressionSyntax governing)
+    private ExpressionSyntax? ConvertNotPattern(UnaryPatternSyntax unary, ExpressionSyntax governing,
+        Dictionary<ISymbol, ExpressionSyntax> bindings)
     {
-        var operand = ConvertPattern(unary.Pattern, governing);
+        var operand = ConvertPattern(unary.Pattern, governing, bindings);
         return operand is null ? null
             : PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, ParenthesizedExpression(operand));
     }
