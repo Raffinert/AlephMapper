@@ -124,6 +124,193 @@ public class ExtensionMemberTests
     }
 
     [Test]
+    [Arguments("public", "Offset", "Mapper")]
+    [Arguments("public", "Ext.Offset", "Mapper")]
+    [Arguments("internal", "Offset", "Mapper")]
+    [Arguments("internal", "Ext.Offset", "Mapper")]
+    [Arguments("private", "Offset", "Ext")]
+    [Arguments("private", "Ext.Offset", "Ext")]
+    public async Task Accessible_extension_constants_preserve_named_references(string accessibility, string use, string outputType)
+    {
+        var map = "[Projectable] public static int Map(int n) => n.Value;";
+        var source = $$"""
+            using AlephMapper;
+            public static partial class Ext
+            {
+                {{accessibility}} const int Offset = 3;
+                extension(int n) { public int Value => n + {{use}}; }
+                {{(outputType == "Ext" ? map : "")}}
+            }
+            {{(outputType == "Mapper" ? "public static partial class Mapper { " + map + " }" : "")}}
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single(s => s.HintName == outputType + "_GeneratedMappings.g.cs");
+        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
+        await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + global::Ext.Offset)");
+    }
+
+    [Test]
+    [Arguments("Offset")]
+    [Arguments("Ext.Offset")]
+    public async Task Inaccessible_extension_constants_remain_inlined(string use)
+    {
+        var source = $$"""
+            using AlephMapper;
+            public static partial class Ext
+            {
+                private const int Offset = 3;
+                extension(int n) { public int Value => n + {{use}}; }
+            }
+            public static partial class Mapper
+            {
+                [Projectable] public static int Map(int n) => n.Value;
+                public static bool Check() => MapExpression().Compile()(4) == Map(4);
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
+        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
+        await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + ((int)(3)))");
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Mapper")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
+    [Arguments("new Dto { Amount = source.Amount }")]
+    [Arguments("new() { Amount = source.Amount }")]
+    public async Task Expanded_extension_object_creations_do_not_add_parentheses(string creation)
+    {
+        var source = $$"""
+            using AlephMapper;
+            public sealed class Input { public int Amount { get; set; } }
+            public sealed class Dto { public int Amount { get; set; } }
+            public static partial class Mapper
+            {
+                extension(Input source) { public Dto ToDto() => {{creation}}; }
+                [Projectable] public static Dto Map(Input source) => source.ToDto();
+                [Projectable] public static int Read(Input source) => source.ToDto().Amount;
+                public static bool Check()
+                {
+                    var source = new Input { Amount = 7 };
+                    return MapExpression().Compile()(source).Amount == Map(source).Amount
+                        && ReadExpression().Compile()(source) == Read(source);
+                }
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
+        var expressions = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m.ExpressionBody!.Expression);
+        var expectedMap = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }");
+        var expectedRead = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }.Amount");
+        await Assert.That(expressions["MapExpression"].NormalizeWhitespace().ToFullString())
+            .IsEqualTo(expectedMap.NormalizeWhitespace().ToFullString());
+        await Assert.That(expressions["ReadExpression"].NormalizeWhitespace().ToFullString())
+            .IsEqualTo(expectedRead.NormalizeWhitespace().ToFullString());
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Mapper")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
+    [Arguments("IAmount", 17)]
+    [Arguments("ConvertedDto", 27)]
+    public async Task Expanded_extension_object_creations_preserve_return_conversions(string returnType, int expected)
+    {
+        var source = $$"""
+            using AlephMapper;
+            public sealed class Input { public int Amount { get; set; } }
+            public interface IAmount { int Amount { get; } }
+            public sealed class Dto : IAmount
+            {
+                public int Amount { get; set; }
+                int IAmount.Amount => Amount + 10;
+                public static implicit operator ConvertedDto(Dto value) => new() { Amount = value.Amount + 20 };
+            }
+            public sealed class ConvertedDto { public int Amount { get; set; } }
+            public static partial class Mapper
+            {
+                extension(Input source) { public {{returnType}} ToDto() => new Dto { Amount = source.Amount }; }
+                [Projectable] public static {{returnType}} Map(Input source) => source.ToDto();
+                [Projectable] public static int Read(Input source) => source.ToDto().Amount;
+                public static bool Check()
+                {
+                    var source = new Input { Amount = 7 };
+                    return Map(source).Amount == {{expected}}
+                        && MapExpression().Compile()(source).Amount == {{expected}}
+                        && Read(source) == {{expected}}
+                        && ReadExpression().Compile()(source) == {{expected}};
+                }
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Mapper")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
+    public async Task Adapted_extension_helper_preserves_named_rounding_constant()
+    {
+        var source = """
+            using AlephMapper;
+            public static class Precision { public const int AmountDecimals = 6; }
+            public sealed class Input { public decimal Amount { get; set; } }
+            public sealed class Dto { public decimal Amount { get; set; } }
+            public sealed class ReadOnlyDto { public decimal Amount { get; set; } }
+            public static partial class Mapper
+            {
+                extension(Input source)
+                {
+                    [Adapt(typeof(Input), typeof(ReadOnlyDto), Generate = AdaptGeneration.Expression, Name = "MapReadOnly")]
+                    public Dto Map() => source?.MapNonNullable();
+                    private Dto MapNonNullable() => new Dto
+                    {
+                        Amount = System.Math.Round(source.Amount, Precision.AmountDecimals)
+                    };
+                }
+                public static bool Check()
+                {
+                    var source = new Input { Amount = 1.1234567m };
+                    return MapReadOnlyExpression().Compile()(source).Amount == source.Map().Amount;
+                }
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
+        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapReadOnlyExpression").ExpressionBody!.Expression;
+        var expected = SyntaxFactory.ParseExpression(
+            "source => new global::ReadOnlyDto { Amount = global::System.Math.Round(source.Amount, global::Precision.AmountDecimals) }");
+        await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo(expected.NormalizeWhitespace().ToFullString());
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Mapper")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
     public async Task CSharp14_extension_method_generates_projection_update_and_adapted_companions()
     {
         const string source = """
