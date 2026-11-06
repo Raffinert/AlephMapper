@@ -50,6 +50,8 @@ internal sealed partial class InliningResolver
     {
         if (!TryExpandBody(mapping, substitutions, out var body, extensionExpansion: true)) return original;
         body = PreserveReturnConversion(mapping, body, includeUntyped: true);
-        return ParenthesizedExpression(body).WithTriviaFrom(original);
+        return (body is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax
+            ? body
+            : ParenthesizedExpression(body)).WithTriviaFrom(original);
     }
 }

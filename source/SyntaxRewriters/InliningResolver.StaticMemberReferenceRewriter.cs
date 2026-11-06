@@ -47,6 +47,8 @@ internal sealed partial class InliningResolver
     {
         result = null!;
         if (!_extensionExpansion || symbol is null) return false;
+        if (_context.OutputType is not null && model.Compilation.IsSymbolAccessibleWithin(symbol, _context.OutputType))
+            return false;
         if (symbol is IFieldSymbol { IsConst: true } field && field.Type.TypeKind != TypeKind.Enum)
         {
             result = ExtensionConstant(field).WithTriviaFrom(original);
