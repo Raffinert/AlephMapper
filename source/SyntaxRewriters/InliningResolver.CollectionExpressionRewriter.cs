@@ -27,8 +27,8 @@ internal sealed partial class InliningResolver
         var rightOriginal = node.Right;
 
         // Visit both sides to apply any null-conditional rewrites while preserving '??'
-        var leftVisited = (ExpressionSyntax)Visit(node.Left);
-        var rightVisited = (ExpressionSyntax)Visit(node.Right);
+        var leftVisited = (ExpressionSyntax)(Visit(node.Left) ?? node.Left);
+        var rightVisited = (ExpressionSyntax)(Visit(node.Right) ?? node.Right);
 
         var coalesce = BinaryExpression(
                 SyntaxKind.CoalesceExpression,
@@ -53,7 +53,7 @@ internal sealed partial class InliningResolver
         if (!IsCollectionExpression(node.Right)) return base.VisitAssignmentExpression(node);
         var rewritten = RewriteCollectionExpression(node.Right, node.Left);
         return node
-            .WithLeft((ExpressionSyntax)Visit(node.Left))
+            .WithLeft((ExpressionSyntax)(Visit(node.Left) ?? node.Left))
             .WithRight(rewritten);
     }
 
