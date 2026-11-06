@@ -227,6 +227,47 @@ public class ExtensionMemberTests
     }
 
     [Test]
+    [Arguments("IAmount", 17)]
+    [Arguments("ConvertedDto", 27)]
+    public async Task Expanded_extension_object_creations_preserve_return_conversions(string returnType, int expected)
+    {
+        var source = $$"""
+            using AlephMapper;
+            public sealed class Input { public int Amount { get; set; } }
+            public interface IAmount { int Amount { get; } }
+            public sealed class Dto : IAmount
+            {
+                public int Amount { get; set; }
+                int IAmount.Amount => Amount + 10;
+                public static implicit operator ConvertedDto(Dto value) => new() { Amount = value.Amount + 20 };
+            }
+            public sealed class ConvertedDto { public int Amount { get; set; } }
+            public static partial class Mapper
+            {
+                extension(Input source) { public {{returnType}} ToDto() => new Dto { Amount = source.Amount }; }
+                [Projectable] public static {{returnType}} Map(Input source) => source.ToDto();
+                [Projectable] public static int Read(Input source) => source.ToDto().Amount;
+                public static bool Check()
+                {
+                    var source = new Input { Amount = 7 };
+                    return Map(source).Amount == {{expected}}
+                        && MapExpression().Compile()(source).Amount == {{expected}}
+                        && Read(source) == {{expected}}
+                        && ReadExpression().Compile()(source) == {{expected}};
+                }
+            }
+            """;
+
+        var (result, output) = await Generate(source);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        using var stream = new MemoryStream();
+        await Assert.That(output.Emit(stream).Success).IsTrue();
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        await Assert.That((bool)assembly.GetType("Mapper")!.GetMethod("Check")!.Invoke(null, null)!).IsTrue();
+    }
+
+    [Test]
     public async Task Adapted_extension_helper_preserves_named_rounding_constant()
     {
         var source = """
