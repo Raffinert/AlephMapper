@@ -736,7 +736,7 @@ AlephMapper is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
-AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables) and [Expressionify](https://github.com/ClaveConsulting/Expressionify). Thanks to all [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors).
+AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables) and [Expressionify](https://github.com/ClaveConsulting/Expressionify). Its extension-member and switch-expression implementations are heavily inspired by [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp). Thanks to all [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors).
 
 ## Related projects
 
@@ -749,6 +749,3 @@ AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.co
 - [Mapster](https://github.com/MapsterMapper/Mapster)
 - [Facet](https://github.com/Tim-Maes/Facet)
 
-## Acknowledgment
-
-AlephMapper's extension-member and switch-expression implementations are heavily inspired by [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp).
