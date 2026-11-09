@@ -140,7 +140,7 @@ var amounts = db.Orders
     .Select(OrderExtensions.AmountWithTaxExpression());
 ```
 
-C# 14 extension members require **Roslyn 5.0+**; classic mappings work with **Roslyn 4.8+**. Supported extension methods can also generate updates and adaptations, while extension properties are projection-only.
+C# 14 extension methods support projections, updates, and adaptations. Extension properties support projections only.
 
 `switch` lowering can re-evaluate an input or inlined arguments; use side-effect-free expressions. Not every pattern or generated expression is supported by every provider. Check the [extension-member compatibility matrix](docs/extension-members-compatibility-matrix.md) and [switch-pattern support matrix](docs/switch-parity-matrix.md).
 
