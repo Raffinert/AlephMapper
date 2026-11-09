@@ -150,11 +150,11 @@ C# 14 extension members require **Roslyn 5.0+**; classic mappings work with **Ro
 
 ```csharp
 [Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
-public static partial class AddressMapper
+public static partial class PersonMapper
 {
-    public static AddressDto ToDto(Address address) => new()
+    public static PersonDto ToDto(Person person) => new()
     {
-        City = address.Country?.Capital
+        City = person.Address?.City
     };
 }
 ```
