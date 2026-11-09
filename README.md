@@ -1,553 +1,61 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
 
-## Terms of use<sup>[?](https://github.com/Tyrrrz/.github/blob/master/docs/why-so-political.md)</sup>
-
-By using this project or its source code, for any purpose and in any shape or form, you grant your **implicit agreement** to all the following statements:
-
-- You **condemn Russia and its military aggression against Ukraine**
-- You **recognize that Russia is an occupant that unlawfully invaded a sovereign state**
-- You **support Ukraine's territorial integrity, including its claims over temporarily occupied territories of Crimea and Donbas**
-- You **reject false narratives perpetuated by Russian state propaganda**
-
-To learn more about the war and how you can help, [click here](https://stand-with-ukraine.pp.ua). Glory to Ukraine!
-
 # AlephMapper
+
+**Write a mapping once as ordinary C#. Use it in memory, as an EF Core projection, or to update an existing object.**
+
+AlephMapper is a compile-time C# source generator. It turns your handwritten, expression-bodied mapping methods into reusable `Expression<Func<...>>` factories, update-in-place overloads, and explicitly requested mappings for compatible types. Nested mapping and helper calls can be inlined into generated expressions—without a runtime mapping configuration or a second implementation to maintain.
 
 [![NuGet](https://img.shields.io/nuget/v/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Write a mapping once as ordinary C#. Use it in memory, as an EF Core projection, or to update an existing object.**
+## Quick start
 
-AlephMapper is a C# source generator for explicit, reusable mappings. It generates companion methods from your expression-bodied mapping code:
-
-- `Expression<Func<TSource, TDestination>>` factories for LINQ providers such as EF Core;
-- update-in-place overloads for existing destination instances;
-- explicitly requested mappings for structurally compatible type pairs.
-
-There is no runtime mapping configuration and no second projection implementation to keep synchronized.
-
-## Why AlephMapper?
-
-A normal C# mapping is easy to write, call, debug, and refactor:
-
-```csharp
-public static PersonDto MapPerson(Person person) => new()
-{
-    Id = person.Id,
-    Name = person.FirstName + " " + person.LastName
-};
-```
-
-EF Core projections usually require the same logic in an expression tree:
-
-```csharp
-public static Expression<Func<Person, PersonDto>> MapPersonExpression() =>
-    person => new PersonDto
-    {
-        Id = person.Id,
-        Name = person.FirstName + " " + person.LastName
-    };
-```
-
-Nested mappings make this duplication worse because ordinary methods cannot be called transparently inside an expression translated by EF Core. AlephMapper expands supported mapping and helper calls at compile time, generating one provider-visible expression from the original C# methods.
-
-Use AlephMapper when you prefer:
-
-- handwritten mappings over convention-based member discovery;
-- compile-time generation over runtime mapping configuration;
-- ordinary method composition over manual expression-tree composition;
-- inspectable generated code and compiler diagnostics.
-
-AlephMapper does not automatically discover mappings between arbitrary types, and the target LINQ provider still determines which generated expressions it can translate.
-
-## Installation
-
-Using the .NET CLI:
-
-```bash
+```shell
 dotnet add package AlephMapper
 ```
 
-Using `PackageReference`:
-
-```xml
-<PackageReference Include="AlephMapper" Version="0.8.1">
-  <PrivateAssets>all</PrivateAssets>
-  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-</PackageReference>
-```
-
-With Central Package Management:
-
-```xml
-<!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.8.1" />
-
-<!-- Project file -->
-<PackageReference Include="AlephMapper">
-  <PrivateAssets>all</PrivateAssets>
-  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-</PackageReference>
-```
-
-When referencing the generator directly from source:
-
-```xml
-<ProjectReference Include="..\path\to\AlephMapper.csproj"
-                  OutputItemType="Analyzer"
-                  ReferenceOutputAssembly="false" />
-```
-
-`PrivateAssets="all"` prevents AlephMapper from flowing transitively to consumers of your library. `IncludeAssets` makes its analyzer and source-generator assets available during compilation.
-
-### Compiler compatibility
-
-AlephMapper 0.8.1 supports Roslyn 4.8 and later through versioned analyzer assets. Roslyn 4.8 through 4.x supports classic mappings, switch lowering, Update and Adapt; Roslyn 5.0 and later additionally supports C# 14 extension members. The compiler automatically selects one compatible analyzer. Generated configuration attributes remain private to the consuming assembly, including when `InternalsVisibleTo` is used.
-
-### Migration: `[Expressive]` to `[Projectable]`
-
-`[Expressive]` has been renamed to `[Projectable]`. Replace every attribute use directly; no compatibility attribute is emitted.
-
-```csharp
-// Before
-[Expressive]
-public static PersonDto Map(Person person) => new();
-
-// After
-[Projectable]
-public static PersonDto Map(Person person) => new();
-```
-
-## Quick start
-
-Classic mapping methods must be `static`, expression-bodied, and declared in a `static partial` class. Supported C# 14 extension methods and getter-only expression-bodied extension properties use [extension blocks](#c-14-extension-members) inside a `static partial` class.
-
-Add `using AlephMapper;`, then apply `[Projectable]` to a mapping method or its containing class:
+Add `[Projectable]` to a `static`, expression-bodied method in a `static partial` class:
 
 ```csharp
 using AlephMapper;
 
-public static partial class PersonMapper
+public static partial class EmployeeMapper
 {
     [Projectable]
-    public static PersonDto MapPerson(Employee employee) => new()
+    public static EmployeeDto ToDto(Employee employee) => new()
     {
-        Id = employee.EmployeeId,
-        FullName = GetFullName(employee),
-        Email = employee.ContactInfo.Email,
-        Department = employee.Department.Name
+        Id = employee.Id,
+        Name = FullName(employee)
     };
 
-    private static string GetFullName(Employee employee) =>
+    private static string FullName(Employee employee) =>
         employee.FirstName + " " + employee.LastName;
 }
 ```
 
-AlephMapper generates a projection companion and inlines the helper:
+Use the original mapping in memory **or** the generated expression in EF Core:
 
 ```csharp
-public static partial class PersonMapper
-{
-    public static Expression<Func<Employee, PersonDto>> MapPersonExpression() =>
-        employee => new PersonDto
-        {
-            Id = employee.EmployeeId,
-            FullName = employee.FirstName + " " + employee.LastName,
-            Email = employee.ContactInfo.Email,
-            Department = employee.Department.Name
-        };
-}
-```
+var dto = EmployeeMapper.ToDto(employee);
 
-Use the generated expression in an EF Core query:
-
-```csharp
-var people = await dbContext.Employees
-    .Select(PersonMapper.MapPersonExpression())
+var employees = await db.Employees
+    .Select(EmployeeMapper.ToDtoExpression())
     .ToListAsync();
 ```
 
-Use the original method in memory:
+AlephMapper inlines the `FullName` helper into the generated expression, so EF Core receives the mapping logic rather than a call to an arbitrary C# method. The database provider still determines which expression nodes it can translate.
 
-```csharp
-var person = PersonMapper.MapPerson(employee);
-```
+## One mapping, several capabilities
 
-## C# 14 extension members
-
-C# 14 instance methods and expression-bodied getter-only properties in extension
-blocks can generate ordinary static expression factories in the outer `static
-partial` class. The receiver is the expression input; ordinary method arguments
-become factory arguments.
-
-```csharp
-public static partial class OrderExtensions
-{
-    // Classic extension method remains supported.
-    [Projectable]
-    public static decimal Twice(this Order order) => order.Amount * 2m;
-
-    extension(Order order)
-    {
-        [Projectable]
-        public decimal AmountWithTax => order.Amount * 1.25m;
-
-        [Projectable]
-        public string Label(int min) => order.Amount >= min ? "high" : "low";
-    }
-}
-
-// Expression<Func<Order, decimal>>
-var tax = OrderExtensions.AmountWithTaxExpression();
-// Expression<Func<Order, string>>
-var label = OrderExtensions.LabelExpression(100);
-```
-
-For a C# 14 instance method returning an object, add `[Updatable]` and
-`[Adapt]` to generate the same companions available for classic mappings:
-
-```csharp
-public static partial class PersonExtensions
-{
-    extension(Person person)
-    {
-        [Projectable, Updatable]
-        [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee",
-            Generate = AdaptGeneration.Map | AdaptGeneration.Expression | AdaptGeneration.Update)]
-        public PersonDto Map() => new()
-        {
-            Name = person.FirstName + " " + person.LastName
-        };
-    }
-}
-
-var personProjection = PersonExtensions.MapExpression(); // Expression<Func<Person, PersonDto>>
-PersonExtensions.Map(person, existingPersonDto);         // update existing destination
-var employeeDto = PersonExtensions.MapEmployee(employee);
-var employeeProjection = PersonExtensions.MapEmployeeExpression();
-PersonExtensions.MapEmployee(employee, existingEmployeeDto); // adapted update
-```
-
-The generated methods are ordinary static members of `PersonExtensions`; the
-C# 14 receiver becomes their first source parameter. The adapted types must
-expose the source members and writable destination members used by the template.
-Value-type results still cannot use update-in-place semantics (`AM0001`).
-See the [extension compatibility matrix](docs/extension-members-compatibility-matrix.md)
-for supported forms and limitations.
-
-Nested source-defined extension accesses/calls are expanded by symbol identity,
-including classic/C# 14 composition, switch bodies, and nested LINQ method calls.
-Primitive, interface, struct, nullable-value and reference receivers are supported.
-`[Projectable]` on the outer class includes supported extension members. Supported
-C# 14 **instance extension methods** can also declare `[Updatable]` and `[Adapt]`;
-these generate static update/adaptation companions in the outer partial class.
-Extension properties remain projection-only. `[Updatable]` on the outer class
-continues to apply to classic mapping methods, not automatically to extension
-members.
-
-The NuGet package selects a compatible analyzer automatically by the compiler
-host version (independent of the application's target framework):
-
-| Compiler host | Selected analyzer | Features |
-|---|---|---|
-| Roslyn 4.8 through 4.x | `analyzers/dotnet/roslyn4.8/cs/AlephMapper.dll` | Classic mappings, helpers, switches, Update and Adapt |
-| Roslyn 5.0 or newer | `analyzers/dotnet/roslyn5.0/cs/AlephMapper.dll` | Classic features plus C# 14 extension projections, updates, and adaptations |
-
-Both variants target `netstandard2.0` and share the mapping implementation.
-The package contains no compiler DLLs and needs no consumer-side version setting.
-Hosts below Roslyn 4.8 are outside the supported floor. IDE builds follow their
-compiler host version too; individual IDE versions were not separately tested.
-C# 14 source still requires a compiler/language version that supports C# 14.
-
-Package tests execute actual compilers **4.8.0, 4.14.0, 5.0.0**, and the installed
-SDK **10.0.403 / Roslyn 5.9**, asserting that exactly one correct analyzer is
-selected. The old single-5.0 package was reproduced failing on 4.14 with CS9057.
-The new package runs classic net8 consumers under 4.x and C# 14 extension
-projections, updates, and adaptations under 5.x. See the [multiversion plan and evidence](docs/roslyn-multiversion-plan.md).
-
-Mapper classes must be `static partial`. `AM0022` skips a classic mapper with an invalid declaration.
-`AM0023` skips a classic expression companion that conflicts with an existing member.
-Companion overload checks distinguish nullable value types such as `int` and `int?`, while ignoring nullable reference annotations.
-
-`AM0021` explains unsupported extension forms and skips the affected companion:
-generic blocks/methods, block/accessor bodies, query syntax (use LINQ method
-syntax), bound extension method groups (use an explicit lambda), static members,
-optional/params/ref arguments, ref-like receivers, ref returns, generated factory
-signature conflicts, and inaccessible expanded dependencies. Ordinary
-`Select(Map)` method groups retain their existing support.
-
-Null policies and the repeated-evaluation tradeoff remain unchanged. Generated
-expression correctness does not guarantee provider translation; the SQLite
-integration tests execute the documented scalar projection subset. See the
-[extension compatibility matrix](docs/extension-members-compatibility-matrix.md).
-
-## Switch expressions: evaluation semantics
-
-AlephMapper lowers supported C# `switch` expressions to nested conditional
-expressions so they can appear in LINQ expression trees. This deliberately
-matches the conditional-lowering behavior of ExpressiveSharp.
-
-**Important:** the input to a C# `switch` is ordinarily evaluated once, but
-lowering to conditional comparisons can evaluate the input **more than once**
-(for example, `source.Code.ToLower() switch { "a" => ..., "b" => ..., _ => ... }`).
-The generator does **not** reject these repeated input evaluations via
-`AM0019`. Prefer stable, side-effect-free expressions as switch inputs,
-especially for queries and methods with mutable state. EF Core translation
-depends on the provider.
-
-`AM0019` still prevents expression generation for unsupported or
-non-exhaustive patterns, including cases whose comparison semantics cannot
-be lowered correctly. Inlining helper methods likewise substitutes their
-arguments directly; an argument with side effects can be evaluated more than
-once, skipped, or evaluated in a different order. Prefer stable, side-effect-free
-arguments when generating projections.
-
-Supported patterns include scalar constants, relational/logical patterns, type and
-`var` bindings, nested/extended property patterns, fixed-length arrays and
-`List<T>`, non-capturing list slices, and positional records whose selected
-`Deconstruct` and component properties are compiler synthesized. Captures in
-switch arms bind to their actual member or element path, including in `when`.
-Nested switches and capture-free `is` patterns reuse the same lowering.
-
-Examples of the generated conditional shapes (formatting simplified):
-
-```csharp
-// input switch { { Quantity: > 100 } => 1, _ => 0 }
-((object)input != null && input.Quantity > 100) ? 1 : 0
-
-// items switch { [1, .., 3] => 1, _ => 0 }
-((object)items != null && items.Length >= 2
-    && items[0] == 1 && items[items.Length - 1] == 3) ? 1 : 0
-
-// point switch { (0, 0) => 1, _ => 0 } for record Point(int X, int Y)
-((object)point != null && point.X == 0 && point.Y == 0) ? 1 : 0
-```
-
-Repeated member/indexer reads share the evaluation tradeoff described above.
-SQL translation remains provider dependent; array/list and record support does
-not guarantee that a database provider can translate those expressions.
-
-An unguarded final `_` arm is required, including for otherwise exhaustive
-switches. `AM0019` also covers NaN constants, boxed/interface scalar comparisons,
-custom deconstruction, captured slices, unverified indexable collections,
-ref-return properties, `is` captures requiring an outer binding scope, and throw
-expressions. Update-only adaptation retains ordinary C# switch behavior.
-See the [tested support matrix](docs/switch-parity-matrix.md) for precise limits.
-
-## Composing mappings and predicates
-
-Supported expression-bodied methods can call other mapping or helper methods. AlephMapper substitutes their arguments and expands their bodies into the generated expression:
-
-```csharp
-public static partial class OrderMapper
-{
-    [Projectable]
-    public static OrderDto MapOrder(Order order) => new()
-    {
-        Id = order.Id,
-        Customer = MapCustomer(order.Customer),
-        Lines = order.Lines.Select(MapLine).ToList()
-    };
-
-    private static CustomerDto MapCustomer(Customer customer) => new()
-    {
-        Id = customer.Id,
-        Name = customer.Name
-    };
-
-    private static OrderLineDto MapLine(OrderLine line) => new()
-    {
-        ProductId = line.ProductId,
-        Quantity = line.Quantity
-    };
-}
-```
-
-`[Projectable]` is not limited to object projections. A method returning `bool` generates an `Expression<Func<TSource, bool>>`, allowing statically known conditions to be composed as ordinary methods:
-
-```csharp
-public static partial class EmployeeConditions
-{
-    [Projectable]
-    public static bool IsEligible(Employee employee) =>
-        IsActive(employee) &&
-        HasRequiredExperience(employee, 3);
-
-    private static bool IsActive(Employee employee) =>
-        employee.IsActive;
-
-    private static bool HasRequiredExperience(
-        Employee employee,
-        int minimumYears) =>
-        employee.YearsOfExperience >= minimumYears;
-}
-```
-
-```csharp
-var employees = await dbContext.Employees
-    .Where(EmployeeConditions.IsEligibleExpression())
-    .ToListAsync();
-```
-
-This complements rather than replaces runtime predicate builders: use AlephMapper when the condition structure is known at compile time, and a dynamic expression API when runtime input determines the number or shape of conditions.
-
-## Context parameters
-
-A mapping may accept values after its source parameter. AlephMapper moves those values to the generated expression factory while keeping a single source parameter in the returned expression:
-
-```csharp
-public static partial class EmployeeMapper
-{
-    [Projectable]
-    public static EmployeeDto Map(
-        Employee employee,
-        int currentYear) => new()
-    {
-        Id = employee.Id,
-        YearsOfExperience = currentYear - employee.StartYear
-    };
-}
-```
-
-The generated signature is:
-
-```csharp
-public static Expression<Func<Employee, EmployeeDto>>
-    MapExpression(int currentYear) =>
-        employee => new EmployeeDto
-        {
-            Id = employee.Id,
-            YearsOfExperience = currentYear - employee.StartYear
-        };
-```
-
-```csharp
-var employees = await dbContext.Employees
-    .Select(EmployeeMapper.MapExpression(DateTime.UtcNow.Year))
-    .ToListAsync();
-```
-
-Helpers may also have multiple parameters. Positional and named arguments are substituted according to the helper's declared parameters.
-
-## Extension-method inlining
-
-AlephMapper supports expression-bodied extension methods declared with the traditional `this` parameter syntax:
-
-```csharp
-public static class ProductExtensions
-{
-    public static string FormatPrice(
-        this Product product,
-        string prefix) =>
-        prefix + product.Price;
-}
-
-public static partial class ProductMapper
-{
-    [Projectable]
-    public static ProductDto Map(Product product) => new()
-    {
-        Name = product.Name,
-        Price = product.FormatPrice("$")
-    };
-}
-```
-
-The generated expression contains `"$" + product.Price`, not a call to `FormatPrice`. Extension mapping methods can also be used as LINQ method groups:
-
-```csharp
-Addresses = person.Addresses
-    .Select(AddressMapper.ToDto)
-    .ToList()
-```
-
-### Null-safe mapping at the call site
-
-Extension mappings work naturally with null-conditional access. This places one null check around the complete inlined mapping:
-
-```csharp
-public static partial class AddressMapper
-{
-    public static AddressDto ToDto(this Address address) => new()
-    {
-        Street = address.Street,
-        City = address.City,
-        Country = address.Country
-    };
-}
-
-[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
-public static partial class PersonMapper
-{
-    public static PersonDto ToDto(Person person) => new()
-    {
-        Name = person.Name,
-        Address = person.Address?.ToDto()
-    };
-}
-```
-
-AlephMapper inlines `ToDto()` and generates an expression equivalent to:
-
-```csharp
-person => new PersonDto
-{
-    Name = person.Name,
-    Address = person.Address != null
-        ? new AddressDto
-        {
-            Street = person.Address.Street,
-            City = person.Address.City,
-            Country = person.Address.Country
-        }
-        : null
-}
-```
-
-The equivalent regular static call needs a manual condition:
-
-```csharp
-Address = person.Address != null
-    ? AddressMapper.ToDto(person.Address)
-    : null
-```
-
-`person.Address?.ToDto()` is both shorter and more explicit about the intended behavior: the mapping is skipped when the receiver is null. The generated expression checks the nullable boundary once instead of requiring a separate check for every mapped member.
-
-This transformation is not applied automatically to regular method calls. `MapAddress(address)` always invokes `MapAddress`, even when `address` is null, whereas `address?.ToDto()` skips the invocation. Treating those forms as equivalent could change program behavior.
-
-Apply `?.` only at genuinely nullable boundaries. Once inside the non-null extension mapping, access the receiver normally. A receiver must be a stable member-access path. Expression generation is skipped with diagnostic `AM0016` when rewriting a receiver such as `GetAddress()?.ToDto()` could evaluate it more than once.
-
-## Null handling
-
-C# null-conditional access (`?.`) is not directly supported in expression trees. Configure its treatment with `NullConditionalRewrite`:
-
-```csharp
-[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
-public static partial class PersonMapper
-{
-    public static PersonDto Map(Person person) => new()
-    {
-        Name = person.Name,
-        City = person.Address?.City
-    };
-}
-```
-
-| Policy | Generated behavior |
+| Attribute | What it generates |
 | --- | --- |
-| `None` | Skips expression generation and reports `AM0017` because expression trees do not support null-conditional syntax. |
-| `Ignore` | Removes conditional access: `person.Address?.City` becomes `person.Address.City`. |
-| `Rewrite` | Emits an explicit check: `person.Address != null ? person.Address.City : null`. |
+| `[Projectable]` | An `<MethodName>Expression(...)` factory for LINQ and EF Core. |
+| `[Updatable]` | An overload that updates an existing destination object. |
+| `[Adapt]` | Explicit map, projection, and optionally update methods for another compatible source/destination pair. |
 
-`Ignore` is the default. Use `Rewrite` when the generated expression must retain the null-safe behavior of the original method.
-
-`None` does not inline through a conditional extension call because doing so would detach the inlined body from `?.` and change its semantics. Expression generation is skipped with `AM0017` instead of emitting uncompilable or behavior-changing code. Use `Rewrite` to produce an expression-compatible explicit null check.
-
-## Updating existing objects
-
-Apply `[Updatable]` to generate an overload that writes mapped properties to an existing destination:
+### Update an existing object
 
 ```csharp
 public static partial class PersonMapper
@@ -556,196 +64,120 @@ public static partial class PersonMapper
     public static Person Map(PersonUpdateDto source) => new()
     {
         FirstName = source.FirstName,
-        LastName = source.LastName,
-        Email = source.Email
+        LastName = source.LastName
     };
 }
+
+var person = await db.People.FindAsync(id);
+PersonMapper.Map(request, dest: person!); // Generated overload.
+await db.SaveChangesAsync();
 ```
 
-Generated shape:
+This reuses the handwritten assignments without replacing the tracked entity. Collection updates are opt-in; see [advanced usage](docs/advanced-usage.md).
 
-```csharp
-public static Person Map(PersonUpdateDto source, Person dest)
-{
-    dest.FirstName = source.FirstName;
-    dest.LastName = source.LastName;
-    dest.Email = source.Email;
-    return dest;
-}
-```
-
-This preserves EF Core's tracked instance:
-
-```csharp
-var person = await dbContext.People.FindAsync(id);
-
-PersonMapper.Map(request, dest: person);
-
-await dbContext.SaveChangesAsync();
-```
-
-Collection properties are skipped by default. Enable their update explicitly:
-
-```csharp
-[Updatable(CollectionProperties = CollectionPropertiesPolicy.Update)]
-public static Order Map(OrderRequest source) => new()
-{
-    Lines = source.Lines.Select(MapLine).ToList()
-};
-```
-
-Replacing tracked collections can affect relationships and persistence behavior, so opt in deliberately. Update generation for value-type destinations reports `AM0001` because value types do not provide useful update-in-place semantics.
-
-## Adapting a mapping template
-
-`[Adapt]` reuses a mapping body for one explicitly declared source/destination pair. The types need not share a base type or interface; AlephMapper validates the members, constructors, and conversions required by the template.
+### Adapt a mapping to compatible types
 
 ```csharp
 public static partial class PersonMapper
 {
-    [Adapt(
-        typeof(Employee),
-        typeof(EmployeeDto),
-        Name = "MapEmployee",
-        Generate = AdaptGeneration.Map | AdaptGeneration.Expression)]
-    public static PersonDto MapPerson(Person source) => new()
+    [Adapt(typeof(Employee), typeof(EmployeeDto), Name = "ToEmployeeDto")]
+    public static PersonDto ToPersonDto(Person person) => new()
     {
-        Id = source.Id,
-        Name = source.FirstName + " " + source.LastName,
-        Email = source.Email
+        Id = person.Id,
+        Name = person.Name
+    };
+}
+
+var employeeDto = PersonMapper.ToEmployeeDto(employee);
+var query = db.Employees.Select(PersonMapper.ToEmployeeDtoExpression());
+```
+
+`[Adapt]` generates only the explicitly requested compatible pairs; it does not discover mappings by convention. See the [adaptation guide](docs/Adapt-Attribute.md).
+
+## Compose mappings and predicates
+
+Supported expression-bodied helpers and nested mappings can be inlined at compile time:
+
+```csharp
+public static partial class OrderMapper
+{
+    [Projectable]
+    public static OrderDto ToDto(Order order) => new()
+    {
+        Id = order.Id,
+        Lines = order.Lines.Select(ToLineDto).ToList()
+    };
+
+    private static OrderLineDto ToLineDto(OrderLine line) => new()
+    {
+        ProductId = line.ProductId,
+        Quantity = line.Quantity
+    };
+}
+
+var orders = await db.Orders
+    .Select(OrderMapper.ToDtoExpression())
+    .ToListAsync();
+```
+
+A `[Projectable]` method returning `bool` also generates an `Expression<Func<T, bool>>` factory for `Where`. AlephMapper expands **statically known** composition during compilation; for dynamic runtime composition, use an expression-building library such as [Raffinert.Expressions](https://github.com/Raffinert/Expressions).
+
+## Modern C# support
+
+AlephMapper supports compatible C# `switch` expressions and C# 14 instance extension methods and getter-only expression properties. For example:
+
+```csharp
+public static partial class OrderExtensions
+{
+    extension(Order order)
+    {
+        [Projectable]
+        public decimal AmountWithTax => order.Amount * 1.25m;
+    }
+}
+
+var amounts = db.Orders
+    .Select(OrderExtensions.AmountWithTaxExpression());
+```
+
+C# 14 extension methods support projections, updates, and adaptations. Extension properties support projections only.
+
+`switch` lowering can re-evaluate an input or inlined arguments; use side-effect-free expressions. Not every pattern or generated expression is supported by every provider. Check the [extension-member compatibility matrix](docs/extension-members-compatibility-matrix.md) and [switch-pattern support matrix](docs/switch-parity-matrix.md).
+
+## Null handling
+
+**Important:** `NullConditionalRewrite.Ignore` is the default for generated expressions, so it removes `?.`. To preserve null-conditional behavior in projections, opt into rewriting:
+
+```csharp
+[Projectable(NullConditionalRewrite = NullConditionalRewrite.Rewrite)]
+public static partial class PersonMapper
+{
+    public static PersonDto ToDto(Person person) => new()
+    {
+        City = person.Address?.City
     };
 }
 ```
 
-AlephMapper generates:
+This preserves the null check in the generated expression. The original mapping method continues to follow ordinary C# semantics. See [advanced usage](docs/advanced-usage.md) for the null policies and their limits.
 
-```csharp
-public static EmployeeDto MapEmployee(Employee source) => new()
-{
-    Id = source.Id,
-    Name = source.FirstName + " " + source.LastName,
-    Email = source.Email
-};
+## AI agent skill
 
-public static Expression<Func<Employee, EmployeeDto>>
-    MapEmployeeExpression() =>
-        source => new EmployeeDto
-        {
-            Id = source.Id,
-            Name = source.FirstName + " " + source.LastName,
-            Email = source.Email
-        };
-```
+Use the portable skill to help coding agents apply the correct generated APIs and expansion rules:
 
-`Generate` defaults to `AdaptGeneration.Map | AdaptGeneration.Expression`. Combine `Map`, `Expression`, and `Update` as needed.
-
-`Name` is required when expression generation is requested. For map-only or update-only adaptations, omitting it uses the template method's name. Additional template parameters are preserved in generated signatures.
-
-Adaptation is explicit: AlephMapper does not scan for compatible types. Invalid adaptations report diagnostics `AM0005` through `AM0015`. See the [`[Adapt]` technical guide](docs/Adapt-Attribute.md) for validation rules and examples.
-
-## Generated API
-
-| Attribute | Generated member |
-| --- | --- |
-| `[Projectable]` | `<MethodName>Expression(...)` returning `Expression<Func<TSource, TDestination>>` |
-| `[Updatable]` | An overload with a final destination parameter named `dest` |
-| `[Adapt]` | The requested adapted map, expression, and/or update members |
-| C# 14 instance extension method | `[Projectable]`, `[Updatable]`, and `[Adapt]` produce static companions in the outer partial class, with the receiver as the source parameter |
-
-Attributes can be applied to individual classic mapping methods. `[Projectable]` and `[Updatable]` can also be applied to the containing class. For C# 14 extension members, `[Projectable]` supports instance methods and getter-only expression properties; `[Updatable]` and `[Adapt]` are supported on instance methods only.
-
-AlephMapper is best suited to object initializers, predicates, constructor calls, member access, conversions, LINQ operations, and small expression-bodied methods that it can inline. Not every valid C# construct can be represented in an expression tree, and not every expression-tree operation can be translated by every query provider.
-
-## Inspecting generated code
-
-Generated mapper files follow the consuming project's project-level nullable configuration. Source-local `#nullable` directives on mapping methods and inlined helpers are not propagated; AlephMapper emits `#nullable restore` in each generated mapper file so Roslyn applies that project policy to generated code.
-
-To emit generated files from a consuming project:
-
-```xml
-<PropertyGroup>
-  <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-  <CompilerGeneratedFilesOutputPath>
-    $(BaseIntermediateOutputPath)Generated
-  </CompilerGeneratedFilesOutputPath>
-</PropertyGroup>
-```
-
-Inspect generated code to confirm method inlining, null handling, adapted members, and the exact expression supplied to EF Core.
-
-## Troubleshooting
-
-### A generated method is missing
-
-For a classic mapping, confirm that the mapper class is `static partial`, the method is `static` and expression-bodied, and the appropriate attribute is applied to the method or class. For C# 14 extension members, use a `static partial` outer class, a supported instance method or expression-bodied getter-only property, and a C# 14 / Roslyn 5.0+ compiler; unsupported shapes report `AM0021`. For `[Adapt]`, check the explicit source/destination types and provide `Name` when generating an expression.
-
-### EF Core cannot translate a generated expression
-
-AlephMapper generates an expression tree; EF Core and its database provider translate it. Inspect the generated expression and the provider exception for unsupported operations.
-
-### A helper or extension method was not inlined
-
-The method must be visible in the current compilation and use a supported expression-bodied shape. Both traditional `this` extension methods and [supported C# 14 extension members](#c-14-extension-members) can be expanded; unsupported C# 14 forms report `AM0021`. Circular helper calls report `AM0002` or `AM0003` and skip the affected generation.
-
-### `?.` causes a `NullReferenceException`
-
-The default `Ignore` policy removes null-conditional access from generated expressions. Select `NullConditionalRewrite.Rewrite` to generate explicit null checks.
-
-## Comparison
-
-| Tool | Primary approach | AlephMapper's focus |
-| --- | --- | --- |
-| AutoMapper | Runtime configuration and conventions | Explicit C# mappings with compile-time companions |
-| Mapster | Configuration/conventions with runtime and generated options | Handwritten mapping methods as the source of truth |
-| Mapperly | Compile-time mapping generation from declarations and conventions | Expressions and updates derived from an existing implementation |
-| EntityFrameworkCore.Projectables | Projectable members expanded for EF Core | Complete mappings, predicates, updates, and explicit adaptation |
-| Expressionify | Expression expansion | Mapping-oriented companion generation |
-| [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp) | Compile-time expression trees for modern C# syntax and computed members, with query rewriting and EF Core integration | Handwritten mappings with generated projections, in-place updates, and explicit type adaptations |
-| LINQKit | Runtime/query-time expression composition and expansion | Compile-time expansion of statically known composition |
-
-## AI Agent Skill
-
-Use AlephMapper with AI coding agents through the repository's [Agent Skill](.agents/skills/alephmapper/SKILL.md). It covers generated projection companions, in-place updates, explicit adaptations, null-conditional policies, diagnostics, and EF Core translation boundaries.
-
-~~~bash
+```shell
 npx skills add Raffinert/AlephMapper --skill alephmapper
-~~~
+```
 
-The skill is optional guidance for a consuming project's AI agent; install the `AlephMapper` NuGet package separately to use the source generator.
+The skill is stored in [`.agents/skills/alephmapper/`](.agents/skills/alephmapper/).
 
-## Examples
+## Documentation
 
+- [Installation, compiler compatibility, and package references](docs/installation-and-compatibility.md)
+- [Advanced usage, null handling, and troubleshooting](docs/advanced-usage.md)
+- [`[Adapt]` reference](docs/Adapt-Attribute.md)
+- [C# 14 extension-member compatibility](docs/extension-members-compatibility-matrix.md)
+- [Switch-pattern support and evaluation semantics](docs/switch-parity-matrix.md)
 - [Sample application](examples/SampleApp)
-- [`[Adapt]` technical guide](docs/Adapt-Attribute.md)
-- [Integration tests](tests/AlephMapper.IntegrationTests)
 
-## Contributing
-
-Contributions are welcome.
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Make the change.
-4. Add or update tests.
-5. Run the test suite.
-6. Open a pull request.
-
-## License
-
-AlephMapper is licensed under the [MIT License](LICENSE).
-
-## Acknowledgments
-
-AlephMapper was inspired by [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables) and [Expressionify](https://github.com/ClaveConsulting/Expressionify). Its extension-member and switch-expression implementations are heavily inspired by [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp). Thanks to all [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors).
-
-## Related projects
-
-- [EntityFrameworkCore.Projectables](https://github.com/koenbeuk/EntityFrameworkCore.Projectables) and its successor [ExpressiveSharp](https://github.com/EFNext/ExpressiveSharp)
-- [Expressionify](https://github.com/ClaveConsulting/Expressionify)
-- [LINQKit](https://github.com/scottksmith95/LINQKit)
-- [NeinLinq](https://github.com/axelheer/nein-linq)
-- [Mapperly](https://github.com/riok/mapperly)
-- [AutoMapper](https://automapper.org/)
-- [Mapster](https://github.com/MapsterMapper/Mapster)
-- [Facet](https://github.com/Tim-Maes/Facet)
-
+AlephMapper is [MIT licensed](LICENSE). Thanks to the [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors). See also our [statement on Russia's war against Ukraine](docs/terms-of-use.md). [Feedback and issues](https://github.com/Raffinert/AlephMapper/issues) are welcome.
