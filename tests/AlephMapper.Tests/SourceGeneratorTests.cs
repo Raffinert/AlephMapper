@@ -8,11 +8,16 @@ using AlephMapper.Generation;
 using AlephMapper.Diagnostics;
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AlephMapper.Tests;
 
 public class SourceGeneratorTests
 {
+    private static readonly Regex GeneratedCodeVersionPattern = new(
+        @"(?<=\[global::System\.CodeDom\.Compiler\.GeneratedCode\(""AlephMapper"", "")[^""]+(?=""\)\])",
+        RegexOptions.Compiled);
+
     private readonly CSharpParseOptions _parseOptions;
     private readonly CSharpGeneratorDriver _driver;
 
@@ -872,6 +877,29 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task GeneratedCodeAttributeUsesCurrentAssemblyVersion()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => value;
+            }
+            """;
+        var compilation = CSharpCompilation.Create(
+            "VersionFixture",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var result = _driver.RunGenerators(compilation).GetRunResult().Results.Single();
+        var generated = result.GeneratedSources.Single(item => item.HintName.EndsWith("_GeneratedMappings.g.cs", StringComparison.Ordinal));
+
+        await Assert.That(generated.SourceText.ToString()).Contains(
+            $"[global::System.CodeDom.Compiler.GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
+    }
+
+    [Test]
     [MethodDataSource(typeof(SourceGeneratorTests), nameof(GetTestCases))]
     public async Task GenerationMatchesBaseLine(string name, string[] sourceFiles, string[] expectedFiles)
     {
@@ -931,7 +959,7 @@ public class SourceGeneratorTests
 
         var actualSources = result.GeneratedSources.ToDictionary(
             source => Path.GetFileName(source.HintName),
-            source => NormalizeLineEndings(source.SourceText.ToString()),
+            source => GeneratedCodeVersionPattern.Replace(NormalizeLineEndings(source.SourceText.ToString()), "<VERSION>"),
             StringComparer.Ordinal);
 
         var expectedFileContents = expectedFiles
