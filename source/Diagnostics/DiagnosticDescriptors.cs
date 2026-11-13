@@ -176,8 +176,8 @@ public static class DiagnosticDescriptors
         helpLinkUri: DiagnosticDocsUrl + "am0019");
 
     public static readonly DiagnosticDescriptor UnsupportedExtensionMember = new(
-        "AM0020", "Extension member cannot be projected",
-        "Expression generation for extension member '{0}' skipped: {1}",
+        "AM0020", "Extension member cannot generate companions",
+        "Companion generation for extension member '{0}' skipped: {1}",
         "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidMapperDeclaration = new(

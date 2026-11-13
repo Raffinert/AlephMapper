@@ -2,6 +2,8 @@
 
 Read [features.md](features.md) first. This guide separates contract hardening from optional new APIs. Coordinate with the [internal-design guide](internal-api-agent-instructions.md) and [documentation guide](docs-agent-instructions.md).
 
+This is the baseline implementation plan. Check the assessment's implementation update and current checkout before treating a step as outstanding.
+
 ## Working rules
 
 1. Read the active task, current repository instructions, and current implementation before editing.

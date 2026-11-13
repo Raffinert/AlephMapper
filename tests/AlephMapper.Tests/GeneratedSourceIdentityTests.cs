@@ -35,6 +35,58 @@ public class GeneratedSourceIdentityTests
     }
 
     [Test]
+    public async Task Static_imported_constants_in_conditions_and_patterns_keep_their_binding()
+    {
+        const string source = """
+            using AlephMapper;
+            using static Choices;
+            public static class Choices
+            {
+                public const int Positive = 1;
+                public const int Negative = -1;
+            }
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Conditional(int value) => value > 0 ? Positive : Negative;
+                [Projectable]
+                public static int Pattern(int value) => value switch { Positive => 1, _ => 0 };
+            }
+            public static class Consumer
+            {
+                public static int Run() => Mapper.ConditionalExpression().Compile()(2) +
+                    Mapper.PatternExpression().Compile()(1);
+            }
+            """;
+
+        var (_, output, result) = await Generate(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Static_imported_generic_method_keeps_its_binding()
+    {
+        const string source = """
+            using AlephMapper;
+            using static System.Array;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => Empty<int>().Length + value;
+            }
+            public static class Consumer
+            {
+                public static int Run(int value) => Mapper.MapExpression().Compile()(value);
+            }
+            """;
+
+        var (_, output, result) = await Generate(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     public async Task Nested_mappers_with_the_same_short_name_get_distinct_files()
     {
         const string source = """
@@ -87,6 +139,96 @@ public class GeneratedSourceIdentityTests
         var firstName = initial.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
         var nextName = updated.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
         await Assert.That(nextName).IsEqualTo(firstName);
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Nonemitting_attributed_types_do_not_rename_existing_mapper_output()
+    {
+        const string mapper = """
+            using AlephMapper;
+            public partial class First
+            {
+                public static partial class Mapper
+                {
+                    [Projectable] public static int Map(int value) => value + 1;
+                }
+            }
+            """;
+        const string unrelated = """
+            using AlephMapper;
+            public partial class Second { [Projectable] public static partial class Mapper { } }
+            public partial class Third
+            {
+                [Projectable] public static class Mapper
+                {
+                    public static int Map(int value) => value + 2;
+                }
+            }
+            """;
+
+        var (_, _, initial) = await Generate(mapper);
+        var (_, output, updated) = await Generate(mapper, unrelated);
+        var firstName = initial.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
+        var nextName = updated.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
+        await Assert.That(nextName).IsEqualTo(firstName);
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Mapper_names_differing_only_by_case_get_distinct_file_paths()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable] public static int Map(int value) => value + 1;
+            }
+            public static partial class mapper
+            {
+                [Projectable] public static int Map(int value) => value + 2;
+            }
+            public static class Consumer
+            {
+                public static int Run() => Mapper.MapExpression().Compile()(1) +
+                    mapper.MapExpression().Compile()(1);
+            }
+            """;
+
+        var (_, output, result) = await Generate(source);
+        var names = result.GeneratedSources.Where(s => s.SourceText.ToString().Contains("MapExpression"))
+            .Select(s => s.HintName).ToArray();
+        await Assert.That(names).Count().IsEqualTo(2);
+        await Assert.That(names.Distinct(StringComparer.OrdinalIgnoreCase)).Count().IsEqualTo(2);
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Nested_mapper_requires_partial_class_enclosing_types()
+    {
+        const string source = """
+            using AlephMapper;
+            public class NonPartial
+            {
+                public static partial class Mapper
+                {
+                    [Projectable] public static int Map(int value) => value + 1;
+                }
+            }
+            public partial record RecordOuter
+            {
+                public static partial class Mapper
+                {
+                    [Projectable] public static int Map(int value) => value + 2;
+                }
+            }
+            """;
+
+        var (_, output, result) = await Generate(source);
+        await Assert.That(result.Diagnostics.Count(d => d.Id == "AM0021")).IsEqualTo(2);
+        await Assert.That(result.Diagnostics.Where(d => d.Id == "AM0021")
+            .All(d => d.GetMessage().Contains("every enclosing type must be a partial class"))).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("MapExpression"))).IsFalse();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 

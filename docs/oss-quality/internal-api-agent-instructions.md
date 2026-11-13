@@ -1,6 +1,6 @@
 # Implementation instructions: internal API and design
 
-Read [internal-api.md](internal-api.md) first. This guide turns IA-01 through IA-06 into ordered implementation tasks. It is a future execution guide; its existence does not mean the changes have been implemented.
+Read [internal-api.md](internal-api.md) first. This guide turns IA-01 through IA-06 into ordered implementation tasks. It records the baseline plan; check the assessment's implementation update and current checkout before treating a step as outstanding.
 
 ## Working rules
 

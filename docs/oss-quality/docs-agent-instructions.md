@@ -2,6 +2,8 @@
 
 Read [docs.md](docs.md) first. This guide covers D-01 through D-07. It does not authorize implementing proposed mapper features, publishing packages, or inventing organizational policies.
 
+This is the baseline implementation plan. Check the assessment's implementation update and current checkout before treating a step as outstanding.
+
 ## Working rules
 
 1. Read the current user request and repository instructions.

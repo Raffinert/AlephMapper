@@ -24,7 +24,7 @@ Test sources: [generator safety](../tests/AlephMapper.Tests/SemanticSafetyGenera
 | Type-only / declaration / var / discard | Supported | `New_patterns_generate_compilable_expressions`, property differential suite; final arm must still be `_` |
 | Empty, multiple, nested, extended, typed properties | Supported | `Property_patterns_match_original_including_nested_bindings_and_nulls`, `Property_pattern_executes_in_SQLite` |
 | Nested member bindings, helper symbols and hidden members | Supported | `Nested`, `Helper`, `Inlined_property_pattern_preserves_base_member_binding` including hidden governing path |
-| Fixed array / List<T> | Supported for SZ rank-one arrays and exact List<T> | `List_patterns_generate_compilable_expressions`, `List_patterns_match_original_at_length_boundaries`; null, lengths 0–4, captures |
+| Fixed array / List<T> | Supported for SZ rank-one arrays and exact List<T> | `List_patterns_generate_compilable_expressions`, `List_patterns_match_original_at_length_boundaries`; null, lengths 0â€“4, captures |
 | Non-capturing list slice | Supported | Same list suite: prefix, suffix, both, empty `[..]`; suffix uses length subtraction |
 | Nested list elements | Supported | `NestedElements` in property differential suite |
 | Slice capture | Unsupported AM0019 | `Unsupported_patterns_are_diagnosed_without_crashing`; no expression-compatible materialization promised |

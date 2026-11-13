@@ -2,6 +2,8 @@
 
 Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`.
 
+Implementation update for this branch: D-01 version and sample guidance, D-02 generated API reference, D-03 diagnostic catalog, D-04 contributor/release guidance, and D-06 runnable documentation and link checks are in place. D-05 still needs a maintainer-supported confidential security route and governance decisions. D-07 improves package description and tags; symbol distribution and reproducibility remain unverified. The sections below retain the original assessment and acceptance criteria.
+
 Companion implementation guide: [docs-agent-instructions.md](docs-agent-instructions.md).
 
 Related assessments: [internal API and design](internal-api.md) and [features](features.md).

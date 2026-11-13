@@ -20,7 +20,7 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 ## AM0005
 
-**Invalid adapted source or destination type · Error.** An `[Adapt]` type argument is invalid for structural substitution. Use concrete, valid source and destination types, for example `[Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]`. The requested adaptation is omitted.
+**Invalid adapted source or destination type · Error.** The adapted source and destination are both identical to the template's original pair, so the adaptation would duplicate the original mapping. Choose a different source or destination type, for example `[Adapt(typeof(Employee), typeof(EmployeeDto), Name = "MapEmployee")]`. Open generic types are reported separately as [AM0014](#am0014). The requested adaptation is omitted.
 
 ## AM0006
 
@@ -80,11 +80,11 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 ## AM0020
 
-**Extension member cannot be projected · Warning.** The diagnostic message gives the specific reason, such as an unsupported extension shape, inaccessible dependency, or conflicting generated factory. Use a supported instance expression-bodied extension method or getter-only expression property, for example `extension(Person p) { [Projectable] public string Label => p.Name; }`, in a partial outer class; see the [extension matrix](extension-members-compatibility-matrix.md). The affected extension companion is omitted.
+**Extension member cannot generate companions · Warning.** The diagnostic message gives the specific reason, such as an unsupported extension shape, inaccessible dependency, or conflicting generated factory. Use a supported instance expression-bodied extension method or getter-only expression property, for example `extension(Person p) { [Projectable] public string Label => p.Name; }`, in a partial outer class; see the [extension matrix](extension-members-compatibility-matrix.md). The affected extension companion is omitted.
 
 ## AM0021
 
-**Mapper declaration cannot contain generated companions · Warning.** The mapper declaration is ineligible, typically because the class is not `static partial`. Change `public static class Mapper` to `public static partial class Mapper`. Its companions are omitted.
+**Mapper declaration cannot contain generated companions · Warning.** The mapper declaration is ineligible, typically because the mapper is not a `static partial` class or a nested mapper has an enclosing type that is not a `partial class`. Declare the mapper as `public static partial class Mapper` and every enclosing type as a `partial class`; a containing struct or record is unsupported. Its companions are omitted. C# 14 extension-member declaration failures report [AM0020](#am0020) instead.
 
 ## AM0022
 

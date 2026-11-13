@@ -1,5 +1,6 @@
 """Verify NuGet analyzer band selection with actual isolated compiler processes."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -60,6 +61,13 @@ def main():
         ET.SubElement(sources, "clear")
         ET.SubElement(sources, "add", key="local", value=str(args.package_dir.resolve()))
         ET.SubElement(sources, "add", key="nuget.org", value="https://api.nuget.org/v3/index.json")
+        # The exact ID takes precedence over the wildcard: verify the package
+        # just packed in this run, while resolving compiler toolsets from NuGet.
+        mapping = ET.SubElement(config, "packageSourceMapping")
+        local = ET.SubElement(mapping, "packageSource", key="local")
+        ET.SubElement(local, "package", pattern="AlephMapper")
+        nuget = ET.SubElement(mapping, "packageSource", key="nuget.org")
+        ET.SubElement(nuget, "package", pattern="*")
         ET.ElementTree(config).write(work / "NuGet.Config", encoding="utf-8", xml_declaration=True)
         properties = [f"-p:PackageVersionUnderTest={version}", f"-p:ExpectedRoslynBand={band}",
                       f"-p:CompatibilityLanguageVersion={'14' if modern else '12'}"]
@@ -67,6 +75,10 @@ def main():
             properties.append(f"-p:CompatibilityCompilerVersion={compiler}")
         run([dotnet, "restore", work / "Consumer.csproj", "--configfile", work / "NuGet.Config",
              "--packages", work / "packages", *properties])
+        installed_packages = list((work / "packages/alephmapper").rglob("*.nupkg"))
+        if (len(installed_packages) != 1 or
+                hashlib.sha256(installed_packages[0].read_bytes()).digest() != hashlib.sha256(packages[0].read_bytes()).digest()):
+            raise RuntimeError(f"The consumer did not restore the package under test: {installed_packages}")
         if compiler != "sdk":
             tasks = work / "packages/microsoft.net.compilers.toolset" / compiler / "tasks/netcore"
             csc = tasks / "bincore/csc.dll"

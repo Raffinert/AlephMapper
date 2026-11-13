@@ -80,6 +80,8 @@ internal sealed partial class InliningResolver
             return Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseName(
                 type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).WithTriviaFrom(node);
         }
+        if (TryQualifyStaticName(node, rewritten, symbol, out var staticReference))
+            return staticReference;
         return rewritten;
     }
 

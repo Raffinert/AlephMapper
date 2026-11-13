@@ -1,8 +1,10 @@
 using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,6 +12,8 @@ namespace AlephMapper.Generation;
 
 internal static class MapperFileEmitter
 {
+    private static readonly ConditionalWeakTable<Compilation, Lazy<Dictionary<string, int>>> LegacyHintCounts = new();
+
     private static readonly string[] RequiredUsings =
     [
         "System",
@@ -58,15 +62,14 @@ internal static class MapperFileEmitter
             output.AppendLine("}");
         }
 
-        // Keep the readable suffix while distinguishing nested types, arity,
-        // and namespace spellings that collapse under punctuation replacement.
-        // Preserve existing names unless another source type would request the
-        // same legacy hint. This keeps generated-file identities stable for
-        // ordinary edits while resolving actual nested/underscore/arity clashes.
+        // Keep existing readable hints unless another source mapper would
+        // request the same path. Generated files can be written on a
+        // case-insensitive file system, so compare hints that way too.
         var legacyHint = LegacyHint(mapperType);
-        var couldCollide = containingTypes.Count > 1 || mapperType.Arity > 0 ||
-                           containingNamespace.Contains("_") || mapperType.Name.Contains("_");
-        var needsDisambiguation = couldCollide && HasLegacyCollision(compilation.GlobalNamespace, mapperType, legacyHint);
+        var needsDisambiguation = LegacyHintCounts.GetValue(compilation,
+                static current => new Lazy<Dictionary<string, int>>(
+                    () => CountLegacyHints(current.Assembly.GlobalNamespace)))
+            .Value.TryGetValue(legacyHint, out var count) && count > 1;
         var prefix = "";
         if (needsDisambiguation)
         {
@@ -87,43 +90,67 @@ internal static class MapperFileEmitter
                type.Name + "_GeneratedMappings.g.cs";
     }
 
-    private static bool HasLegacyCollision(INamespaceSymbol root, INamedTypeSymbol mapper, string hint)
+    private static Dictionary<string, int> CountLegacyHints(INamespaceSymbol root)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        CountLegacyHints(root, counts);
+        return counts;
+    }
+
+    private static void CountLegacyHints(INamespaceSymbol root, Dictionary<string, int> counts)
     {
         foreach (var ns in root.GetNamespaceMembers())
         {
-            if (HasLegacyCollision(ns, mapper, hint)) return true;
+            CountLegacyHints(ns, counts);
         }
         foreach (var type in root.GetTypeMembers())
         {
-            if (HasLegacyCollision(type, mapper, hint)) return true;
+            CountLegacyHints(type, counts);
         }
-        return false;
     }
 
-    private static bool HasLegacyCollision(INamedTypeSymbol type, INamedTypeSymbol mapper, string hint)
+    private static void CountLegacyHints(INamedTypeSymbol type, Dictionary<string, int> counts)
     {
-        if (!SymbolEqualityComparer.Default.Equals(type, mapper) && LegacyHint(type) == hint &&
-            IsMapperType(type))
-            return true;
+        if (IsMapperType(type))
+        {
+            var hint = LegacyHint(type);
+            counts.TryGetValue(hint, out var count);
+            counts[hint] = count + 1;
+        }
         foreach (var nested in type.GetTypeMembers())
         {
-            if (HasLegacyCollision(nested, mapper, hint)) return true;
+            CountLegacyHints(nested, counts);
         }
-        return false;
     }
 
     private static bool IsMapperType(INamedTypeSymbol type)
     {
-        if (SymbolHelpers.HasAttribute(type, typeof(ProjectableAttribute).FullName) ||
-            SymbolHelpers.HasAttribute(type, typeof(UpdatableAttribute).FullName))
+        if (!MapperDeclarationValidator.IsEligible(type)) return false;
+
+        var classProjectable = SymbolHelpers.HasAttribute(type, typeof(ProjectableAttribute).FullName);
+        var classUpdatable = SymbolHelpers.HasAttribute(type, typeof(UpdatableAttribute).FullName);
+        var methods = type.GetMembers().OfType<IMethodSymbol>()
+            .Where(static method => method.MethodKind == MethodKind.Ordinary).ToArray();
+        var hasClassicCandidate = classProjectable || classUpdatable || methods.Any(static method =>
+            SymbolHelpers.HasAttribute(method, typeof(ProjectableAttribute).FullName) ||
+            SymbolHelpers.HasAttribute(method, typeof(UpdatableAttribute).FullName) ||
+            SymbolHelpers.HasAttribute(method, typeof(AdaptAttribute).FullName));
+        // Classic mappers emit a file whenever at least one expression-bodied
+        // source method is analyzable, even if every companion is later skipped.
+        if (hasClassicCandidate && methods.Any(static method => method.Parameters.Length > 0 &&
+                method.DeclaringSyntaxReferences.Any(static reference =>
+                    reference.GetSyntax() is MethodDeclarationSyntax { ExpressionBody: not null })))
             return true;
 
-        var members = type.GetMembers().Concat(type.GetTypeMembers()
-            .Where(RoslynCompatibility.IsExtensionType).SelectMany(static extension => extension.GetMembers()));
-        return members.Any(static member =>
-            SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
-            SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
-            SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName));
+        return type.GetTypeMembers().Where(RoslynCompatibility.IsExtensionType)
+            .SelectMany(static extension => extension.GetMembers())
+            .Where(static member => member is IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary })
+            .Any(member => (classProjectable ||
+                            SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
+                            member is IMethodSymbol &&
+                            (SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
+                             SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName))) &&
+                           MappingAnalysisFactory.ExtensionUnsupportedReason(member) is null);
     }
 
     private static List<INamedTypeSymbol> GetContainingTypes(INamedTypeSymbol mapperType)

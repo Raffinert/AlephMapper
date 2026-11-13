@@ -7,7 +7,7 @@ It is intended for types with the same *used* mapping shape. It does not discove
 ## Contents
 
 - [When to use it](#when-to-use-it)
-- [Public API](#public-api)
+- [Attribute declarations](#attribute-declarations)
 - [Basic usage](#basic-usage)
 - [Generation modes and naming](#generation-modes-and-naming)
 - [Compatibility rules](#compatibility-rules)
@@ -25,9 +25,9 @@ For example, `Person` and `Employee` can both contain the fields used by a templ
 
 Use `[Projectable]` when the generated expression is for the original method's declared signature. Use `[Adapt]` when the generated API should use a different, explicit source and/or destination type. The two attributes can be applied to the same template method.
 
-## Public API
+## Attribute declarations
 
-The generator emits the attribute definitions into the consuming compilation during post-initialization. The source definitions live in [`source/Attributes.cs`](../source/Attributes.cs).
+The generator emits these `internal` attribute definitions into the consuming compilation during post-initialization, where mapper declarations in that compilation can use them. The source definitions live in [`source/Attributes.cs`](../source/Attributes.cs). The generated mapping companions are `public` members of the mapper class.
 
 ```csharp
 [Flags]
@@ -176,7 +176,7 @@ The template's first-parameter *name* is retained, so the body does not need a s
 
 Helper methods that can be inlined are expanded before emission. This makes the expression companion useful in LINQ providers that require a self-contained expression tree.
 
-Generated members are written into the same namespace and partial mapper declaration. For nested or generic mapper types, the emitter recreates the containing partial-type hierarchy and generic type parameter lists.
+Generated members are written into the same namespace and partial mapper declaration. For nested or generic mapper types, the emitter recreates the containing partial-type hierarchy and generic type parameter lists. Every enclosing type of a nested mapper must be a `partial class`; containing structs and records are unsupported. Otherwise [AM0021](diagnostics.md#am0021) reports the declaration and companions are omitted.
 
 ## Diagnostics
 

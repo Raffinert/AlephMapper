@@ -123,7 +123,6 @@ internal sealed partial class InliningResolver(
 
         // Generated members from different partial declarations share one file.
         // Bind names in their original semantic model before imports are merged.
-        // The right-hand name in a qualified/member access already has a receiver.
         if (!(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node) &&
             !(node.Parent is QualifiedNameSyntax qualifiedName && qualifiedName.Right == node))
         {
@@ -135,13 +134,8 @@ internal sealed partial class InliningResolver(
                 return ParseName(qualified).WithTriviaFrom(node);
             }
 
-            if (target is { IsStatic: true, ContainingType: not null } &&
-                node.Parent is InvocationExpressionSyntax or ArgumentSyntax or BinaryExpressionSyntax or
-                    EqualsValueClauseSyntax or InitializerExpressionSyntax or MemberAccessExpressionSyntax)
-            {
-                var owner = target.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                return ParseExpression(owner + "." + node).WithTriviaFrom(node);
-            }
+            if (TryQualifyStaticName(node, node, target, out var staticReference))
+                return staticReference;
         }
 
         return base.VisitIdentifierName(node);

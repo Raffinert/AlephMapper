@@ -2,6 +2,8 @@
 
 Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`. Recheck the current checkout before implementing this assessment.
 
+Implementation update for this branch: IA-01 import binding and scope, IA-02 generated file identity, and IA-03 cancellation have fixes and regression tests. IA-04 has warning-clean consumer fixtures, while existing nullable receiver warnings from some rewrites remain visible. IA-05 includes targeted runtime and package-consumer regressions. IA-06 has an initial [generator benchmark](../../benchmarks/GeneratorBenchmark/README.md), without a CI performance threshold. The sections below preserve the original assessment and acceptance criteria; they do not describe the current generator state.
+
 Companion implementation guide: [internal-api-agent-instructions.md](internal-api-agent-instructions.md).
 
 Related assessments: [features](features.md) and [documentation](docs.md).
