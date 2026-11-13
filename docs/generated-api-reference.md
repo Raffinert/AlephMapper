@@ -39,6 +39,8 @@ public static Expression<Func<Person, PersonDto>> ToDtoExpression(int year);
 
 The first mapping parameter becomes the lambda parameter; later parameters become factory arguments. The `FullName` helper is inlined into the tree. The handwritten call `ToDto(person, 2026)` executes ordinary C#. Calling `ToDtoExpression(2026)` constructs a tree; `Compile()` executes that tree in memory. Passing the tree to a LINQ provider asks that provider to translate its nodes. Successful C# generation does not prove SQL translation. See the [SQLite integration tests](../tests/AlephMapper.IntegrationTests) for tested provider cases.
 
+For representative SQL-shape assertions and their limits, see the [SQLite translation evidence](sqlite-translation-evidence.md).
+
 The generator does not add a universal null-source guard to ordinary mappings or projection factories. If a body dereferences its source, a null source follows that body's C# or expression semantics. For `?.`, the default `Ignore` policy removes the conditional in generated expressions; choose `Rewrite` when the null check must be retained and its receiver is stable.
 
 ## Predicate factory

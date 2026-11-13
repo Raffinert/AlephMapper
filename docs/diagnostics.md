@@ -60,7 +60,7 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 ## AM0015
 
-**Generated adapted method fails Roslyn rebinding · Error.** After substitution, the proposed member fails compilation validation, for example when the adapted destination lacks the constructor used by `new Destination(value)`. Add a compatible constructor such as `EmployeeDto(string value)`, choose a compatible pair, or write an explicit mapping. The adaptation is omitted; report a minimal reproducer if the pair should be supported.
+**Generated adapted method fails Roslyn rebinding · Error.** After substitution, the proposed member fails compilation validation, for example when the adapted destination lacks the constructor used by `new Destination(value)`. For a constructor mismatch, the diagnostic points at the original `new ...` expression and names the adapted destination and rejected construction. Add a compatible constructor such as `EmployeeDto(string value)`, choose a compatible pair, or write an explicit mapping. The adaptation is omitted; report a minimal reproducer if the pair should be supported.
 
 ## AM0016
 

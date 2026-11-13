@@ -2,6 +2,8 @@
 
 Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`.
 
+Implementation update: F-02 collection contracts, F-03 SQLite SQL assertions, and a focused F-04 constructor diagnostic improvement are implemented and tested on the current branch. F-01 has a [design proposal](strict-semantics-design.md) but no shipped strict option. F-04 IDE code fixes, F-05 generic expansion, and an additional database provider remain demand-driven. See [collection behavior](../advanced-usage.md#updating-existing-objects) and [SQLite translation evidence](../sqlite-translation-evidence.md).
+
 Companion implementation guide: [features-agent-instructions.md](features-agent-instructions.md).
 
 Related assessments: [internal API and design](internal-api.md) and [documentation](docs.md).
@@ -34,7 +36,7 @@ Evidence: `docs/advanced-usage.md`, `source/Diagnostics/DiagnosticDescriptors.cs
 
 ## F-02 — P1: define collection update semantics
 
-**Existing contract:** collections are skipped by default; `CollectionPropertiesPolicy.Update` opts into the generated update path. Documentation warns about replacement on tracked entities. The review found no test explicitly using that enum value.
+**Assessment baseline:** collections were skipped by default; `CollectionPropertiesPolicy.Update` opted into the generated update path. Documentation warned about replacement on tracked entities. The original review found no test explicitly using that enum value; the implementation update above adds direct coverage.
 
 First document and test what Update actually does for supported shapes: property replacement, resulting reference identity, null input, ordering, and preservation of unrelated destination state. Include EF tracking behavior for a concrete supported entity relationship.
 
@@ -46,7 +48,7 @@ Evidence: `source/Helpers/EmitHelpers.cs`, `source/CodeGenerators/UpdatableMetho
 
 ## F-03 — P1: establish provider translation guarantees
 
-**Existing coverage:** real EF Core SQLite integration tests on .NET 10. The review found no SQL-capture or SQL-shape assertions in the integration tests. Query execution is useful evidence but does not rule out computation in the top-level client projection.
+**Assessment baseline:** real EF Core SQLite integration tests existed on .NET 10. The original review found no SQL-capture or SQL-shape assertions; the implementation update above adds them. Query execution is useful evidence but does not rule out computation in the top-level client projection.
 
 Add representative translation checks for computed scalar projections, predicates, null navigation, and nested projections. Assert the relevant SQL structure or executed command and result; avoid brittle full SQL snapshots when aliases and formatting are immaterial.
 

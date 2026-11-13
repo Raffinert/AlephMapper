@@ -43,10 +43,17 @@ public class ArticleMappingTests
             });
         await context.SaveChangesAsync();
 
-        var projected = await context.ArticleOrders
+        var projection = context.ArticleOrders
             .OrderBy(order => order.Id)
-            .Select(ArticleOrderMapper.MapExpression())
-            .ToListAsync();
+            .Select(ArticleOrderMapper.MapExpression());
+        var sql = projection.ToQueryString();
+        await Assert.That(sql.Contains("SUM", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        await Assert.That(sql.Contains("JOIN", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        await Assert.That(sql.Contains("Price", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(sql.Contains("Quantity", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(sql.Contains("ef_multiply", StringComparison.OrdinalIgnoreCase)).IsTrue();
+
+        var projected = await projection.ToListAsync();
 
         await Assert.That(projected.Count).IsEqualTo(2);
         await Assert.That(projected[0].Id).IsEqualTo(10);

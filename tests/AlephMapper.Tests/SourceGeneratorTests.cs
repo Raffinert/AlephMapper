@@ -1623,6 +1623,43 @@ public class SourceGeneratorTests
     }
 
     [Test]
+    public async Task Constructor_rebinding_diagnostic_points_to_template_creation_and_omits_adaptation()
+    {
+        var source = CreateAdaptationSource(
+            "[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]",
+            "new PersonDto(source.Id)",
+            employeeMembers: "public string Name { get; set; } = string.Empty; public int Id { get; set; }",
+            personDtoConstructor: "public PersonDto(int id) { Name = id.ToString(); }",
+            employeeDtoConstructor: "public EmployeeDto() { }");
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var tree = CSharpSyntaxTree.ParseText(source, _parseOptions, "ConstructorTemplate.cs");
+        var compilation = CSharpCompilation.Create("ConstructorRebindingLocation", [tree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var result = driver.GetRunResult().Results.Single();
+        var diagnostic = result.Diagnostics.Single(item => item.Id == "AM0015");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Location.SourceTree).IsEqualTo(tree);
+        await Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length))
+            .IsEqualTo("new PersonDto(source.Id)");
+        await Assert.That(diagnostic.GetMessage()).Contains("EmployeeDto");
+        await Assert.That(diagnostic.GetMessage()).Contains("new PersonDto(source.Id)");
+        await Assert.That(diagnostic.Descriptor.HelpLinkUri).Contains("docs/diagnostics.md#am0015");
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapEmployee(", StringComparison.Ordinal))).IsFalse();
+
+        var shiftedTree = tree.WithChangedText(SourceText.From("\n" + source));
+        var shiftedCompilation = compilation.ReplaceSyntaxTree(tree, shiftedTree);
+        driver = driver.RunGeneratorsAndUpdateCompilation(shiftedCompilation, out _, out _);
+        var shiftedDiagnostic = driver.GetRunResult().Results.Single().Diagnostics.Single(item => item.Id == "AM0015");
+        await Assert.That(shiftedDiagnostic.Location.SourceTree).IsEqualTo(shiftedTree);
+        await Assert.That(shiftedDiagnostic.Location.GetLineSpan().StartLinePosition.Line)
+            .IsEqualTo(diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1);
+    }
+
+    [Test]
     public async Task UnsafeNullConditionalReceiverReportsDiagnosticAndSkipsExpression()
     {
         const string source = """

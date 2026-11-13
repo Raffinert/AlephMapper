@@ -24,7 +24,12 @@ public class SemanticSafetyGeneratorTests
             """;
 
         var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        var diagnostic = result.Diagnostics.Single(d => d.Id == "AM0019");
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.GetMessage()).Contains("Companion generation");
+        await Assert.That(diagnostic.Descriptor.HelpLinkUri).Contains("docs/diagnostics.md#am0019");
+        await Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length))
+            .Contains("value switch");
         await Assert.That(result.GeneratedSources.Any(s =>
             s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
     }
@@ -383,7 +388,7 @@ public class SemanticSafetyGeneratorTests
             LanguageNames.CSharp, CancellationToken.None);
         var compilation = CSharpCompilation.Create(
             "SemanticSafety",
-            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "SemanticSafety.cs")],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var driver = CSharpGeneratorDriver.Create(

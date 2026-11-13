@@ -22,11 +22,14 @@ PAGES = [
     ROOT / "docs/generated-api-reference.md",
     ROOT / "docs/diagnostics.md",
     ROOT / "docs/advanced-usage.md",
+    ROOT / "docs/sqlite-translation-evidence.md",
     ROOT / "docs/Adapt-Attribute.md",
     ROOT / "docs/extension-members-compatibility-matrix.md",
     ROOT / "docs/installation-and-compatibility.md",
     ROOT / "docs/architecture.md",
     ROOT / "docs/releasing-and-support.md",
+    ROOT / "docs/oss-quality/features.md",
+    ROOT / "docs/oss-quality/strict-semantics-design.md",
     ROOT / "examples/SampleApp/README.md",
 ]
 EXAMPLE_RE = re.compile(
