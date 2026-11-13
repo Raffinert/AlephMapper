@@ -13,6 +13,18 @@ public class OtherDestination { public string Name { get; set; } = ""; public in
 public class Animal { public int Score { get; set; } }
 public class Dog : Animal { }
 
+// Keep all active diagnostic IDs exercised by a real package consumer.
+public static class InvalidMapper
+{
+    [Projectable] public static int Map(int value) => value;
+}
+
+public static partial class ConflictingMapper
+{
+    [Projectable] public static int Map(int value) => value;
+    public static int MapExpression() => 0;
+}
+
 public static partial class StaticImportMapper
 {
     [Projectable] public static int Absolute(int value) => Abs(value);
@@ -58,6 +70,14 @@ public static partial class Mapper
 }
 
 #if EXTENSION_MEMBERS
+public static partial class UnsupportedExtensionMapper
+{
+    extension(int value)
+    {
+        [Projectable] public int BlockGetter { get { return value; } }
+    }
+}
+
 public static partial class Extensions
 {
     extension(int value)

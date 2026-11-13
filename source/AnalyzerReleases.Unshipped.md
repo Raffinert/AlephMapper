@@ -24,6 +24,6 @@ AM0017 | AlephMapper | Warning | Null-conditional access is unsupported in expre
 AM0018 | AlephMapper | Warning | Adaptation of generic mapping methods is unsupported.
 AM0019 | AlephMapper | Warning | Switch expression cannot be lowered without changing semantics.
 
-AM0021 | AlephMapper | Warning | Extension member cannot be projected; diagnostic supplies the unsupported reason.
-AM0022 | AlephMapper | Warning | Mapper must be static partial to emit companions.
-AM0023 | AlephMapper | Warning | Generated companion signature conflicts with another member.
+AM0020 | AlephMapper | Warning | Extension member cannot be projected; diagnostic supplies the unsupported reason.
+AM0021 | AlephMapper | Warning | Mapper must be static partial to emit companions.
+AM0022 | AlephMapper | Warning | Generated companion signature conflicts with another member.

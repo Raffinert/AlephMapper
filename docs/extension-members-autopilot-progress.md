@@ -12,7 +12,7 @@
 ## Implementation and review
 
 - E00: 2ea9211, executable Roslyn probe; baseline158 including probe; package smoke passed.
-- E01-E04: 7bebd06, discovery, separate receiver/member metadata, property catalog, transitive expansion and AM0021. Expanded receiver/cycle/determinism suite173 passed.
+- E01-E04: 7bebd06, discovery, separate receiver/member metadata, property catalog, transitive expansion and AM0020. Expanded receiver/cycle/determinism suite173 passed.
 - E05-E07: b19767c, conversions, lambda alpha-renaming, static dependencies, escaped names and explicit unsupported forms. Initial bound-methodgroup negative fixture incorrectly used a value-type receiver (invalid CSharp delegate source); corrected to valid string receiver in f9f3f50, preserving assertions.
 - E08: f9f3f50, nonfinite constants, qualified accessibility, query rejection and partial-class failure isolation. Full186 passed.
 - Three bounded independent review cycles: all reported capture, static binding/accessibility, escaped name, conditional conversion, constants and query-capture findings fixed. Final cycle found nameof substitution; original INameOfOperation is now folded before substitution with runtime regression. No known findings remain; newest nameof fix has test evidence, not a fourth review.
@@ -63,6 +63,6 @@ The concern was reproduced as CS9057 on real compiler4.14. Shared-source analyze
 assets now cover Roslyn4.8 and5.0 in one NuGet, with automatic SDK selection.
 Classic behavior executes on4.8/4.14; CSharp14 extensions execute on5.0/SDK5.9.
 Package tests verify a single selected analyzer, actual compiler binary/version
-and invocation, AM0019 retention, AM0020 absence, and runtime semantics. Full191
+and invocation, AM0019 retention, absence of a purity diagnostic, and runtime semantics. Full191
 existing tests pass without mapper snapshot changes. The package matrix is added
 to CI; no merge, release or publication is authorized by this follow-up.

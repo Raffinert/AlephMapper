@@ -2,8 +2,8 @@
 
 The generator still rewrites syntax into readable C# expression lambdas. These changes consolidate responsibilities shared by classic mappings and C# 14 extension members.
 
-- `MapperDeclarationValidator` checks the containing mapper once before generation. Invalid classic declarations receive AM0022; extension requests retain AM0021.
-- `GeneratedMemberRegistry` atomically reserves source and generated signatures for Projectable, Updatable and Adapt. `MethodSignature` uses type symbols and C# overload identity: `int` and `int?` remain distinct; nullable reference annotations, tuple element names and method type parameter names do not distinguish signatures. Classic companion collisions receive AM0023; existing extension and adaptation collision diagnostics remain in use.
+- `MapperDeclarationValidator` checks the containing mapper once before generation. Invalid classic declarations receive AM0021; extension requests receive AM0020.
+- `GeneratedMemberRegistry` atomically reserves source and generated signatures for Projectable, Updatable and Adapt. `MethodSignature` uses type symbols and C# overload identity: `int` and `int?` remain distinct; nullable reference annotations, tuple element names and method type parameter names do not distinguish signatures. Classic companion collisions receive AM0022; existing extension and adaptation collision diagnostics remain in use.
 - `InliningContext` owns shared expansion state and diagnostics. Lambda locals, switch captures and conditional receiver stacks remain local to each visitor.
 - `InliningResolver.Arguments` binds classic and C# 14 calls through Roslyn argument operations. `InliningResolver.Expansion` handles child visitor creation, recursion and return conversions in one place, including method-group expansion.
 - Static reference handling shares constant expansion, dependency accessibility checks and member qualification. Semantic symbols are resolved before rewriting syntax.

@@ -1,6 +1,6 @@
 # F-01 design: opt-in strict transformation checks
 
-**Status: design only.** No strict option or `AM0024` diagnostic is shipped in 0.8.3. The current default behavior, including `NullConditionalRewrite.Ignore`, remains unchanged. This proposal defines a conservative first increment for a later compatible release; an API name and public release decision are still required.
+**Status: design only.** No strict option or strict-mode diagnostic is shipped in 0.8.3. The current default behavior, including `NullConditionalRewrite.Ignore`, remains unchanged. This proposal defines a conservative first increment for a later compatible release; an API name and public release decision are still required.
 
 ## Contract and scope
 
@@ -25,7 +25,7 @@ Extra expression-factory arguments are evaluated by C# when the factory is calle
 | `obj?.Member` with strict + `Rewrite` | Generate only when the receiver is a direct parameter/constant or can otherwise be proven single-evaluation | A property path may invoke getters twice. Existing `AM0016` already rejects some unstable receivers. |
 | `obj?.Member` with strict + `None` | Existing `AM0017`; omit expression | `?.` cannot remain in an expression tree. |
 
-The proposed diagnostic is a warning at the original argument, receiver, or switch expression with a concise cause and recovery action. `AM0024` is a proposed next ID, subject to descriptor/release-catalog review; it is not allocated in source. Suppression would hide the warning but would not create the omitted companion. The checker would run before signature reservation and emission so unaffected siblings can still generate.
+The proposed diagnostic is a warning at the original argument, receiver, or switch expression with a concise cause and recovery action. Its ID would be selected when the feature is implemented; no ID is allocated in source. Suppression would hide the warning but would not create the omitted companion. The checker would run before signature reservation and emission so unaffected siblings can still generate.
 
 ## Configuration and precedence proposal
 

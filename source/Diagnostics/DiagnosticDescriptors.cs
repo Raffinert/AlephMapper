@@ -176,16 +176,16 @@ public static class DiagnosticDescriptors
         helpLinkUri: DiagnosticDocsUrl + "am0019");
 
     public static readonly DiagnosticDescriptor UnsupportedExtensionMember = new(
-        "AM0021", "Extension member cannot be projected",
+        "AM0020", "Extension member cannot be projected",
         "Expression generation for extension member '{0}' skipped: {1}",
         "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidMapperDeclaration = new(
-        "AM0022", "Mapper declaration cannot contain generated companions",
+        "AM0021", "Mapper declaration cannot contain generated companions",
         "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor GeneratedMemberConflict = new(
-        "AM0023", "Generated companion conflicts with another member",
+        "AM0022", "Generated companion conflicts with another member",
         "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static DiagnosticDescriptor? GetById(string id) => id switch
@@ -209,9 +209,9 @@ public static class DiagnosticDescriptors
         "AM0017" => UnsupportedNullConditionalExpression,
         "AM0018" => AdaptGenericMethodUnsupported,
         "AM0019" => UnsupportedSwitchPattern,
-        "AM0021" => UnsupportedExtensionMember,
-        "AM0022" => InvalidMapperDeclaration,
-        "AM0023" => GeneratedMemberConflict,
+        "AM0020" => UnsupportedExtensionMember,
+        "AM0021" => InvalidMapperDeclaration,
+        "AM0022" => GeneratedMemberConflict,
         _ => null
     };
 }

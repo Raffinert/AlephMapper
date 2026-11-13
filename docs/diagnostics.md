@@ -78,16 +78,16 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 **Switch expression cannot be lowered without changing semantics · Warning.** An unsupported or non-exhaustive switch cannot safely become an expression tree. Add a supported exhaustive arm, such as `_ => fallback`, and consult the [switch matrix](switch-parity-matrix.md). The affected projection or adapted map/expression is omitted. An update-only adaptation can retain an ordinary C# switch.
 
-## AM0021
+## AM0020
 
 **Extension member cannot be projected · Warning.** The diagnostic message gives the specific reason, such as an unsupported extension shape, inaccessible dependency, or conflicting generated factory. Use a supported instance expression-bodied extension method or getter-only expression property, for example `extension(Person p) { [Projectable] public string Label => p.Name; }`, in a partial outer class; see the [extension matrix](extension-members-compatibility-matrix.md). The affected extension companion is omitted.
 
-## AM0022
+## AM0021
 
 **Mapper declaration cannot contain generated companions · Warning.** The mapper declaration is ineligible, typically because the class is not `static partial`. Change `public static class Mapper` to `public static partial class Mapper`. Its companions are omitted.
 
-## AM0023
+## AM0022
 
 **Generated companion conflicts with another member · Warning.** A requested classic projection/update signature already exists, such as a handwritten `MapExpression()` beside `[Projectable] Map(...)`. Rename the existing method or mapping so each signature is unique. The conflicting companion is omitted.
 
-The numbering has no AM0020 descriptor. The source of truth for new or changed IDs is the descriptor declaration plus [analyzer release tracking](../source/AnalyzerReleases.Unshipped.md). For API shapes and troubleshooting, see the [generated API reference](generated-api-reference.md) and [advanced usage](advanced-usage.md#troubleshooting).
+The source of truth for diagnostic IDs is the descriptor declaration plus [analyzer release tracking](../source/AnalyzerReleases.Unshipped.md). For API shapes and troubleshooting, see the [generated API reference](generated-api-reference.md) and [advanced usage](advanced-usage.md#troubleshooting).

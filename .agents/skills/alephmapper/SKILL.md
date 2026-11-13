@@ -62,13 +62,13 @@ For further recipes, read [projections.md](references/projections.md), [updates-
 - In EF queries, pass the generated expression to `Select` or `Where`. Do not assume `Select(x => CustomerMapper.ToDto(x))` is translated merely because `ToDtoExpression()` exists.
 - A generated expression is only provider-visible C#; EF Core and the selected provider still determine translation. Test server-side behavior instead of relying on an in-memory test.
 - For null-safe extension mappings, use `receiver?.ToDto()` with `NullConditionalRewrite.Rewrite` only for stable nullable member-access receivers. A regular `MapAddress(address)` call has different null semantics.
-- Supported C# 14 extension blocks require Roslyn 5.0+; generic, block-bodied and other unsupported member shapes report `AM0021`. See the [extension compatibility matrix](https://github.com/Raffinert/AlephMapper/blob/main/docs/extension-members-compatibility-matrix.md).
+- Supported C# 14 extension blocks require Roslyn 5.0+; generic, block-bodied and other unsupported member shapes report `AM0020`. See the [extension compatibility matrix](https://github.com/Raffinert/AlephMapper/blob/main/docs/extension-members-compatibility-matrix.md).
 - No silent implicit map discovery or unrequested two-way mapping. Avoid invented AlephMapper APIs and preserve the consuming application's domain model.
 
 ## Installation and verification
 
 The documented package is `AlephMapper` 0.8.3, packaged as a compile-time analyzer/source generator targeting `netstandard2.0`. It supports Roslyn 4.8 and later through versioned analyzer assets; C# 14 extension members require Roslyn 5.0 or later. Verify requirements for the installed version. A `PackageReference` used in a library should configure generator assets appropriately (see the repository README).
 
-Inspect compiler diagnostics (including `AM0019` for switch patterns and `AM0021`–`AM0023` for extension members and declaration/signature issues) and, when debugging, emit compiler-generated files. Verify generated signatures rather than inventing them. Do not treat a generated code compilation failure as an EF translation problem.
+Inspect compiler diagnostics (including `AM0019` for switch patterns and `AM0020`–`AM0022` for extension members and declaration/signature issues) and, when debugging, emit compiler-generated files. Verify generated signatures rather than inventing them. Do not treat a generated code compilation failure as an EF translation problem.
 
 Canonical documentation: https://github.com/Raffinert/AlephMapper (README, `docs/Adapt-Attribute.md`, integration tests).

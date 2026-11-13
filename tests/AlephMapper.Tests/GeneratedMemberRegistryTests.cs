@@ -55,7 +55,7 @@ public class GeneratedMemberRegistryTests
     public async Task Classic_factory_collision_reports_diagnostic_and_preserves_other_mapping()
     {
         var (result, output) = await ExtensionMemberTests.Generate("using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => value; public static int MapExpression() => 1; [Projectable] public static int Good(int value) => value+1; }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0023")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0022")).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("GoodExpression"))).IsTrue();
     }

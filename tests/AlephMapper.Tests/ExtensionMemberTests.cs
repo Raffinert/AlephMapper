@@ -51,11 +51,11 @@ public class ExtensionMemberTests
     [Arguments("public T Value<T>(T x) => x;")]
     [Arguments("public int Value() => System.Linq.Enumerable.Sum(new[]{n}, x => { return x; });")]
     [Arguments("public System.Collections.Generic.IEnumerable<int> Value => from x in new[]{1} select x+n;")]
-    public async Task Unsupported_extension_members_report_AM0021_and_isolate_failure(string declaration)
+    public async Task Unsupported_extension_members_report_AM0020_and_isolate_failure(string declaration)
     {
         var source = "using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " [Projectable] public int Good => n+1; } }";
         var (result, output) = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("GoodExpression"))).IsTrue();
@@ -77,7 +77,7 @@ public class ExtensionMemberTests
     public async Task Extension_factory_signature_conflicts_are_diagnosed()
     {
         var (result, output) = await Generate("using AlephMapper; [Projectable] public static partial class Ext { extension(int n) { public int Value => n; } extension(string n) { public int Value => n.Length; } }");
-        await Assert.That(result.Diagnostics.Count(d => d.Id == "AM0021")).IsEqualTo(2);
+        await Assert.That(result.Diagnostics.Count(d => d.Id == "AM0020")).IsEqualTo(2);
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -95,10 +95,10 @@ public class ExtensionMemberTests
     }
 
     [Test]
-    public async Task AM0021_is_registered_and_AM0020_remains_absent()
+    public async Task AM0020_is_registered_for_unsupported_extension_members()
     {
-        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0021")).IsNotNull();
-        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0020")).IsNull();
+        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0020"))
+            .IsEqualTo(AlephMapper.Diagnostics.DiagnosticDescriptors.UnsupportedExtensionMember);
     }
 
     [Test]
@@ -119,7 +119,7 @@ public class ExtensionMemberTests
     public async Task Inaccessible_extension_dependencies_are_diagnosed(string declaration, string use)
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { " + declaration + " extension(int n) { [Projectable] public int Value => n + " + use + "; } } public static partial class Mapper { [Projectable] public static int Map(int n) => n.Value; }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -373,7 +373,7 @@ public class ExtensionMemberTests
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(int n) { [Updatable] public int Value() => n+1; } }");
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0001")).IsTrue();
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsFalse();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -382,7 +382,7 @@ public class ExtensionMemberTests
     {
         var (result, output) = await Generate("using AlephMapper; using System.Linq; public static partial class Ext { extension(string n) { public int Add(int x) => n.Length+x; } [Projectable] public static int[] Map(int[] input) => input.Select(string.Empty.Add).ToArray(); }");
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
     }
 
     [Test]
@@ -422,7 +422,7 @@ public class ExtensionMemberTests
     public async Task Missing_partial_outer_class_has_actionable_diagnostic()
     {
         var (result, output) = await Generate("using AlephMapper; public static class Ext { extension(int n) { [Projectable] public int Value => n+1; } }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021" && d.GetMessage().Contains("partial"))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020" && d.GetMessage().Contains("partial"))).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -450,7 +450,7 @@ public class ExtensionMemberTests
     {
         var source = "using AlephMapper; public class Input { public int Value {get;set;} } public class Dto {public int Value {get;set;} } public " + modifiers + " class Bad { [" + attribute + "] public static Dto Map(Input value) => new() {Value=value.Value}; } public static partial class Good { [Projectable] public static int Map(int value) => value; }";
         var (result, output) = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0022")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
         await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Bad_GeneratedMappings.g.cs")).IsFalse();
         await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Good_GeneratedMappings.g.cs")).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();

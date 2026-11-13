@@ -43,7 +43,7 @@ Test sources: [generator safety](../tests/AlephMapper.Tests/SemanticSafetyGenera
 | Throw expression in expression companion | Unsupported AM0019 | `Unrepresentable_expression_shapes_report_AM0019` |
 | Adapt expression / map+expression | Supported | `Property_patterns_work_in_adapted_expression_paths` compiles both outputs |
 | Update-only non-exhaustive switch | Ordinary C# retained | Existing `Update_only_adaptation_preserves_non_exhaustive_switch` |
-| Repeated input/helper evaluation | Deliberately permitted, no AM0020 | Existing effectful input/argument compilation regressions |
+| Repeated input/helper evaluation | Deliberately permitted; no purity diagnostic | Existing effectful input/argument compilation regressions |
 
 Stable inputs are used for differential checks; the suite compares exception
 categories for throwing property getters too. Null and length checks precede
@@ -87,6 +87,6 @@ warnings are visible; compilation checks require zero errors, not hidden warning
 - CI workflow `.github/workflows/build.yml` package-consumer fixture recreated in `artifacts/package-smoke` with the same net10.0 project, PackageReference and mapper. `dotnet restore artifacts/package-smoke/PackageSmoke.csproj --source artifacts/nuget --packages artifacts/package-smoke/packages` then `dotnet build artifacts/package-smoke/PackageSmoke.csproj -c Release --no-restore`: succeeded, zero warnings/errors. The isolated package cache ensures this consumes the newly packed local artifact.
 - `git diff --check`: passed.
 
-Additional review fix commit: `9aeddd2`, grouping converted lambda operands before helper substitution. No public attributes changed, no AM0020 restored, no expression-factory architecture introduced, and no PR merge/rebase performed. Existing untracked user documents are intentionally excluded from commits under the user's override of the clean-tree gate.
+Additional review fix commit: `9aeddd2`, grouping converted lambda operands before helper substitution. No public attributes changed, no purity diagnostic restored, no expression-factory architecture introduced, and no PR merge/rebase performed. Existing untracked user documents are intentionally excluded from commits under the user's override of the clean-tree gate.
 
 Next work, if expanded later: prove readable slice materialization and custom indexable/Deconstruct equivalents, widen `is` capture scopes, and add provider-specific translation evidence. These remain explicit AM0019 limitations rather than claimed parity.

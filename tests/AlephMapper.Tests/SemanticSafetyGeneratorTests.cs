@@ -378,7 +378,10 @@ public class SemanticSafetyGeneratorTests
     public async Task New_diagnostic_descriptors_are_registered()
     {
         await Assert.That(DiagnosticDescriptors.GetById("AM0019")).IsEqualTo(DiagnosticDescriptors.UnsupportedSwitchPattern);
-        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsNull();
+        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsEqualTo(DiagnosticDescriptors.UnsupportedExtensionMember);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0021")).IsEqualTo(DiagnosticDescriptors.InvalidMapperDeclaration);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0022")).IsEqualTo(DiagnosticDescriptors.GeneratedMemberConflict);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0023")).IsNull();
     }
 
     private static async Task<GeneratorRunResult> Generate(string source)

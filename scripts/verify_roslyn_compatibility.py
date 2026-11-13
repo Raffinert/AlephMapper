@@ -90,8 +90,16 @@ def main():
         log = run([dotnet, "build", work / "Consumer.csproj", "-c", "Release", "--no-restore", *properties])
         if compiler != "sdk" and (not stamp.exists() or stamp.read_text().strip() != compiler):
             raise RuntimeError("The requested compiler wrapper was not executed")
-        if "AM0019" not in log or "AM0020" in log:
-            raise RuntimeError("Expected AM0019 and absence of AM0020 in package regression fixture")
+        expected_diagnostics = {"AM0019", "AM0021", "AM0022"}
+        if modern:
+            expected_diagnostics.add("AM0020")
+        # Compiler output writes the ID followed by a colon, so inspect the
+        # diagnostic prefix rather than relying on raw token membership.
+        missing = {id for id in expected_diagnostics if f"{id}:" not in log}
+        if missing:
+            raise RuntimeError(f"Missing package-consumer diagnostics for {compiler}: {sorted(missing)}")
+        if not modern and "AM0020:" in log:
+            raise RuntimeError("Classic compiler fixture unexpectedly reported an extension-member diagnostic")
         run([dotnet, work / "bin/Release/net8.0/Consumer.dll"])
         results.append({"compiler": compiler, "selected_band": band, "status": "passed"})
     (output / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
