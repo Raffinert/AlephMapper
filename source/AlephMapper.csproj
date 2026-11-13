@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Authors>Yevhen Cherkes</Authors>
     <Copyright>Copyright 2025 - $([System.DateTime]::Now.Year) Yevhen Cherkes</Copyright>
-    <Description>Your manual mapping companion.</Description>
+    <Description>Compile-time C# mapping generator for handwritten mappings, LINQ expression projections, update-in-place overloads, and explicit structural adaptations.</Description>
     <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <DefineConstants>$(DefineConstants);ALEPHMAPPER_ROSLYN5</DefineConstants>
@@ -12,7 +12,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Raffinert/AlephMapper</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>Mapping Companion</PackageTags>
+    <PackageTags>mapping;source-generator;LINQ;expression-tree;projection;EF-Core;object-mapping</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Raffinert/AlephMapper.git</RepositoryUrl>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>

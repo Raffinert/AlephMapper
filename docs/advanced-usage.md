@@ -144,6 +144,8 @@ Inspect the generated source for inlined helpers, adapted members, null handling
 
 ## Troubleshooting
 
+For every `AMxxxx` ID, default severity, cause, fix, and missing-companion consequence, use the [diagnostic catalog](diagnostics.md). For exact companion signatures, see the [generated API reference](generated-api-reference.md).
+
 - **Missing generated method:** check `static partial` mapper declaration, expression-bodied mapping, and attribute placement. For C# 14 extension members, verify Roslyn 5.0+ and the supported member forms (`AM0021`).
 - **EF Core cannot translate a projection:** inspect the generated expression and the provider exception. A generated C# expression tree does not guarantee SQL translation.
 - **Helper was not inlined:** use a supported, visible, expression-bodied method; cyclic helper calls are rejected (`AM0002`/`AM0003`).

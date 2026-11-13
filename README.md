@@ -8,7 +8,7 @@ AlephMapper is a compile-time C# source generator. It turns your handwritten, ex
 
 [![NuGet](https://img.shields.io/nuget/v/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/AlephMapper.svg)](https://www.nuget.org/packages/AlephMapper)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Raffinert/AlephMapper/blob/main/LICENSE)
 
 ## Quick start
 
@@ -73,7 +73,7 @@ PersonMapper.Map(request, dest: person!); // Generated overload.
 await db.SaveChangesAsync();
 ```
 
-This reuses the handwritten assignments without replacing the tracked entity. Collection updates are opt-in; see [advanced usage](docs/advanced-usage.md).
+This reuses the handwritten assignments without replacing the tracked entity. Collection updates are opt-in; see [advanced usage](https://github.com/Raffinert/AlephMapper/blob/main/docs/advanced-usage.md).
 
 ### Adapt a mapping to compatible types
 
@@ -92,7 +92,7 @@ var employeeDto = PersonMapper.ToEmployeeDto(employee);
 var query = db.Employees.Select(PersonMapper.ToEmployeeDtoExpression());
 ```
 
-`[Adapt]` generates only the explicitly requested compatible pairs; it does not discover mappings by convention. See the [adaptation guide](docs/Adapt-Attribute.md).
+`[Adapt]` generates only the explicitly requested compatible pairs; it does not discover mappings by convention. See the [adaptation guide](https://github.com/Raffinert/AlephMapper/blob/main/docs/Adapt-Attribute.md).
 
 ## Compose mappings and predicates
 
@@ -142,7 +142,7 @@ var amounts = db.Orders
 
 C# 14 extension methods support projections, updates, and adaptations. Extension properties support projections only.
 
-`switch` lowering can re-evaluate an input or inlined arguments; use side-effect-free expressions. Not every pattern or generated expression is supported by every provider. Check the [extension-member compatibility matrix](docs/extension-members-compatibility-matrix.md) and [switch-pattern support matrix](docs/switch-parity-matrix.md).
+`switch` lowering can re-evaluate an input or inlined arguments; use side-effect-free expressions. Not every pattern or generated expression is supported by every provider. Check the [extension-member compatibility matrix](https://github.com/Raffinert/AlephMapper/blob/main/docs/extension-members-compatibility-matrix.md) and [switch-pattern support matrix](https://github.com/Raffinert/AlephMapper/blob/main/docs/switch-parity-matrix.md).
 
 ## Null handling
 
@@ -159,7 +159,7 @@ public static partial class PersonMapper
 }
 ```
 
-This preserves the null check in the generated expression. The original mapping method continues to follow ordinary C# semantics. See [advanced usage](docs/advanced-usage.md) for the null policies and their limits.
+This preserves the null check in the generated expression. The original mapping method continues to follow ordinary C# semantics. See [advanced usage](https://github.com/Raffinert/AlephMapper/blob/main/docs/advanced-usage.md) for the null policies and their limits.
 
 ## AI agent skill
 
@@ -169,15 +169,19 @@ Use the portable skill to help coding agents apply the correct generated APIs an
 npx skills add Raffinert/AlephMapper --skill alephmapper
 ```
 
-The skill is stored in [`.agents/skills/alephmapper/`](.agents/skills/alephmapper/).
+The skill is stored in [`.agents/skills/alephmapper/`](https://github.com/Raffinert/AlephMapper/tree/main/.agents/skills/alephmapper/).
 
 ## Documentation
 
-- [Installation, compiler compatibility, and package references](docs/installation-and-compatibility.md)
-- [Advanced usage, null handling, and troubleshooting](docs/advanced-usage.md)
-- [`[Adapt]` reference](docs/Adapt-Attribute.md)
-- [C# 14 extension-member compatibility](docs/extension-members-compatibility-matrix.md)
-- [Switch-pattern support and evaluation semantics](docs/switch-parity-matrix.md)
-- [Sample application](examples/SampleApp)
+- [Installation, compiler compatibility, and package references](https://github.com/Raffinert/AlephMapper/blob/main/docs/installation-and-compatibility.md)
+- [Generated API reference and runnable examples](https://github.com/Raffinert/AlephMapper/blob/main/docs/generated-api-reference.md)
+- [Diagnostic catalog](https://github.com/Raffinert/AlephMapper/blob/main/docs/diagnostics.md)
+- [Advanced usage, null handling, and troubleshooting](https://github.com/Raffinert/AlephMapper/blob/main/docs/advanced-usage.md)
+- [`[Adapt]` reference](https://github.com/Raffinert/AlephMapper/blob/main/docs/Adapt-Attribute.md)
+- [C# 14 extension-member compatibility](https://github.com/Raffinert/AlephMapper/blob/main/docs/extension-members-compatibility-matrix.md)
+- [Switch-pattern support and evaluation semantics](https://github.com/Raffinert/AlephMapper/blob/main/docs/switch-parity-matrix.md)
+- [Sample application](https://github.com/Raffinert/AlephMapper/tree/main/examples/SampleApp)
+- [Contributing and architecture](https://github.com/Raffinert/AlephMapper/blob/main/CONTRIBUTING.md)
+- [Releasing and support](https://github.com/Raffinert/AlephMapper/blob/main/docs/releasing-and-support.md)
 
-AlephMapper is [MIT licensed](LICENSE). Thanks to the [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors). See also our [statement on Russia's war against Ukraine](docs/terms-of-use.md). [Feedback and issues](https://github.com/Raffinert/AlephMapper/issues) are welcome.
+AlephMapper is [MIT licensed](https://github.com/Raffinert/AlephMapper/blob/main/LICENSE). Thanks to the [contributors](https://github.com/Raffinert/AlephMapper/graphs/contributors). See also our [statement on Russia's war against Ukraine](https://github.com/Raffinert/AlephMapper/blob/main/docs/terms-of-use.md). [Feedback and issues](https://github.com/Raffinert/AlephMapper/issues) are welcome.

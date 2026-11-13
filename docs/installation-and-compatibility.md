@@ -1,6 +1,6 @@
 # Installation and compatibility
 
-The root [README](../README.md) contains the quick start. This page covers package-management and compiler-host details.
+The root [README](../README.md) contains the quick start. This page covers package-management and compiler-host details. Version `0.8.3` below is the version declared by this source tree; check the [NuGet package page](https://www.nuget.org/packages/AlephMapper) before installing from the public feed.
 
 ## Install AlephMapper
 
@@ -67,4 +67,4 @@ public static PersonDto Map(Person person) => new();
 public static PersonDto Map(Person person) => new();
 ```
 
-See the [README](../README.md) for the current API and [advanced usage](advanced-usage.md) for diagnostics and null handling.
+See the [README](../README.md) for the quick start, the [generated API reference](generated-api-reference.md) for companion signatures, and [advanced usage](advanced-usage.md) for null handling.
