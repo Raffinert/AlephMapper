@@ -1,6 +1,6 @@
 # OSS quality assessment: internal API and design
 
-Assessment baseline: commit `a40c4b5`, package version `0.8.2`, reviewed 2026-11-13. Recheck the current checkout before implementing this assessment.
+Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`. Recheck the current checkout before implementing this assessment.
 
 Companion implementation guide: [internal-api-agent-instructions.md](internal-api-agent-instructions.md).
 

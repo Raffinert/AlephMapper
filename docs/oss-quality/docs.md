@@ -1,6 +1,6 @@
 # OSS quality assessment: documentation and contributor experience
 
-Assessment baseline: commit `a40c4b5`, package version `0.8.2`, reviewed 2026-11-13.
+Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`.
 
 Companion implementation guide: [docs-agent-instructions.md](docs-agent-instructions.md).
 
@@ -14,11 +14,11 @@ The repository already has compatibility matrices, an adaptation reference, trou
 
 ## D-01 — P1: eliminate current documentation drift
 
-Confirmed at the review baseline:
+The review found version drift. The current version alignment target is:
 
-- `source/Analyzer.Shared.props` declares package version `0.8.2`.
-- `docs/installation-and-compatibility.md` uses `0.8.1` in package-reference examples.
-- `.agents/skills/alephmapper/SKILL.md` also describes the documented package as `0.8.1`.
+- `source/Analyzer.Shared.props` declares package version `0.8.3`.
+- `docs/installation-and-compatibility.md` uses `0.8.3` in package-reference examples.
+- `.agents/skills/alephmapper/SKILL.md` describes `0.8.3`.
 - `examples/SampleApp/README.md` describes C# 13 and .NET 9, whereas `SampleApp.csproj` targets .NET 10.
 
 Choose a clear policy for versioned examples: synchronized explicit versions or clearly marked placeholders. Historical release notes should retain their historical versions. Distinguish a version declared in the source from a version actually published to NuGet.

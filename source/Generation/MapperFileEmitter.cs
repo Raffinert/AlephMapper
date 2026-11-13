@@ -1,6 +1,9 @@
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace AlephMapper.Generation;
@@ -14,7 +17,7 @@ internal static class MapperFileEmitter
         "System.Linq.Expressions"
     ];
 
-    public static GeneratedMapperFile Render(MapperGenerationContext context)
+    public static GeneratedMapperFile Render(MapperGenerationContext context, Compilation compilation)
     {
         context.AddUsings(RequiredUsings);
         var mapperType = context.MapperType;
@@ -55,9 +58,72 @@ internal static class MapperFileEmitter
             output.AppendLine("}");
         }
 
-        var hintName = (string.IsNullOrEmpty(containingNamespace) ? "" : containingNamespace.Replace('.', '_') + "_") +
-                       mapperType.Name + "_GeneratedMappings.g.cs";
+        // Keep the readable suffix while distinguishing nested types, arity,
+        // and namespace spellings that collapse under punctuation replacement.
+        // Preserve existing names unless another source type would request the
+        // same legacy hint. This keeps generated-file identities stable for
+        // ordinary edits while resolving actual nested/underscore/arity clashes.
+        var legacyHint = LegacyHint(mapperType);
+        var couldCollide = containingTypes.Count > 1 || mapperType.Arity > 0 ||
+                           containingNamespace.Contains("_") || mapperType.Name.Contains("_");
+        var needsDisambiguation = couldCollide && HasLegacyCollision(compilation.GlobalNamespace, mapperType, legacyHint);
+        var prefix = "";
+        if (needsDisambiguation)
+        {
+            var identity = containingNamespace + ":" +
+                           string.Join("+", containingTypes.Select(static type => type.MetadataName));
+            using var sha256 = SHA256.Create();
+            prefix = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(identity)))
+                .Replace("-", "").Substring(0, 20) + "_";
+        }
+        var hintName = prefix + legacyHint;
         return new GeneratedMapperFile(hintName, output.ToString());
+    }
+
+    private static string LegacyHint(INamedTypeSymbol type)
+    {
+        var ns = type.ContainingNamespace.IsGlobalNamespace ? "" : type.ContainingNamespace.ToDisplayString();
+        return (ns.Length == 0 ? "" : ns.Replace('.', '_') + "_") +
+               type.Name + "_GeneratedMappings.g.cs";
+    }
+
+    private static bool HasLegacyCollision(INamespaceSymbol root, INamedTypeSymbol mapper, string hint)
+    {
+        foreach (var ns in root.GetNamespaceMembers())
+        {
+            if (HasLegacyCollision(ns, mapper, hint)) return true;
+        }
+        foreach (var type in root.GetTypeMembers())
+        {
+            if (HasLegacyCollision(type, mapper, hint)) return true;
+        }
+        return false;
+    }
+
+    private static bool HasLegacyCollision(INamedTypeSymbol type, INamedTypeSymbol mapper, string hint)
+    {
+        if (!SymbolEqualityComparer.Default.Equals(type, mapper) && LegacyHint(type) == hint &&
+            IsMapperType(type))
+            return true;
+        foreach (var nested in type.GetTypeMembers())
+        {
+            if (HasLegacyCollision(nested, mapper, hint)) return true;
+        }
+        return false;
+    }
+
+    private static bool IsMapperType(INamedTypeSymbol type)
+    {
+        if (SymbolHelpers.HasAttribute(type, typeof(ProjectableAttribute).FullName) ||
+            SymbolHelpers.HasAttribute(type, typeof(UpdatableAttribute).FullName))
+            return true;
+
+        var members = type.GetMembers().Concat(type.GetTypeMembers()
+            .Where(RoslynCompatibility.IsExtensionType).SelectMany(static extension => extension.GetMembers()));
+        return members.Any(static member =>
+            SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
+            SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
+            SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName));
     }
 
     private static List<INamedTypeSymbol> GetContainingTypes(INamedTypeSymbol mapperType)

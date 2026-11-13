@@ -37,6 +37,9 @@ def main():
             raise RuntimeError(f"Unexpected package assemblies: {dlls}")
         nuspec = ET.fromstring(archive.read(next(n for n in archive.namelist() if n.endswith(".nuspec"))))
         version = nuspec.find("{*}metadata/{*}version").text
+    configured_version = ET.parse(ROOT / "source/Analyzer.Shared.props").findtext("./PropertyGroup/PackageVersion")
+    if version != configured_version:
+        raise RuntimeError(f"Package version {version} does not match source/Analyzer.Shared.props ({configured_version})")
     dotnet = shutil.which("dotnet")
     if not dotnet:
         raise RuntimeError("dotnet is required")

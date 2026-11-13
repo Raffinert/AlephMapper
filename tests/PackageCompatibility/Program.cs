@@ -1,4 +1,5 @@
 using AlephMapper;
+using static System.Math;
 
 public class Source
 {
@@ -11,6 +12,27 @@ public class Destination { public string Name { get; set; } = ""; public int Num
 public class OtherDestination { public string Name { get; set; } = ""; public int Number { get; set; } }
 public class Animal { public int Score { get; set; } }
 public class Dog : Animal { }
+
+public static partial class StaticImportMapper
+{
+    [Projectable] public static int Absolute(int value) => Abs(value);
+}
+
+public partial class FirstContainer
+{
+    public static partial class Mapper
+    {
+        [Projectable] public static int Map(int value) => value + 1;
+    }
+}
+
+public partial class SecondContainer
+{
+    public static partial class Mapper
+    {
+        [Projectable] public static int Map(int value) => value + 2;
+    }
+}
 
 public static partial class Mapper
 {
@@ -106,6 +128,9 @@ public static class Program
             Equal(Mapper.TypeRankExpression().Compile()(value), Mapper.TypeRank(value));
         foreach (var values in new int[]?[] { null, [], [1], [1, 3], [1, 2, 3], [-1, 3] })
             Equal(Mapper.SliceExpression().Compile()(values), Mapper.Slice(values));
+        Equal(StaticImportMapper.AbsoluteExpression().Compile()(-7), StaticImportMapper.Absolute(-7));
+        Equal(FirstContainer.Mapper.MapExpression().Compile()(4), 5);
+        Equal(SecondContainer.Mapper.MapExpression().Compile()(4), 6);
         Console.WriteLine("Package compatibility runtime checks passed.");
     }
 }

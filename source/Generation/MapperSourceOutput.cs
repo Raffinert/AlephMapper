@@ -73,7 +73,11 @@ internal static class MapperSourceOutput
             var catalog = new MappingCatalog(
                 mappingsByMethod,
                 method => CreateExternalAnalysis(compilation, method, cancellationToken));
-            return GenerateMapper(mapperType, mappings, catalog);
+            return GenerateMapper(compilation, mapperType, mappings, catalog, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
 #if DEBUG
         catch
@@ -122,6 +126,7 @@ internal static class MapperSourceOutput
                      .OrderBy(static reference => reference.SyntaxTree.FilePath, StringComparer.Ordinal)
                      .ThenBy(static reference => reference.Span.Start))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (declarationReference.GetSyntax(cancellationToken) is not ClassDeclarationSyntax declaration)
             {
                 continue;
@@ -130,6 +135,7 @@ internal static class MapperSourceOutput
             var semanticModel = compilation.GetSemanticModel(declaration.SyntaxTree);
             foreach (var member in RoslynCompatibility.GetExtensionMembers(declaration))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var extension = MappingAnalysisFactory.CreateExtension(semanticModel, member, cancellationToken);
                 if (extension is not null) mappings.Add(extension);
             }
@@ -137,6 +143,7 @@ internal static class MapperSourceOutput
                          .Where(static method => method.ExpressionBody is not null)
                          .OrderBy(static method => method.SpanStart))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var mapping = MappingAnalysisFactory.Create(semanticModel, method, cancellationToken);
                 if (mapping is not null)
                 {
@@ -268,14 +275,17 @@ internal static class MapperSourceOutput
     }
 
     private static MapperGenerationResult GenerateMapper(
+        Compilation compilation,
         INamedTypeSymbol mapperType,
         IReadOnlyList<MappingAnalysis> mappings,
-        MappingCatalog catalog)
+        MappingCatalog catalog,
+        CancellationToken cancellationToken)
     {
         var context = new MapperGenerationContext(mapperType, catalog);
         foreach (var extensionType in mapperType.GetTypeMembers().Where(RoslynCompatibility.IsExtensionType))
         foreach (var member in extensionType.GetMembers().Where(s => s is IPropertySymbol || s is IMethodSymbol { MethodKind: MethodKind.Ordinary }))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var requested = SymbolHelpers.HasAttribute(member, typeof(ProjectableAttribute).FullName) ||
                 SymbolHelpers.HasAttribute(member, typeof(UpdatableAttribute).FullName) ||
                 SymbolHelpers.HasAttribute(member, typeof(AdaptAttribute).FullName) ||
@@ -290,6 +300,7 @@ internal static class MapperSourceOutput
             .Where(group => group.Count() > 1 && group.Any(m => m.ReceiverSymbol is not null)).Select(group => group.Key));
         foreach (var mapping in mappings)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!mapping.IsProjectable && !mapping.IsUpdatable && mapping.Adaptations.Count == 0)
             {
                 continue;
@@ -310,7 +321,7 @@ internal static class MapperSourceOutput
 
         if (context.Members.Length == 0 && mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType))
             return new MapperGenerationResult(null, null, context.GetDiagnostics());
-        var generatedFile = MapperFileEmitter.Render(context);
+        var generatedFile = MapperFileEmitter.Render(context, compilation);
         return new MapperGenerationResult(generatedFile.HintName, generatedFile.Source, context.GetDiagnostics());
     }
 }

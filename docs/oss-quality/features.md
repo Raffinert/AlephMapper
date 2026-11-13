@@ -1,6 +1,6 @@
 # OSS quality assessment: features
 
-Assessment baseline: commit `a40c4b5`, package version `0.8.2`, reviewed 2026-11-13.
+Assessment baseline: commit `a40c4b5`, reviewed 2026-11-13. Implementation target: package version `0.8.3`.
 
 Companion implementation guide: [features-agent-instructions.md](features-agent-instructions.md).
 

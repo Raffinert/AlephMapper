@@ -13,7 +13,7 @@ AlephMapper is a compile-time source generator. If you reference it from a libra
 With a regular `PackageReference`:
 
 ```xml
-<PackageReference Include="AlephMapper" Version="0.8.1">
+<PackageReference Include="AlephMapper" Version="0.8.3">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -23,7 +23,7 @@ With Central Package Management:
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="AlephMapper" Version="0.8.1" />
+<PackageVersion Include="AlephMapper" Version="0.8.3" />
 
 <!-- Your project file -->
 <PackageReference Include="AlephMapper">

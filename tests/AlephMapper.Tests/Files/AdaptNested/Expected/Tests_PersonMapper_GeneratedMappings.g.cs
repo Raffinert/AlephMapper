@@ -8,7 +8,7 @@ using System.Linq.Expressions;
 
 namespace Tests;
 
-[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.2.0")]
+[global::System.CodeDom.Compiler.GeneratedCode("AlephMapper", "0.8.3.0")]
 partial class PersonMapper
 {
     /// <summary>
