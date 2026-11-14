@@ -5,59 +5,55 @@ namespace AlephMapper.IntegrationTests;
 
 public class SqlTranslationContractTests
 {
+    private SqliteConnection _connection = null!;
+    private ComprehensiveTestDbContext _context = null!;
+
+    [Before(Test)]
+    public async Task Setup()
+    {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        await _connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
+            .UseSqlite(_connection).Options;
+        _context = new ComprehensiveTestDbContext(options);
+        await _context.Database.EnsureCreatedAsync();
+    }
+
+    [After(Test)]
+    public async Task Cleanup()
+    {
+        await _context.DisposeAsync();
+        await _connection.DisposeAsync();
+    }
+
     [Test]
     public async Task Generated_scalar_computation_is_in_SQL_not_only_client_projection()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection).Options;
-        await using var context = new ComprehensiveTestDbContext(options);
-        await context.Database.EnsureCreatedAsync();
+        var generated = _context.Employees.Select(SqlContractMapper.FullNameExpression());
+        var control = _context.Employees.Select(employee => SqlContractMapper.FullName(employee));
 
-        var generated = context.Employees.Select(SqlContractMapper.FullNameExpression());
-        var control = context.Employees.Select(employee => SqlContractMapper.FullName(employee));
-        var generatedSql = generated.ToQueryString();
-        var controlSql = control.ToQueryString();
-
-        await SqlSnapshot.AssertMatches("scalar-generated", generatedSql);
-        await SqlSnapshot.AssertMatches("scalar-control", controlSql);
+        await SqlSnapshot.AssertMatches("scalar-generated", generated.ToQueryString());
+        await SqlSnapshot.AssertMatches("scalar-control", control.ToQueryString());
         await Assert.That(await generated.OrderBy(name => name).FirstAsync()).IsEqualTo("Alice Brown");
     }
 
     [Test]
     public async Task Generated_predicate_filters_in_SQL()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection).Options;
-        await using var context = new ComprehensiveTestDbContext(options);
-        await context.Database.EnsureCreatedAsync();
+        var query = _context.Employees.Where(SqlContractMapper.ActiveJohnExpression());
 
-        var query = context.Employees.Where(SqlContractMapper.ActiveJohnExpression());
-        var sql = query.ToQueryString();
-
-        await SqlSnapshot.AssertMatches("predicate", sql);
+        await SqlSnapshot.AssertMatches("predicate", query.ToQueryString());
         await Assert.That((await query.ToListAsync()).Select(employee => employee.Id).Single()).IsEqualTo(1);
     }
 
     [Test]
     public async Task Rewritten_null_navigation_is_in_SQL()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection).Options;
-        await using var context = new ComprehensiveTestDbContext(options);
-        await context.Database.EnsureCreatedAsync();
-
-        var query = context.Employees.OrderBy(employee => employee.Id)
+        var query = _context.Employees.OrderBy(employee => employee.Id)
             .Select(SqlContractMapper.DepartmentNameExpression());
-        var sql = query.ToQueryString();
-        var values = await query.ToListAsync();
 
-        await SqlSnapshot.AssertMatches("navigation", sql);
+        await SqlSnapshot.AssertMatches("navigation", query.ToQueryString());
+        var values = await query.ToListAsync();
         await Assert.That(values[0]).IsEqualTo("Engineering");
         await Assert.That(values[3]).IsEqualTo("Unassigned");
     }
