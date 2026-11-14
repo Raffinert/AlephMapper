@@ -73,7 +73,7 @@ internal static class MapperSourceOutput
             var catalog = new MappingCatalog(
                 mappingsByMethod,
                 method => CreateExternalAnalysis(compilation, method, cancellationToken));
-            return GenerateMapper(compilation, mapperType, mappings, catalog, cancellationToken);
+            return GenerateMapper(mapperType, mappings, catalog, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -275,7 +275,6 @@ internal static class MapperSourceOutput
     }
 
     private static MapperGenerationResult GenerateMapper(
-        Compilation compilation,
         INamedTypeSymbol mapperType,
         IReadOnlyList<MappingAnalysis> mappings,
         MappingCatalog catalog,
@@ -321,7 +320,7 @@ internal static class MapperSourceOutput
 
         if (context.Members.Length == 0 && mapperType.GetTypeMembers().Any(RoslynCompatibility.IsExtensionType))
             return new MapperGenerationResult(null, null, context.GetDiagnostics());
-        var generatedFile = MapperFileEmitter.Render(context, compilation);
+        var generatedFile = MapperFileEmitter.Render(context);
         return new MapperGenerationResult(generatedFile.HintName, generatedFile.Source, context.GetDiagnostics());
     }
 }

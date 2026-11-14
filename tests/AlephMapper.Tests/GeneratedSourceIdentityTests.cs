@@ -143,6 +143,39 @@ public class GeneratedSourceIdentityTests
     }
 
     [Test]
+    public async Task Another_emitting_mapper_does_not_rename_existing_mapper_output()
+    {
+        const string first = """
+            using AlephMapper;
+            public partial class First
+            {
+                public static partial class Mapper
+                {
+                    [Projectable] public static int Map(int value) => value + 1;
+                }
+            }
+            """;
+        const string second = """
+            using AlephMapper;
+            public partial class Second
+            {
+                public static partial class Mapper
+                {
+                    [Projectable] public static int Map(int value) => value + 2;
+                }
+            }
+            """;
+
+        var (_, _, initial) = await Generate(first);
+        var (_, output, updated) = await Generate(first, second);
+        var firstName = initial.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
+        var nextName = updated.GeneratedSources.Single(s => s.SourceText.ToString().Contains("partial class First")).HintName;
+        await Assert.That(nextName).IsEqualTo(firstName);
+        await Assert.That(updated.GeneratedSources.Select(s => s.HintName).Distinct(StringComparer.OrdinalIgnoreCase)).Count().IsEqualTo(updated.GeneratedSources.Length);
+        await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     public async Task Nonemitting_attributed_types_do_not_rename_existing_mapper_output()
     {
         const string mapper = """
