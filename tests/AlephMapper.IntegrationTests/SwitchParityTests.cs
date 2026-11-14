@@ -1,5 +1,4 @@
 using System.Linq.Expressions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
@@ -95,11 +94,8 @@ public class SwitchParityTests
     [Test]
     public async Task Property_pattern_executes_in_SQLite()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        await using var context = new ComprehensiveTestDbContext(new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection).Options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await SqliteTestDatabase.CreateAsync();
+        var context = database.Context;
         var employees = await context.Employees.OrderBy(e => e.Id).ToListAsync();
         var actual = await context.Employees.OrderBy(e => e.Id).Select(SwitchParityMapper.EmployeeGradeExpression()).ToListAsync();
         await Assert.That(actual).IsEquivalentTo(employees.Select(SwitchParityMapper.EmployeeGrade));

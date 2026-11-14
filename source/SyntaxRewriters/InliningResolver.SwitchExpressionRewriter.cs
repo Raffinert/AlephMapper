@@ -193,9 +193,9 @@ internal sealed partial class InliningResolver
     private static ExpressionSyntax And(ExpressionSyntax left, ExpressionSyntax right) =>
         ParenthesizedExpression(PadBinaryOperator(BinaryExpression(SyntaxKind.LogicalAndExpression, left, right)));
 
-    private static ExpressionSyntax NonNull(ExpressionSyntax input) =>
+    private ExpressionSyntax NonNull(ExpressionSyntax input) =>
         PadBinaryOperator(BinaryExpression(SyntaxKind.NotEqualsExpression,
-            ParenthesizedExpression(CastExpression(PredefinedType(Token(SyntaxKind.ObjectKeyword)), input)),
+            ParenthesizedExpression(CastExpression(ParseTypeName(nullablePolicy.AnnotationsEnabled ? "object?" : "object"), input)),
             LiteralExpression(SyntaxKind.NullLiteralExpression)));
 
     private ExpressionSyntax? ConvertRecursive(RecursivePatternSyntax pattern, ExpressionSyntax input,
@@ -368,7 +368,7 @@ internal sealed partial class InliningResolver
             // A C# null pattern doesn't invoke an overloaded == operator.
             // Compare boxed values using reference equality semantics.
             compared = ParenthesizedExpression(
-                CastExpression(PredefinedType(Token(SyntaxKind.ObjectKeyword)), governing));
+                CastExpression(ParseTypeName(nullablePolicy.AnnotationsEnabled ? "object?" : "object"), governing));
         }
 
         return PadBinaryOperator(BinaryExpression(

@@ -184,7 +184,7 @@ internal static class MappingAnalysisFactory
             AddUsing(usings, usingDirective);
         }
 
-        foreach (var namespaceDeclaration in compilationUnit.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
+        foreach (var namespaceDeclaration in node.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse())
         {
             foreach (var usingDirective in namespaceDeclaration.Usings)
             {
@@ -197,7 +197,11 @@ internal static class MappingAnalysisFactory
 
     private static void AddUsing(ISet<string> usings, UsingDirectiveSyntax usingDirective)
     {
-        if (usingDirective.Name is { } name)
+        // Alias and static references are resolved to their bound symbols by the
+        // inliner. Re-emitting either directive in a file shared by partial
+        // declarations can change the binding of another mapping.
+        if (usingDirective.Alias is null && !usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) &&
+            usingDirective.Name is { } name)
         {
             usings.Add(name.ToString());
         }

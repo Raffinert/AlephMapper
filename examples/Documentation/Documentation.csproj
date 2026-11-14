@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <WarningsAsErrors>AM0001;AM0002;AM0003;AM0004;AM0005;AM0006;AM0007;AM0008;AM0009;AM0010;AM0011;AM0012;AM0013;AM0014;AM0015;AM0016;AM0017;AM0018;AM0019;AM0020;AM0021;AM0022</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../source/AlephMapper.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

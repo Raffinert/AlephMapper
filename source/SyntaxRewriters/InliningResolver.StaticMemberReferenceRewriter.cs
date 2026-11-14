@@ -43,6 +43,22 @@ internal sealed partial class InliningResolver
         return true;
     }
 
+    private static bool TryQualifyStaticName(SimpleNameSyntax original, SimpleNameSyntax rewritten,
+        ISymbol? symbol, out ExpressionSyntax result)
+    {
+        result = rewritten;
+        if (symbol is not { IsStatic: true, ContainingType: { } owner } ||
+            symbol is not (IFieldSymbol or IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }) ||
+            original.Parent is MemberAccessExpressionSyntax { Name: var name } && name == original ||
+            original.Parent is QualifiedNameSyntax { Right: var right } && right == original)
+            return false;
+
+        result = QualifyMember(rewritten,
+                ParseName(owner.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
+            .WithTriviaFrom(original);
+        return true;
+    }
+
     private bool TryRewriteExpandedDependency(SyntaxNode original, ISymbol? symbol, out ExpressionSyntax result)
     {
         result = null!;

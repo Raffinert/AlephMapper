@@ -60,7 +60,7 @@ this support floor. No target-framework/version-number bump or package publicati
   Toolset PackageReference under SDK10 did not replace its inbox compiler.
 - Runtime fixture covers classic projection, helper and classic-extension inlining,
   nullable/type/property/list-slice switch patterns, Update, Adapt, AM0019 retention
-  and AM0020 absence.5.0+ cases additionally execute CSharp14 property/method and
+  and no purity diagnostic. 5.0+ cases additionally execute CSharp14 property/method and
   composed factories. All target net8 to separate framework from compiler version.
 - Full existing suite:191 passed,0 failed,0 skipped. Release clean build and
   Release pack --no-build --no-restore passed. Independent review caught a missing

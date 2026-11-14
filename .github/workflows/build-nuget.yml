@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -45,6 +47,12 @@ jobs:
       - name: Run tests
         run: dotnet test AlephMapper.slnx --configuration Release --no-build --no-restore -- --report-trx --results-directory artifacts/test-results
 
+      - name: Verify documentation examples and links
+        run: |
+          dotnet run --project examples/Documentation/Documentation.csproj --configuration Release
+          dotnet run --project examples/SampleApp/SampleApp.csproj --configuration Release
+          python scripts/verify_docs.py
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,6 +63,9 @@ jobs:
 
       - name: Pack NuGet package
         run: dotnet pack source/AlephMapper.csproj --configuration Release --no-restore -p:BuildNumber=${{ github.run_number }} --output artifacts/nuget
+
+      - name: Verify packaged README
+        run: python scripts/verify_docs.py --package-dir artifacts/nuget
 
       - name: Verify Roslyn compiler compatibility
         run: python scripts/verify_roslyn_compatibility.py --package-dir artifacts/nuget

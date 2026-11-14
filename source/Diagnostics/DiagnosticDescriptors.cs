@@ -10,6 +10,8 @@ public static class DiagnosticDescriptors
 {
     private const string CrashIssueUrl =
         "https://github.com/Raffinert/AlephMapper/issues/new?labels=bug&title=Generator%20crash:%20AM0004";
+    private const string DiagnosticDocsUrl =
+        "https://github.com/Raffinert/AlephMapper/blob/main/docs/diagnostics.md#";
 
     public static readonly DiagnosticDescriptor UpdatableValueTypeReturn = new(
         "AM0001",
@@ -135,7 +137,8 @@ public static class DiagnosticDescriptors
         "Cannot adapt '{0}': generated adapted member failed compilation validation: {1}",
         "AlephMapper",
         DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: DiagnosticDocsUrl + "am0015");
 
     public static readonly DiagnosticDescriptor UnsafeNullConditionalReceiver = new(
         "AM0016",
@@ -166,22 +169,23 @@ public static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnsupportedSwitchPattern = new(
         "AM0019",
         "Switch expression cannot be lowered without changing semantics",
-        "Expression generation for '{0}' skipped: unsupported or non-exhaustive switch pattern '{1}'",
+        "Companion generation for '{0}' skipped: unsupported or non-exhaustive switch pattern '{1}'",
         "AlephMapper",
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: DiagnosticDocsUrl + "am0019");
 
     public static readonly DiagnosticDescriptor UnsupportedExtensionMember = new(
-        "AM0021", "Extension member cannot be projected",
-        "Expression generation for extension member '{0}' skipped: {1}",
+        "AM0020", "Extension member cannot generate companions",
+        "Companion generation for extension member '{0}' skipped: {1}",
         "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidMapperDeclaration = new(
-        "AM0022", "Mapper declaration cannot contain generated companions",
+        "AM0021", "Mapper declaration cannot contain generated companions",
         "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor GeneratedMemberConflict = new(
-        "AM0023", "Generated companion conflicts with another member",
+        "AM0022", "Generated companion conflicts with another member",
         "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
     public static DiagnosticDescriptor? GetById(string id) => id switch
@@ -205,9 +209,9 @@ public static class DiagnosticDescriptors
         "AM0017" => UnsupportedNullConditionalExpression,
         "AM0018" => AdaptGenericMethodUnsupported,
         "AM0019" => UnsupportedSwitchPattern,
-        "AM0021" => UnsupportedExtensionMember,
-        "AM0022" => InvalidMapperDeclaration,
-        "AM0023" => GeneratedMemberConflict,
+        "AM0020" => UnsupportedExtensionMember,
+        "AM0021" => InvalidMapperDeclaration,
+        "AM0022" => GeneratedMemberConflict,
         _ => null
     };
 }

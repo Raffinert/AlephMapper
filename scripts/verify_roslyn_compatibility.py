@@ -1,5 +1,6 @@
 """Verify NuGet analyzer band selection with actual isolated compiler processes."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,6 +38,9 @@ def main():
             raise RuntimeError(f"Unexpected package assemblies: {dlls}")
         nuspec = ET.fromstring(archive.read(next(n for n in archive.namelist() if n.endswith(".nuspec"))))
         version = nuspec.find("{*}metadata/{*}version").text
+    configured_version = ET.parse(ROOT / "source/Analyzer.Shared.props").findtext("./PropertyGroup/PackageVersion")
+    if version != configured_version:
+        raise RuntimeError(f"Package version {version} does not match source/Analyzer.Shared.props ({configured_version})")
     dotnet = shutil.which("dotnet")
     if not dotnet:
         raise RuntimeError("dotnet is required")
@@ -57,6 +61,13 @@ def main():
         ET.SubElement(sources, "clear")
         ET.SubElement(sources, "add", key="local", value=str(args.package_dir.resolve()))
         ET.SubElement(sources, "add", key="nuget.org", value="https://api.nuget.org/v3/index.json")
+        # The exact ID takes precedence over the wildcard: verify the package
+        # just packed in this run, while resolving compiler toolsets from NuGet.
+        mapping = ET.SubElement(config, "packageSourceMapping")
+        local = ET.SubElement(mapping, "packageSource", key="local")
+        ET.SubElement(local, "package", pattern="AlephMapper")
+        nuget = ET.SubElement(mapping, "packageSource", key="nuget.org")
+        ET.SubElement(nuget, "package", pattern="*")
         ET.ElementTree(config).write(work / "NuGet.Config", encoding="utf-8", xml_declaration=True)
         properties = [f"-p:PackageVersionUnderTest={version}", f"-p:ExpectedRoslynBand={band}",
                       f"-p:CompatibilityLanguageVersion={'14' if modern else '12'}"]
@@ -64,6 +75,10 @@ def main():
             properties.append(f"-p:CompatibilityCompilerVersion={compiler}")
         run([dotnet, "restore", work / "Consumer.csproj", "--configfile", work / "NuGet.Config",
              "--packages", work / "packages", *properties])
+        installed_packages = list((work / "packages/alephmapper").rglob("*.nupkg"))
+        if (len(installed_packages) != 1 or
+                hashlib.sha256(installed_packages[0].read_bytes()).digest() != hashlib.sha256(packages[0].read_bytes()).digest()):
+            raise RuntimeError(f"The consumer did not restore the package under test: {installed_packages}")
         if compiler != "sdk":
             tasks = work / "packages/microsoft.net.compilers.toolset" / compiler / "tasks/netcore"
             csc = tasks / "bincore/csc.dll"
@@ -87,8 +102,16 @@ def main():
         log = run([dotnet, "build", work / "Consumer.csproj", "-c", "Release", "--no-restore", *properties])
         if compiler != "sdk" and (not stamp.exists() or stamp.read_text().strip() != compiler):
             raise RuntimeError("The requested compiler wrapper was not executed")
-        if "AM0019" not in log or "AM0020" in log:
-            raise RuntimeError("Expected AM0019 and absence of AM0020 in package regression fixture")
+        expected_diagnostics = {"AM0019", "AM0021", "AM0022"}
+        if modern:
+            expected_diagnostics.add("AM0020")
+        # Compiler output writes the ID followed by a colon, so inspect the
+        # diagnostic prefix rather than relying on raw token membership.
+        missing = {id for id in expected_diagnostics if f"{id}:" not in log}
+        if missing:
+            raise RuntimeError(f"Missing package-consumer diagnostics for {compiler}: {sorted(missing)}")
+        if not modern and "AM0020:" in log:
+            raise RuntimeError("Classic compiler fixture unexpectedly reported an extension-member diagnostic")
         run([dotnet, work / "bin/Release/net8.0/Consumer.dll"])
         results.append({"compiler": compiler, "selected_band": band, "status": "passed"})
     (output / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

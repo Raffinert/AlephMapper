@@ -73,6 +73,15 @@ internal sealed partial class InliningResolver
         var symbol = CanQuerySemanticModel(node) ? model.GetSymbolInfo(node).Symbol : null;
         if (TryRewriteExpandedName(node, rewritten, symbol, out var expandedReference))
             return expandedReference;
+        if (symbol is INamedTypeSymbol type &&
+            !(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node) &&
+            !(node.Parent is QualifiedNameSyntax qualifiedName && qualifiedName.Right == node))
+        {
+            return Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseName(
+                type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).WithTriviaFrom(node);
+        }
+        if (TryQualifyStaticName(node, rewritten, symbol, out var staticReference))
+            return staticReference;
         return rewritten;
     }
 

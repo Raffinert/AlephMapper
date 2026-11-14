@@ -119,13 +119,17 @@ public static Order Map(OrderRequest source) => new()
 };
 ```
 
-Replacing collections on tracked entities may affect relationships and persistence; validate this behavior for your application. Update-in-place generation for value-type destinations is not supported (`AM0001`).
+`Skip` leaves a mapped collection property on the existing destination untouched, including its reference and contents. `Update` emits the initializer's assignment; it does not merge by key or mutate the existing list in place. If the right-hand side is `source.Lines`, the destination receives that same collection reference. If it is `source.Lines.Select(MapLine).ToList()`, the destination receives a new list and new mapped child objects. An empty mapped source produces an empty replacement list. A guarded nullable source expression can assign `null` without dereferencing it. Properties absent from the initializer retain their destination values. A null source object returns the existing destination without assignments.
+
+The [collection contract tests](../tests/AlephMapper.IntegrationTests/CollectionContractTests.cs) verify these cases. In their specific required SQLite one-to-many relationship, replacing a tracked employee's address list marks the old child deleted and the new child added after change detection; save/reload persists the replacement. Other relationship configurations can behave differently, so inspect tracking states and persistence in your model. Update-in-place generation for non-nullable value-type destinations is not supported (`AM0001`).
 
 ## Switch expressions and side effects
 
 Supported C# `switch` patterns are lowered to conditional expressions. The input can be evaluated **more than once** after lowering, unlike a native C# switch. Inlined helper arguments can also be duplicated, skipped, or reordered. Use stable, side-effect-free inputs and arguments in projection code.
 
 Unsupported or non-exhaustive switch patterns report `AM0019`. Check the [switch-pattern support matrix](switch-parity-matrix.md) for precise coverage. The resulting tree must still be translatable by the selected LINQ provider.
+
+For tested computed projections, predicates, null navigation, and nested mapping on EF Core SQLite 10.0.14, see the [SQL translation evidence](sqlite-translation-evidence.md). This evidence is scoped to those shapes and provider version.
 
 ## Inspect generated code
 
@@ -144,11 +148,13 @@ Inspect the generated source for inlined helpers, adapted members, null handling
 
 ## Troubleshooting
 
-- **Missing generated method:** check `static partial` mapper declaration, expression-bodied mapping, and attribute placement. For C# 14 extension members, verify Roslyn 5.0+ and the supported member forms (`AM0021`).
+For every `AMxxxx` ID, default severity, cause, fix, and missing-companion consequence, use the [diagnostic catalog](diagnostics.md). For exact companion signatures, see the [generated API reference](generated-api-reference.md).
+
+- **Missing generated method:** check `static partial` mapper declaration, expression-bodied mapping, and attribute placement. For C# 14 extension members, verify Roslyn 5.0+ and the supported member forms (`AM0020`).
 - **EF Core cannot translate a projection:** inspect the generated expression and the provider exception. A generated C# expression tree does not guarantee SQL translation.
 - **Helper was not inlined:** use a supported, visible, expression-bodied method; cyclic helper calls are rejected (`AM0002`/`AM0003`).
 - **Null reference after `?.`:** the default is `Ignore`; opt into `NullConditionalRewrite.Rewrite` where needed.
 - **Adaptation failed:** check used members, constructors, destination writeability, and `Name` for expression generation. See the [`[Adapt]` guide](Adapt-Attribute.md).
-- **Generated member collision or invalid mapper class:** check diagnostics `AM0022`/`AM0023`.
+- **Generated member collision or invalid mapper class:** check diagnostics `AM0021`/`AM0022`.
 
 See [installation and compiler compatibility](installation-and-compatibility.md) for package setup and [integration tests](../tests/AlephMapper.IntegrationTests) for executable behavior.

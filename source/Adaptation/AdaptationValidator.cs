@@ -65,13 +65,14 @@ internal static class AdaptationValidator
                 mapping.BodySyntax.Expression.Kind()));
             isValid = false;
         }
-        else if (!HasCompatibleConstructors(destinationCreations, adaptation.DestinationType, mapping.SemanticModel.Compilation, mapping.SemanticModel))
+        else if (FindIncompatibleConstructor(destinationCreations, adaptation.DestinationType,
+                     mapping.SemanticModel.Compilation, mapping.SemanticModel) is { } incompatibleCreation)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.AdaptRebindingFailed,
-                location,
+                incompatibleCreation.GetLocation(),
                 mapping.MethodSymbol.Name,
-                "the adapted destination does not expose a compatible constructor"));
+                $"adapted destination '{adaptation.DestinationType.ToDisplayString()}' has no constructor compatible with '{incompatibleCreation.WithoutTrivia()}'"));
             isValid = false;
         }
 
@@ -268,7 +269,7 @@ internal static class AdaptationValidator
                csharpCompilation.ClassifyConversion(source, destination).IsImplicit;
     }
 
-    private static bool HasCompatibleConstructors(
+    private static ObjectCreationExpressionSyntax? FindIncompatibleConstructor(
         IEnumerable<ExpressionSyntax> destinationCreations,
         INamedTypeSymbol adaptedDestinationType,
         Compilation compilation,
@@ -282,11 +283,11 @@ internal static class AdaptationValidator
             if (!adaptedDestinationType.InstanceConstructors.Any(constructor =>
                     IsCompatibleConstructor(constructor, argumentTypes, compilation)))
             {
-                return false;
+                return creation;
             }
         }
 
-        return true;
+        return null;
     }
 
     private static bool IsCompatibleConstructor(

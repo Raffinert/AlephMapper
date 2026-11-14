@@ -39,11 +39,11 @@ Here `Employee` and `EmployeeDto` must expose the members actually used by the t
 
 | Symptom | First things to check |
 |---|---|
-| Missing generated companion | `static partial` containing class; classic `static` expression-bodied method or supported C# 14 instance extension member; appropriate attributes, source receiver, installed analyzer and compiler compatibility |
+| Missing generated companion | `static partial` mapper class; for a nested classic mapper, `partial class` on every enclosing type (`AM0021`); classic `static` expression-bodied method or supported C# 14 instance extension member; appropriate attributes, source receiver, installed analyzer and compiler compatibility |
 | Generated query fails EF translation | Inspect `MapExpression()`'s generated expression; verify provider support. This is distinct from C# compilation. |
 | Missing adapted member | `AM0005`–`AM0015`: inspect explicitly requested types, accessed source-member paths, destination writable members, constructor compatibility, generated name/signature conflicts and `Name` requirements |
 | Helper recursion or unsupported conditional receiver | `AM0002`, `AM0003`, `AM0013` for circular composition; `AM0016` for unsafe null-conditional receiver; `AM0017` for unsupported null-conditional policy |
-| Generated member names collide | Inspect declared mapper members and other generated adaptations; do not invent fallback suffixes |
+| Generated member names collide | For `AM0022`, inspect declared mapper members and other generated companions; for adapted names also inspect `AM0009`. Do not invent fallback suffixes |
 
 ## Inspect generated files
 

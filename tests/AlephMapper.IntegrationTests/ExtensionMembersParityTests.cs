@@ -19,7 +19,7 @@ public class ExtensionMembersParityTests
             await Assert.That(OrderExtensions.NamedExpression().Compile()(order)).IsEqualTo(OrderExtensions.Named(order));
             await Assert.That(OrderExtensions.TimesExpression(2L).Compile()(order)).IsEqualTo(order.Times(2L));
             await Assert.That(ScalarExtensions.SquaredExpression().Compile()(value)).IsEqualTo(value.Squared);
-            await Assert.That(ScalarExtensions.InterfaceLabelExpression().Compile()(order)).IsEqualTo(((IExtensionEntity)order).InterfaceLabel);
+            await Assert.That(ScalarExtensions.InterfaceLabelExpression().Compile()(order)).IsEqualTo(order.InterfaceLabel);
         }
     }
 

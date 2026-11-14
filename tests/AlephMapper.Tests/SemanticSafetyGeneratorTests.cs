@@ -24,7 +24,12 @@ public class SemanticSafetyGeneratorTests
             """;
 
         var result = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0019")).IsTrue();
+        var diagnostic = result.Diagnostics.Single(d => d.Id == "AM0019");
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.GetMessage()).Contains("Companion generation");
+        await Assert.That(diagnostic.Descriptor.HelpLinkUri).Contains("docs/diagnostics.md#am0019");
+        await Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length))
+            .Contains("value switch");
         await Assert.That(result.GeneratedSources.Any(s =>
             s.SourceText.ToString().Contains("MapExpression", StringComparison.Ordinal))).IsFalse();
     }
@@ -251,6 +256,32 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
+    public async Task Updatable_nameof_type_preserves_original_constant()
+    {
+        const string source = """
+            using System;
+            using AlephMapper;
+
+            public sealed class Source { }
+            public sealed class Destination { public string Name { get; set; } = ""; }
+
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Destination Map(Source source) => new() { Name = nameof(Int32) };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources
+            .Single(source => GeneratedHintName.Matches(source.HintName, "Mapper"))
+            .SourceText.ToString();
+        await Assert.That(generated).Contains("dest.Name = \"Int32\"");
+    }
+
+    [Test]
     [Arguments("value switch { var x when x == null => 1, _ => 0 }")]
     [Arguments("value switch { Node => 1, _ => 0 }")]
     [Arguments("value switch { { Child: Node c } when c.Score > 0 => c.Score, _ => 0 }")]
@@ -358,37 +389,27 @@ public class SemanticSafetyGeneratorTests
         var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(
             LanguageNames.CSharp, CancellationToken.None);
         var compilation = CSharpCompilation.Create(
-            "UpdateOnlySafety",
-            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            "SemanticSafety",
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "SemanticSafety.cs")],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var driver = CSharpGeneratorDriver.Create(
             generators: [new AlephSourceGenerator().AsSourceGenerator()],
             parseOptions: parseOptions);
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
-        return (driver.RunGenerators(compilation).GetRunResult().Results.Single(), output);
+        driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+        return (driver.GetRunResult().Results.Single(), output);
     }
 
     [Test]
     public async Task New_diagnostic_descriptors_are_registered()
     {
         await Assert.That(DiagnosticDescriptors.GetById("AM0019")).IsEqualTo(DiagnosticDescriptors.UnsupportedSwitchPattern);
-        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsNull();
+        await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsEqualTo(DiagnosticDescriptors.UnsupportedExtensionMember);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0021")).IsEqualTo(DiagnosticDescriptors.InvalidMapperDeclaration);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0022")).IsEqualTo(DiagnosticDescriptors.GeneratedMemberConflict);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0023")).IsNull();
     }
 
-    private static async Task<GeneratorRunResult> Generate(string source)
-    {
-        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
-        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(
-            LanguageNames.CSharp, CancellationToken.None);
-        var compilation = CSharpCompilation.Create(
-            "SemanticSafety",
-            [CSharpSyntaxTree.ParseText(source, parseOptions)],
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        var driver = CSharpGeneratorDriver.Create(
-            generators: [new AlephSourceGenerator().AsSourceGenerator()],
-            parseOptions: parseOptions);
-        return driver.RunGenerators(compilation).GetRunResult().Results.Single();
-    }
+    private static async Task<GeneratorRunResult> Generate(string source) =>
+        (await GenerateAndCompile(source)).Result;
 }

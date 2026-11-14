@@ -121,6 +121,23 @@ internal sealed partial class InliningResolver(
             return value.WithTriviaFrom(node);
         }
 
+        // Generated members from different partial declarations share one file.
+        // Bind names in their original semantic model before imports are merged.
+        if (!(node.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == node) &&
+            !(node.Parent is QualifiedNameSyntax qualifiedName && qualifiedName.Right == node))
+        {
+            var alias = model.GetAliasInfo(node);
+            var target = alias?.Target ?? symbol;
+            if (target is INamedTypeSymbol or INamespaceSymbol)
+            {
+                var qualified = target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return ParseName(qualified).WithTriviaFrom(node);
+            }
+
+            if (TryQualifyStaticName(node, node, target, out var staticReference))
+                return staticReference;
+        }
+
         return base.VisitIdentifierName(node);
     }
 
@@ -192,8 +209,9 @@ internal sealed partial class InliningResolver(
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if ((!forUpdateMethod || _extensionExpansion || parameterSubstitutions is { Count: > 0 } || _lambdaVariables.Count > 0) &&
-            CanQuerySemanticModel(node) && model.GetOperation(node) is Microsoft.CodeAnalysis.Operations.INameOfOperation &&
+        // Preserve the original constant before qualifying names in the operand.
+        // For example, nameof(Int32) must not become the invalid nameof(int).
+        if (CanQuerySemanticModel(node) && model.GetOperation(node) is Microsoft.CodeAnalysis.Operations.INameOfOperation &&
             model.GetConstantValue(node) is { HasValue: true, Value: string name })
             return LiteralExpression(SyntaxKind.StringLiteralExpression, Literal(name)).WithTriviaFrom(node);
         if (node.Parent == null ||

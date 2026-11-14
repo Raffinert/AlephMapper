@@ -1,3 +1,4 @@
+using AlephMapper.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -15,16 +16,19 @@ public class ExtensionMemberTests
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var tree = compilation.SyntaxTrees.Single();
         var model = compilation.GetSemanticModel(tree);
-        var block = tree.GetRoot().DescendantNodes().OfType<ExtensionBlockDeclarationSyntax>().Single();
-        var type = (INamedTypeSymbol)model.GetDeclaredSymbol(block)!;
+        var root = await tree.GetRootAsync();
+        var block = root.DescendantNodes().OfType<ExtensionBlockDeclarationSyntax>().Single();
+        var type = model.GetDeclaredSymbol(block)!;
         await Assert.That(type.IsExtension).IsTrue();
         await Assert.That(type.ExtensionParameter!.Name).IsEqualTo("order");
-        var method = (IMethodSymbol)model.GetDeclaredSymbol(block.Members.OfType<MethodDeclarationSyntax>().Single())!;
+        var method = model.GetDeclaredSymbol(block.Members.OfType<MethodDeclarationSyntax>().Single())!;
         await Assert.That(method.Parameters.Length).IsEqualTo(1);
         await Assert.That(method.Parameters[0].Name).IsEqualTo("factor");
-        var access = tree.GetRoot().DescendantNodes().OfType<MemberAccessExpressionSyntax>().First(n => n.Name.Identifier.ValueText == "DoubleTotal");
-        await Assert.That(SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(access).Symbol,
-            model.GetDeclaredSymbol(block.Members.OfType<PropertyDeclarationSyntax>().Single()))).IsTrue();
+        var access = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+            .First(node => node.Name.Identifier.ValueText == "DoubleTotal");
+        var declaredProperty = model.GetDeclaredSymbol(block.Members.OfType<PropertyDeclarationSyntax>().Single());
+        await Assert.That(model.GetSymbolInfo(access).Symbol)
+            .IsEqualTo(declaredProperty, SymbolEqualityComparer.Default);
     }
 
     [Test]
@@ -51,11 +55,11 @@ public class ExtensionMemberTests
     [Arguments("public T Value<T>(T x) => x;")]
     [Arguments("public int Value() => System.Linq.Enumerable.Sum(new[]{n}, x => { return x; });")]
     [Arguments("public System.Collections.Generic.IEnumerable<int> Value => from x in new[]{1} select x+n;")]
-    public async Task Unsupported_extension_members_report_AM0021_and_isolate_failure(string declaration)
+    public async Task Unsupported_extension_members_report_AM0020_and_isolate_failure(string declaration)
     {
         var source = "using AlephMapper; using System.Linq; public static partial class Ext { extension(int n) { [Projectable] " + declaration + " [Projectable] public int Good => n+1; } }";
         var (result, output) = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0004")).IsFalse();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.GeneratedSources.Any(s => s.SourceText.ToString().Contains("GoodExpression"))).IsTrue();
@@ -77,7 +81,7 @@ public class ExtensionMemberTests
     public async Task Extension_factory_signature_conflicts_are_diagnosed()
     {
         var (result, output) = await Generate("using AlephMapper; [Projectable] public static partial class Ext { extension(int n) { public int Value => n; } extension(string n) { public int Value => n.Length; } }");
-        await Assert.That(result.Diagnostics.Count(d => d.Id == "AM0021")).IsEqualTo(2);
+        await Assert.That(result.Diagnostics.Count(d => d.Id == "AM0020")).IsEqualTo(2);
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -89,16 +93,16 @@ public class ExtensionMemberTests
         var (second, _) = await Generate(source);
         await Assert.That(first.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = first.GeneratedSources.Where(s => s.HintName.EndsWith("GeneratedMappings.g.cs")).ToArray();
+        var generated = first.GeneratedSources.Where(s => GeneratedHintName.IsMapperFile(s.HintName)).ToArray();
         await Assert.That(generated.Length).IsEqualTo(1);
         await Assert.That(generated[0].SourceText.ToString()).IsEqualTo(second.GeneratedSources.Single(s => s.HintName == generated[0].HintName).SourceText.ToString());
     }
 
     [Test]
-    public async Task AM0021_is_registered_and_AM0020_remains_absent()
+    public async Task AM0020_is_registered_for_unsupported_extension_members()
     {
-        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0021")).IsNotNull();
-        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0020")).IsNull();
+        await Assert.That(DiagnosticDescriptors.GetById("AM0020"))
+            .IsEqualTo(DiagnosticDescriptors.UnsupportedExtensionMember);
     }
 
     [Test]
@@ -119,7 +123,7 @@ public class ExtensionMemberTests
     public async Task Inaccessible_extension_dependencies_are_diagnosed(string declaration, string use)
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { " + declaration + " extension(int n) { [Projectable] public int Value => n + " + use + "; } } public static partial class Mapper { [Projectable] public static int Map(int n) => n.Value; }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -147,8 +151,8 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single(s => s.HintName == outputType + "_GeneratedMappings.g.cs");
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, outputType));
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
         await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + global::Ext.Offset)");
     }
@@ -175,8 +179,8 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
         await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + ((int)(3)))");
         using var stream = new MemoryStream();
@@ -211,8 +215,8 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
-        var expressions = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
+        var expressions = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m.ExpressionBody!.Expression);
         var expectedMap = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }");
         var expectedRead = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }.Amount");
@@ -298,8 +302,8 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs");
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapReadOnlyExpression").ExpressionBody!.Expression;
         var expected = SyntaxFactory.ParseExpression(
             "source => new global::ReadOnlyDto { Amount = global::System.Math.Round(source.Amount, global::Precision.AmountDecimals) }");
@@ -357,7 +361,7 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single(s => s.HintName.EndsWith("GeneratedMappings.g.cs")).SourceText.ToString();
+        var generated = result.GeneratedSources.Single(s => GeneratedHintName.IsMapperFile(s.HintName)).SourceText.ToString();
         await Assert.That(generated).Contains("MapEmployeeExpression");
         await Assert.That(generated).Contains("MapEmployee(");
         await Assert.That(generated).Contains("PersonDto dest");
@@ -373,7 +377,7 @@ public class ExtensionMemberTests
     {
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(int n) { [Updatable] public int Value() => n+1; } }");
         await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0001")).IsTrue();
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsFalse();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -382,7 +386,7 @@ public class ExtensionMemberTests
     {
         var (result, output) = await Generate("using AlephMapper; using System.Linq; public static partial class Ext { extension(string n) { public int Add(int x) => n.Length+x; } [Projectable] public static int[] Map(int[] input) => input.Select(string.Empty.Add).ToArray(); }");
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020")).IsTrue();
     }
 
     [Test]
@@ -406,7 +410,7 @@ public class ExtensionMemberTests
         var (result, output) = await Generate(source);
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(result.GeneratedSources.Single(s => s.HintName == "Mapper_GeneratedMappings.g.cs").SourceText.ToString())
+        await Assert.That(result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper")).SourceText.ToString())
             .DoesNotContain(".Value");
     }
 
@@ -422,7 +426,7 @@ public class ExtensionMemberTests
     public async Task Missing_partial_outer_class_has_actionable_diagnostic()
     {
         var (result, output) = await Generate("using AlephMapper; public static class Ext { extension(int n) { [Projectable] public int Value => n+1; } }");
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021" && d.GetMessage().Contains("partial"))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0020" && d.GetMessage().Contains("partial"))).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
@@ -439,7 +443,7 @@ public class ExtensionMemberTests
         var (result, output) = await Generate("using AlephMapper; public static partial class Ext { extension(string value) { [Projectable] public int Scale(int amount) => value.Length+amount; [Projectable] public int Scale(int? amount) => value.Length+(amount??0); } }");
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(result.GeneratedSources.Single(s => s.HintName.EndsWith("GeneratedMappings.g.cs")).SourceText.ToString().Split(" ScaleExpression(").Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedSources.Single(s => GeneratedHintName.IsMapperFile(s.HintName)).SourceText.ToString().Split(" ScaleExpression(").Length).IsEqualTo(3);
     }
 
     [Test]
@@ -450,9 +454,9 @@ public class ExtensionMemberTests
     {
         var source = "using AlephMapper; public class Input { public int Value {get;set;} } public class Dto {public int Value {get;set;} } public " + modifiers + " class Bad { [" + attribute + "] public static Dto Map(Input value) => new() {Value=value.Value}; } public static partial class Good { [Projectable] public static int Map(int value) => value; }";
         var (result, output) = await Generate(source);
-        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0022")).IsTrue();
-        await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Bad_GeneratedMappings.g.cs")).IsFalse();
-        await Assert.That(result.GeneratedSources.Any(s => s.HintName == "Good_GeneratedMappings.g.cs")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0021")).IsTrue();
+        await Assert.That(result.GeneratedSources.Any(s => GeneratedHintName.Matches(s.HintName, "Bad"))).IsFalse();
+        await Assert.That(result.GeneratedSources.Any(s => GeneratedHintName.Matches(s.HintName, "Good"))).IsTrue();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 

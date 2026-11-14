@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace AlephMapper.Generation;
@@ -55,9 +57,24 @@ internal static class MapperFileEmitter
             output.AppendLine("}");
         }
 
-        var hintName = (string.IsNullOrEmpty(containingNamespace) ? "" : containingNamespace.Replace('.', '_') + "_") +
-                       mapperType.Name + "_GeneratedMappings.g.cs";
+        // Use a stable identity so the hint never depends on other mappers in
+        // the compilation. The readable part alone can collide for nested
+        // mappers, generic arities, or namespaces containing underscores.
+        var identity = containingNamespace + ":" +
+                       string.Join("+", containingTypes.Select(static type => type.MetadataName));
+        using var sha256 = SHA256.Create();
+        var hash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(identity)))
+            .Replace("-", "").Substring(0, 20);
+        var legacyHint = LegacyHint(mapperType);
+        var hintName = legacyHint.Insert(legacyHint.Length - ".g.cs".Length, "_" + hash);
         return new GeneratedMapperFile(hintName, output.ToString());
+    }
+
+    private static string LegacyHint(INamedTypeSymbol type)
+    {
+        var ns = type.ContainingNamespace.IsGlobalNamespace ? "" : type.ContainingNamespace.ToDisplayString();
+        return (ns.Length == 0 ? "" : ns.Replace('.', '_') + "_") +
+               type.Name + "_GeneratedMappings.g.cs";
     }
 
     private static List<INamedTypeSymbol> GetContainingTypes(INamedTypeSymbol mapperType)

@@ -1,4 +1,5 @@
 using AlephMapper;
+using static System.Math;
 
 public class Source
 {
@@ -11,6 +12,39 @@ public class Destination { public string Name { get; set; } = ""; public int Num
 public class OtherDestination { public string Name { get; set; } = ""; public int Number { get; set; } }
 public class Animal { public int Score { get; set; } }
 public class Dog : Animal { }
+
+// Keep all active diagnostic IDs exercised by a real package consumer.
+public static class InvalidMapper
+{
+    [Projectable] public static int Map(int value) => value;
+}
+
+public static partial class ConflictingMapper
+{
+    [Projectable] public static int Map(int value) => value;
+    public static int MapExpression() => 0;
+}
+
+public static partial class StaticImportMapper
+{
+    [Projectable] public static int Absolute(int value) => Abs(value);
+}
+
+public partial class FirstContainer
+{
+    public static partial class Mapper
+    {
+        [Projectable] public static int Map(int value) => value + 1;
+    }
+}
+
+public partial class SecondContainer
+{
+    public static partial class Mapper
+    {
+        [Projectable] public static int Map(int value) => value + 2;
+    }
+}
 
 public static partial class Mapper
 {
@@ -36,6 +70,14 @@ public static partial class Mapper
 }
 
 #if EXTENSION_MEMBERS
+public static partial class UnsupportedExtensionMapper
+{
+    extension(int value)
+    {
+        [Projectable] public int BlockGetter { get { return value; } }
+    }
+}
+
 public static partial class Extensions
 {
     extension(int value)
@@ -106,6 +148,9 @@ public static class Program
             Equal(Mapper.TypeRankExpression().Compile()(value), Mapper.TypeRank(value));
         foreach (var values in new int[]?[] { null, [], [1], [1, 3], [1, 2, 3], [-1, 3] })
             Equal(Mapper.SliceExpression().Compile()(values), Mapper.Slice(values));
+        Equal(StaticImportMapper.AbsoluteExpression().Compile()(-7), StaticImportMapper.Absolute(-7));
+        Equal(FirstContainer.Mapper.MapExpression().Compile()(4), 5);
+        Equal(SecondContainer.Mapper.MapExpression().Compile()(4), 6);
         Console.WriteLine("Package compatibility runtime checks passed.");
     }
 }

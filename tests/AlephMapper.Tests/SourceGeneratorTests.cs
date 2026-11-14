@@ -8,11 +8,16 @@ using AlephMapper.Generation;
 using AlephMapper.Diagnostics;
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AlephMapper.Tests;
 
 public class SourceGeneratorTests
 {
+    private static readonly Regex GeneratedCodeVersionPattern = new(
+        @"(?<=\[global::System\.CodeDom\.Compiler\.GeneratedCode\(""AlephMapper"", "")[^""]+(?=""\)\])",
+        RegexOptions.Compiled);
+
     private readonly CSharpParseOptions _parseOptions;
     private readonly CSharpGeneratorDriver _driver;
 
@@ -29,7 +34,7 @@ public class SourceGeneratorTests
         var tree = CSharpSyntaxTree.ParseText(
             "public class Unrelated { public int Add(int left, int right) => left + right; }",
             _parseOptions);
-        var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        var method = (await tree.GetRootAsync()).DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
 
         await Assert.That(MappingMethodCandidate.IsCandidate(method, CancellationToken.None)).IsFalse();
     }
@@ -179,7 +184,7 @@ public class SourceGeneratorTests
             .Where(tree => !compilation.SyntaxTrees.Contains(tree))
             .ToHashSet();
         var mapperSource = driver.GetRunResult().Results.Single().GeneratedSources
-            .Single(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(generated => GeneratedHintName.Matches(generated.HintName, "Mapper"))
             .SourceText.ToString();
 
         await Assert.That(compilation.GetDiagnostics().Where(diagnostic =>
@@ -234,7 +239,7 @@ public class SourceGeneratorTests
             .Where(tree => !compilation.SyntaxTrees.Contains(tree))
             .ToHashSet();
         var mapperSource = driver.GetRunResult().Results.Single().GeneratedSources
-            .Single(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(generated => GeneratedHintName.Matches(generated.HintName, "Mapper"))
             .SourceText.ToString();
 
         await Assert.That(mapperSource).Contains("(global::NullableRewriteFixture.AddressDto?)null");
@@ -250,7 +255,7 @@ public class SourceGeneratorTests
         var tree = CSharpSyntaxTree.ParseText(
             "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
             _parseOptions);
-        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+        var methods = (await tree.GetRootAsync()).DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
 
         await Assert.That(methods).Count().IsEqualTo(2);
         await Assert.That(MappingMethodCandidate.IsCandidate(methods.Single(method => method.Identifier.ValueText == "Helper"), CancellationToken.None)).IsTrue();
@@ -296,7 +301,7 @@ public class SourceGeneratorTests
 
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
         var generated = driver.GetRunResult().Results.Single().GeneratedSources
-            .Single(result => result.HintName.EndsWith("PersonMapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(result => GeneratedHintName.Matches(result.HintName, "PersonMapper"))
             .SourceText
             .ToString();
 
@@ -345,7 +350,7 @@ public class SourceGeneratorTests
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generatorResult.Exception).IsNull();
         await Assert.That(generatorResult.GeneratedSources
-            .Count(source => source.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))).IsEqualTo(1);
+            .Count(source => GeneratedHintName.Matches(source.HintName, "Mapper"))).IsEqualTo(1);
     }
 
     [Test]
@@ -423,7 +428,7 @@ public class SourceGeneratorTests
 
         var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
         var generated = driver.GetRunResult().Results.Single().GeneratedSources
-            .Single(result => result.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(result => GeneratedHintName.Matches(result.HintName, "Mapper"))
             .SourceText
             .ToString();
 
@@ -535,7 +540,7 @@ public class SourceGeneratorTests
         await Assert.That(diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.GeneratedSources
-            .Count(generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal)))
+            .Count(generated => GeneratedHintName.Matches(generated.HintName, "Mapper")))
             .IsEqualTo(1);
     }
 
@@ -624,7 +629,7 @@ public class SourceGeneratorTests
         var driver = CreateTrackingDriver().RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
         var initialResult = driver.GetRunResult().Results.Single();
         var generatedSource = initialResult.GeneratedSources
-            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(static generated => GeneratedHintName.Matches(generated.HintName, "Mapper"))
             .SourceText
             .ToString();
         var initialDiagnostic = initialResult.Diagnostics.Single(static diagnostic => diagnostic.Id == "AM0018");
@@ -634,7 +639,7 @@ public class SourceGeneratorTests
 
         var result = driver.GetRunResult().Results.Single();
         var updatedGeneratedSource = result.GeneratedSources
-            .Single(static generated => generated.HintName.EndsWith("Mapper_GeneratedMappings.g.cs", StringComparison.Ordinal))
+            .Single(static generated => GeneratedHintName.Matches(generated.HintName, "Mapper"))
             .SourceText
             .ToString();
         var sourceOutputs = result.TrackedSteps["AlephMapper.ProjectableSourceOutput"]
@@ -825,7 +830,7 @@ public class SourceGeneratorTests
         await Assert.That(outputCompilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(candidateOutputs).Count().IsEqualTo(10);
         await Assert.That(result.GeneratedSources
-            .Count(generated => generated.HintName.EndsWith("_GeneratedMappings.g.cs", StringComparison.Ordinal)))
+            .Count(generated => GeneratedHintName.IsMapperFile(generated.HintName)))
             .IsEqualTo(10);
     }
 
@@ -869,6 +874,29 @@ public class SourceGeneratorTests
             ];
 
         }
+    }
+
+    [Test]
+    public async Task GeneratedCodeAttributeUsesCurrentAssemblyVersion()
+    {
+        const string source = """
+            using AlephMapper;
+            public static partial class Mapper
+            {
+                [Projectable]
+                public static int Map(int value) => value;
+            }
+            """;
+        var compilation = CSharpCompilation.Create(
+            "VersionFixture",
+            [CSharpSyntaxTree.ParseText(source, _parseOptions)],
+            await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var result = _driver.RunGenerators(compilation).GetRunResult().Results.Single();
+        var generated = result.GeneratedSources.Single(item => GeneratedHintName.IsMapperFile(item.HintName));
+
+        await Assert.That(generated.SourceText.ToString()).Contains(
+            $"[global::System.CodeDom.Compiler.GeneratedCode(\"AlephMapper\", \"{VersionInfo.Version}\")]");
     }
 
     [Test]
@@ -931,7 +959,7 @@ public class SourceGeneratorTests
 
         var actualSources = result.GeneratedSources.ToDictionary(
             source => Path.GetFileName(source.HintName),
-            source => NormalizeLineEndings(source.SourceText.ToString()),
+            source => GeneratedCodeVersionPattern.Replace(NormalizeLineEndings(source.SourceText.ToString()), "<VERSION>"),
             StringComparer.Ordinal);
 
         var expectedFileContents = expectedFiles
@@ -1620,6 +1648,43 @@ public class SourceGeneratorTests
         await Assert.That(diagnostic.Location.SourceTree).IsEqualTo(syntaxTree);
         await Assert.That(lineSpan.Path).IsEqualTo("AdaptLocation.cs");
         await Assert.That(lineSpan.StartLinePosition.Line).IsEqualTo(7);
+    }
+
+    [Test]
+    public async Task Constructor_rebinding_diagnostic_points_to_template_creation_and_omits_adaptation()
+    {
+        var source = CreateAdaptationSource(
+            "[Adapt(typeof(Employee), typeof(EmployeeDto), Name = \"MapEmployee\")]",
+            "new PersonDto(source.Id)",
+            employeeMembers: "public string Name { get; set; } = string.Empty; public int Id { get; set; }",
+            personDtoConstructor: "public PersonDto(int id) { Name = id.ToString(); }",
+            employeeDtoConstructor: "public EmployeeDto() { }");
+        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);
+        var tree = CSharpSyntaxTree.ParseText(source, _parseOptions, "ConstructorTemplate.cs");
+        var compilation = CSharpCompilation.Create("ConstructorRebindingLocation", [tree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = _driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var result = driver.GetRunResult().Results.Single();
+        var diagnostic = result.Diagnostics.Single(item => item.Id == "AM0015");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Location.SourceTree).IsEqualTo(tree);
+        await Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length))
+            .IsEqualTo("new PersonDto(source.Id)");
+        await Assert.That(diagnostic.GetMessage()).Contains("EmployeeDto");
+        await Assert.That(diagnostic.GetMessage()).Contains("new PersonDto(source.Id)");
+        await Assert.That(diagnostic.Descriptor.HelpLinkUri).Contains("docs/diagnostics.md#am0015");
+        await Assert.That(result.GeneratedSources.Any(generated =>
+            generated.SourceText.ToString().Contains("MapEmployee(", StringComparison.Ordinal))).IsFalse();
+
+        var shiftedTree = tree.WithChangedText(SourceText.From("\n" + source));
+        var shiftedCompilation = compilation.ReplaceSyntaxTree(tree, shiftedTree);
+        driver = driver.RunGeneratorsAndUpdateCompilation(shiftedCompilation, out _, out _);
+        var shiftedDiagnostic = driver.GetRunResult().Results.Single().Diagnostics.Single(item => item.Id == "AM0015");
+        await Assert.That(shiftedDiagnostic.Location.SourceTree).IsEqualTo(shiftedTree);
+        await Assert.That(shiftedDiagnostic.Location.GetLineSpan().StartLinePosition.Line)
+            .IsEqualTo(diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1);
     }
 
     [Test]
