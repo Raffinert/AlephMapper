@@ -275,7 +275,9 @@ public class SemanticSafetyGeneratorTests
         var (result, compilation) = await GenerateAndCompile(source);
         await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        var generated = result.GeneratedSources.Single().SourceText.ToString();
+        var generated = result.GeneratedSources
+            .Single(source => GeneratedHintName.Matches(source.HintName, "Mapper"))
+            .SourceText.ToString();
         await Assert.That(generated).Contains("dest.Name = \"Int32\"");
     }
 
