@@ -171,6 +171,8 @@ public class GeneratedSourceIdentityTests
         var firstName = initial.GeneratedSources.Single(s => s.SourceText.ToString().Contains("MapExpression")).HintName;
         var nextName = updated.GeneratedSources.Single(s => s.SourceText.ToString().Contains("partial class First")).HintName;
         await Assert.That(nextName).IsEqualTo(firstName);
+        await Assert.That(nextName.StartsWith("Mapper_GeneratedMappings_", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(GeneratedHintName.Matches(nextName, "Mapper")).IsTrue();
         await Assert.That(updated.GeneratedSources.Select(s => s.HintName).Distinct(StringComparer.OrdinalIgnoreCase)).Count().IsEqualTo(updated.GeneratedSources.Length);
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }

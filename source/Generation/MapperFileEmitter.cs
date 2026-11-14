@@ -63,9 +63,10 @@ internal static class MapperFileEmitter
         var identity = containingNamespace + ":" +
                        string.Join("+", containingTypes.Select(static type => type.MetadataName));
         using var sha256 = SHA256.Create();
-        var prefix = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(identity)))
-            .Replace("-", "").Substring(0, 20) + "_";
-        var hintName = prefix + LegacyHint(mapperType);
+        var hash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(identity)))
+            .Replace("-", "").Substring(0, 20);
+        var legacyHint = LegacyHint(mapperType);
+        var hintName = legacyHint.Insert(legacyHint.Length - ".g.cs".Length, "_" + hash);
         return new GeneratedMapperFile(hintName, output.ToString());
     }
 
