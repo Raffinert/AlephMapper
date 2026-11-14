@@ -165,7 +165,7 @@ internal static class MapperSourceOutput
     {
         if (RoslynCompatibility.IsExtensionType(method.ContainingType))
         {
-            var symbol = method.AssociatedSymbol ?? (ISymbol)method;
+            var symbol = method.AssociatedSymbol ?? method;
             foreach (var reference in symbol.DeclaringSyntaxReferences)
             {
                 var syntax = reference.GetSyntax(cancellationToken);

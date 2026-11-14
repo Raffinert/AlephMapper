@@ -254,6 +254,8 @@ public static partial class SemanticRegressionMapper
     [Projectable]
     public static double CastSwitchArm(int value) => value switch
     {
+        // Keep the explicit cast: the test checks switch-arm cast preservation.
+        // ReSharper disable once RedundantCast
         3 => (double)HalfInt(value),
         _ => 0d
     };

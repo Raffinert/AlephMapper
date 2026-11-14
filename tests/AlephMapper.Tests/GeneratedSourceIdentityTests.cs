@@ -25,7 +25,7 @@ public class GeneratedSourceIdentityTests
             """;
 
         var (input, output, result) = await Generate(source);
-        var absCall = input.SyntaxTrees.Single().GetRoot().DescendantNodes()
+        var absCall = (await input.SyntaxTrees.Single().GetRootAsync()).DescendantNodes()
             .OfType<InvocationExpressionSyntax>().Single(call => call.Expression.ToString() == "Abs");
         await Assert.That(input.GetSemanticModel(input.SyntaxTrees.Single())
             .GetSymbolInfo(absCall).Symbol?.ToDisplayString()).IsEqualTo("System.Math.Abs(int)");

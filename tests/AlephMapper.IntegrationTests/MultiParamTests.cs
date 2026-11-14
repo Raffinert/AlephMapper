@@ -189,6 +189,7 @@ public class MultiParamIntegrationTests : ComprehensiveSqliteTestBase
         var result = MultiParamUpdatableMapper.MapToDto(employee, target);
 
         // Assert — mapped properties updated
+        await Assert.That(result).IsSameReferenceAs(target);
         await Assert.That(target.Id).IsEqualTo(50);
         await Assert.That(target.FullName).IsEqualTo("Preserve Test");
 

@@ -1,3 +1,4 @@
+using AlephMapper.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -15,12 +16,12 @@ public class ExtensionMemberTests
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var tree = compilation.SyntaxTrees.Single();
         var model = compilation.GetSemanticModel(tree);
-        var root = tree.GetRoot();
+        var root = await tree.GetRootAsync();
         var block = root.DescendantNodes().OfType<ExtensionBlockDeclarationSyntax>().Single();
-        var type = (INamedTypeSymbol)model.GetDeclaredSymbol(block)!;
+        var type = model.GetDeclaredSymbol(block)!;
         await Assert.That(type.IsExtension).IsTrue();
         await Assert.That(type.ExtensionParameter!.Name).IsEqualTo("order");
-        var method = (IMethodSymbol)model.GetDeclaredSymbol(block.Members.OfType<MethodDeclarationSyntax>().Single())!;
+        var method = model.GetDeclaredSymbol(block.Members.OfType<MethodDeclarationSyntax>().Single())!;
         await Assert.That(method.Parameters.Length).IsEqualTo(1);
         await Assert.That(method.Parameters[0].Name).IsEqualTo("factor");
         var access = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
@@ -100,8 +101,8 @@ public class ExtensionMemberTests
     [Test]
     public async Task AM0020_is_registered_for_unsupported_extension_members()
     {
-        await Assert.That(AlephMapper.Diagnostics.DiagnosticDescriptors.GetById("AM0020"))
-            .IsEqualTo(AlephMapper.Diagnostics.DiagnosticDescriptors.UnsupportedExtensionMember);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0020"))
+            .IsEqualTo(DiagnosticDescriptors.UnsupportedExtensionMember);
     }
 
     [Test]
@@ -151,7 +152,7 @@ public class ExtensionMemberTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, outputType));
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
         await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + global::Ext.Offset)");
     }
@@ -179,7 +180,7 @@ public class ExtensionMemberTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapExpression").ExpressionBody!.Expression;
         await Assert.That(expression.NormalizeWhitespace().ToFullString()).IsEqualTo("n => (n + ((int)(3)))");
         using var stream = new MemoryStream();
@@ -215,7 +216,7 @@ public class ExtensionMemberTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
-        var expressions = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var expressions = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().ToDictionary(m => m.Identifier.ValueText, m => m.ExpressionBody!.Expression);
         var expectedMap = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }");
         var expectedRead = SyntaxFactory.ParseExpression("source => new global::Dto { Amount = source.Amount }.Amount");
@@ -302,7 +303,7 @@ public class ExtensionMemberTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var generated = result.GeneratedSources.Single(s => GeneratedHintName.Matches(s.HintName, "Mapper"));
-        var expression = CSharpSyntaxTree.ParseText(generated.SourceText).GetRoot().DescendantNodes()
+        var expression = (await CSharpSyntaxTree.ParseText(generated.SourceText).GetRootAsync()).DescendantNodes()
             .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "MapReadOnlyExpression").ExpressionBody!.Expression;
         var expected = SyntaxFactory.ParseExpression(
             "source => new global::ReadOnlyDto { Amount = global::System.Math.Round(source.Amount, global::Precision.AmountDecimals) }");

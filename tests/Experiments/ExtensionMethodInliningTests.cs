@@ -91,6 +91,8 @@ public class ExtensionMethodInliningTests
         await Assert.That(readable).Contains("address.Street");
         await Assert.That(readable).Contains("address.City");
         await Assert.That(readable).Contains("address.PostalCode");
+        await Assert.That(readable1).Contains("new ExtensionTestAddressDto");
+        await Assert.That(readable1).DoesNotContain(".ToDto()");
 
         // Should not contain the extension method call
         await Assert.That(readable).DoesNotContain("?.ToDto()");

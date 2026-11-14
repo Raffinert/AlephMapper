@@ -34,7 +34,7 @@ public class SourceGeneratorTests
         var tree = CSharpSyntaxTree.ParseText(
             "public class Unrelated { public int Add(int left, int right) => left + right; }",
             _parseOptions);
-        var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        var method = (await tree.GetRootAsync()).DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
 
         await Assert.That(MappingMethodCandidate.IsCandidate(method, CancellationToken.None)).IsFalse();
     }
@@ -255,7 +255,7 @@ public class SourceGeneratorTests
         var tree = CSharpSyntaxTree.ParseText(
             "using AlephMapper; public static partial class Mapper { [Projectable] public static int Map(int value) => Helper(value); public static int Helper(int value) => value; }",
             _parseOptions);
-        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+        var methods = (await tree.GetRootAsync()).DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
 
         await Assert.That(methods).Count().IsEqualTo(2);
         await Assert.That(MappingMethodCandidate.IsCandidate(methods.Single(method => method.Identifier.ValueText == "Helper"), CancellationToken.None)).IsTrue();
