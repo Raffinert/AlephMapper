@@ -363,15 +363,15 @@ public class SemanticSafetyGeneratorTests
         var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(
             LanguageNames.CSharp, CancellationToken.None);
         var compilation = CSharpCompilation.Create(
-            "UpdateOnlySafety",
-            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            "SemanticSafety",
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "SemanticSafety.cs")],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var driver = CSharpGeneratorDriver.Create(
             generators: [new AlephSourceGenerator().AsSourceGenerator()],
             parseOptions: parseOptions);
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
-        return (driver.RunGenerators(compilation).GetRunResult().Results.Single(), output);
+        driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+        return (driver.GetRunResult().Results.Single(), output);
     }
 
     [Test]
@@ -384,19 +384,6 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(DiagnosticDescriptors.GetById("AM0023")).IsNull();
     }
 
-    private static async Task<GeneratorRunResult> Generate(string source)
-    {
-        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
-        var references = await ReferenceAssemblies.Net.Net90.ResolveAsync(
-            LanguageNames.CSharp, CancellationToken.None);
-        var compilation = CSharpCompilation.Create(
-            "SemanticSafety",
-            [CSharpSyntaxTree.ParseText(source, parseOptions, "SemanticSafety.cs")],
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        var driver = CSharpGeneratorDriver.Create(
-            generators: [new AlephSourceGenerator().AsSourceGenerator()],
-            parseOptions: parseOptions);
-        return driver.RunGenerators(compilation).GetRunResult().Results.Single();
-    }
+    private static async Task<GeneratorRunResult> Generate(string source) =>
+        (await GenerateAndCompile(source)).Result;
 }

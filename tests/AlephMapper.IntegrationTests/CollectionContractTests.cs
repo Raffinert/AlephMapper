@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
@@ -80,14 +79,10 @@ public class CollectionContractTests
     [Test]
     public async Task Replacing_tracked_relationship_removes_old_child_and_inserts_new_child()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection).Options;
+        await using var database = await SqliteTestDatabase.CreateAsync();
 
-        await using (var setup = new ComprehensiveTestDbContext(options))
+        await using (var setup = database.CreateContext())
         {
-            await setup.Database.EnsureCreatedAsync();
             var employee = await setup.Employees.SingleAsync(item => item.Id == 1);
             employee.Addresses.Add(new EmployeeAddress
             {
@@ -96,7 +91,7 @@ public class CollectionContractTests
             await setup.SaveChangesAsync();
         }
 
-        await using (var context = new ComprehensiveTestDbContext(options))
+        await using (var context = database.CreateContext())
         {
             var employee = await context.Employees.Include(item => item.Addresses)
                 .SingleAsync(item => item.Id == 1);
@@ -117,7 +112,7 @@ public class CollectionContractTests
             await context.SaveChangesAsync();
         }
 
-        await using (var verify = new ComprehensiveTestDbContext(options))
+        await using (var verify = database.CreateContext())
         {
             var reloaded = await verify.Employees.Include(item => item.Addresses)
                 .SingleAsync(item => item.Id == 1);

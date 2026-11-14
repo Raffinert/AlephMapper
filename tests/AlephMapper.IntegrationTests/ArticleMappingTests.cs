@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
@@ -8,15 +7,8 @@ public class ArticleMappingTests
     [Test]
     public async Task Mapping_expression_should_inline_helpers_and_project_with_ef_core()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new ComprehensiveTestDbContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await SqliteTestDatabase.CreateAsync();
+        var context = database.Context;
 
         context.ArticleCustomers.AddRange(
             new ArticleCustomer { Id = 1, FirstName = "Ada", LastName = "Lovelace" },

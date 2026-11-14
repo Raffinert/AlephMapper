@@ -1,35 +1,10 @@
 using AgileObjects.ReadableExpressions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
 
-public class MultiParamIntegrationTests
+public class MultiParamIntegrationTests : ComprehensiveSqliteTestBase
 {
-    private SqliteConnection _connection = null!;
-    private ComprehensiveTestDbContext _context = null!;
-
-    [Before(Test)]
-    public async Task Setup()
-    {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        await _connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _context = new ComprehensiveTestDbContext(options);
-        await _context.Database.EnsureCreatedAsync();
-    }
-
-    [After(Test)]
-    public async Task Cleanup()
-    {
-        await _context.DisposeAsync();
-        await _connection.DisposeAsync();
-    }
-
     #region Multi-Param Projectable Tests
 
     [Test]

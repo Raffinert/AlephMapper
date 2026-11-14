@@ -1,31 +1,9 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
 
-public class SqlTranslationContractTests
+public class SqlTranslationContractTests : ComprehensiveSqliteTestBase
 {
-    private SqliteConnection _connection = null!;
-    private ComprehensiveTestDbContext _context = null!;
-
-    [Before(Test)]
-    public async Task Setup()
-    {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        await _connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(_connection).Options;
-        _context = new ComprehensiveTestDbContext(options);
-        await _context.Database.EnsureCreatedAsync();
-    }
-
-    [After(Test)]
-    public async Task Cleanup()
-    {
-        await _context.DisposeAsync();
-        await _connection.DisposeAsync();
-    }
-
     [Test]
     public async Task Generated_scalar_computation_is_in_SQL_not_only_client_projection()
     {

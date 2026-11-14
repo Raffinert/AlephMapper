@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlephMapper.IntegrationTests;
@@ -20,14 +19,8 @@ public class SemanticRegressionTests
     [Test]
     public async Task Relational_and_logical_patterns_translate_in_SQLite()
     {
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<ComprehensiveTestDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        await using var context = new ComprehensiveTestDbContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await SqliteTestDatabase.CreateAsync();
+        var context = database.Context;
 
         var results = await context.Employees
             .OrderBy(e => e.Id)
