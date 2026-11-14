@@ -20,12 +20,8 @@ public class SqlTranslationContractTests
         var generatedSql = generated.ToQueryString();
         var controlSql = control.ToQueryString();
 
-        await Assert.That(generatedSql.Contains("||", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generatedSql.Contains("FirstName", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generatedSql.Contains("LastName", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(controlSql.Contains("||", StringComparison.Ordinal)).IsFalse();
-        await Assert.That(controlSql.Contains("FirstName", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(controlSql.Contains("LastName", StringComparison.Ordinal)).IsTrue();
+        await SqlSnapshot.AssertMatches("scalar-generated", generatedSql);
+        await SqlSnapshot.AssertMatches("scalar-control", controlSql);
         await Assert.That(await generated.OrderBy(name => name).FirstAsync()).IsEqualTo("Alice Brown");
     }
 
@@ -41,12 +37,8 @@ public class SqlTranslationContractTests
 
         var query = context.Employees.Where(SqlContractMapper.ActiveJohnExpression());
         var sql = query.ToQueryString();
-        var where = sql[sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase)..];
 
-        await Assert.That(sql.Contains("WHERE", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        await Assert.That(where.Contains("IsActive", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(where.Contains("FirstName", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(where.Contains("John", StringComparison.Ordinal)).IsTrue();
+        await SqlSnapshot.AssertMatches("predicate", sql);
         await Assert.That((await query.ToListAsync()).Select(employee => employee.Id).Single()).IsEqualTo(1);
     }
 
@@ -65,8 +57,7 @@ public class SqlTranslationContractTests
         var sql = query.ToQueryString();
         var values = await query.ToListAsync();
 
-        await Assert.That(sql.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        await Assert.That(sql.Contains("COALESCE", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        await SqlSnapshot.AssertMatches("navigation", sql);
         await Assert.That(values[0]).IsEqualTo("Engineering");
         await Assert.That(values[3]).IsEqualTo("Unassigned");
     }

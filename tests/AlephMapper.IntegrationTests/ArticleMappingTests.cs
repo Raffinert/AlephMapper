@@ -47,11 +47,7 @@ public class ArticleMappingTests
             .OrderBy(order => order.Id)
             .Select(ArticleOrderMapper.MapExpression());
         var sql = projection.ToQueryString();
-        await Assert.That(sql.Contains("SUM", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        await Assert.That(sql.Contains("JOIN", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        await Assert.That(sql.Contains("Price", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(sql.Contains("Quantity", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(sql.Contains("ef_multiply", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        await SqlSnapshot.AssertMatches("article", sql);
 
         var projected = await projection.ToListAsync();
 
