@@ -15,16 +15,19 @@ public class ExtensionMemberTests
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
         var tree = compilation.SyntaxTrees.Single();
         var model = compilation.GetSemanticModel(tree);
-        var block = tree.GetRoot().DescendantNodes().OfType<ExtensionBlockDeclarationSyntax>().Single();
+        var root = tree.GetRoot();
+        var block = root.DescendantNodes().OfType<ExtensionBlockDeclarationSyntax>().Single();
         var type = (INamedTypeSymbol)model.GetDeclaredSymbol(block)!;
         await Assert.That(type.IsExtension).IsTrue();
         await Assert.That(type.ExtensionParameter!.Name).IsEqualTo("order");
         var method = (IMethodSymbol)model.GetDeclaredSymbol(block.Members.OfType<MethodDeclarationSyntax>().Single())!;
         await Assert.That(method.Parameters.Length).IsEqualTo(1);
         await Assert.That(method.Parameters[0].Name).IsEqualTo("factor");
-        var access = tree.GetRoot().DescendantNodes().OfType<MemberAccessExpressionSyntax>().First(n => n.Name.Identifier.ValueText == "DoubleTotal");
-        await Assert.That(SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(access).Symbol,
-            model.GetDeclaredSymbol(block.Members.OfType<PropertyDeclarationSyntax>().Single()))).IsTrue();
+        var access = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+            .First(node => node.Name.Identifier.ValueText == "DoubleTotal");
+        var declaredProperty = model.GetDeclaredSymbol(block.Members.OfType<PropertyDeclarationSyntax>().Single());
+        await Assert.That(model.GetSymbolInfo(access).Symbol)
+            .IsEqualTo(declaredProperty, SymbolEqualityComparer.Default);
     }
 
     [Test]
