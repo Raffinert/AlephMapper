@@ -141,7 +141,7 @@ partial class ConditionalPatternMapper
         }
         else
         {
-            throw new global::System.ArgumentNullException(nameof(source.Name));
+            throw new global::System.ArgumentNullException("Name");
         }
         return dest;
     }
@@ -160,7 +160,7 @@ partial class ConditionalPatternMapper
         dest.Name = source.Name;
         if (source.Name == null)
         {
-            throw new global::System.ArgumentNullException(nameof(source.Name));
+            throw new global::System.ArgumentNullException("Name");
         }
         else
         {

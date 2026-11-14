@@ -256,6 +256,30 @@ public class SemanticSafetyGeneratorTests
     }
 
     [Test]
+    public async Task Updatable_nameof_type_preserves_original_constant()
+    {
+        const string source = """
+            using System;
+            using AlephMapper;
+
+            public sealed class Source { }
+            public sealed class Destination { public string Name { get; set; } = ""; }
+
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Destination Map(Source source) => new() { Name = nameof(Int32) };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+        await Assert.That(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = result.GeneratedSources.Single().SourceText.ToString();
+        await Assert.That(generated).Contains("dest.Name = \"Int32\"");
+    }
+
+    [Test]
     [Arguments("value switch { var x when x == null => 1, _ => 0 }")]
     [Arguments("value switch { Node => 1, _ => 0 }")]
     [Arguments("value switch { { Child: Node c } when c.Score > 0 => c.Score, _ => 0 }")]
