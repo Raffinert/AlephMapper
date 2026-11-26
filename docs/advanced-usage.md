@@ -129,7 +129,7 @@ Supported C# `switch` patterns are lowered to conditional expressions. The input
 
 Unsupported or non-exhaustive switch patterns report `AM0019`. Check the [switch-pattern support matrix](switch-parity-matrix.md) for precise coverage. The resulting tree must still be translatable by the selected LINQ provider.
 
-For tested computed projections, predicates, null navigation, and nested mapping on EF Core SQLite 10.0.14, see the [SQL translation evidence](sqlite-translation-evidence.md). This evidence is scoped to those shapes and provider version.
+For tested computed projections, predicates, null navigation, and nested mapping on EF Core SQLite 11.0.0, see the [SQL translation evidence](sqlite-translation-evidence.md). This evidence is scoped to those shapes and provider version.
 
 ## Inspect generated code
 

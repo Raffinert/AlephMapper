@@ -25,7 +25,7 @@ jobs:
         with:
           dotnet-version: |
             8.0.x
-            10.0.400
+            11.0.100
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -80,7 +80,7 @@ jobs:
           cat > artifacts/package-smoke/PackageSmoke.csproj <<EOF
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
-              <TargetFramework>net10.0</TargetFramework>
+              <TargetFramework>net11.0</TargetFramework>
               <ImplicitUsings>enable</ImplicitUsings>
               <Nullable>enable</Nullable>
             </PropertyGroup>

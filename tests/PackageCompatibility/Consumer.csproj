@@ -8,6 +8,9 @@
     <UseSharedCompilation>false</UseSharedCompilation>
     <WarningsAsErrors>$(WarningsAsErrors);CS9057;CS8032;CS8784;CS8785;AD0001</WarningsAsErrors>
     <DefineConstants Condition="'$(ExpectedRoslynBand)' == '5.0'">$(DefineConstants);EXTENSION_MEMBERS</DefineConstants>
+    <!-- The SDK's inbox .NET analyzers (SDK 11: Roslyn 4.14+) cannot load in older pinned compilers
+         and would fail with CS9057. They are not under test here; AlephMapper's analyzer still is. -->
+    <EnableNETAnalyzers Condition="'$(CompatibilityCompilerVersion)' != ''">false</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AlephMapper" Version="$(PackageVersionUnderTest)" />
