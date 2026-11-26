@@ -1,6 +1,6 @@
 # Sample application
 
-This console application demonstrates handwritten expression-bodied mappings and AlephMapper-generated projection, update, and adaptation companions over in-memory models. It targets `net10.0` and uses the SDK selected by [`global.json`](../../global.json) (10.0.400 with `latestFeature` roll-forward). The project does not set a separate C# language version; the installed SDK supplies its default. No database or external service is required.
+This console application demonstrates handwritten expression-bodied mappings and AlephMapper-generated projection, update, and adaptation companions over in-memory models. It targets `net11.0` and uses the SDK selected by [`global.json`](../../global.json) (11.0.100 with `latestFeature` roll-forward). The project does not set a separate C# language version; the installed SDK supplies its default. No database or external service is required.
 
 From the repository root:
 

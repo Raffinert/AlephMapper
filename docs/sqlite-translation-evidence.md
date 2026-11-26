@@ -1,6 +1,6 @@
 # SQLite translation evidence
 
-The [integration project](../tests/AlephMapper.IntegrationTests/AlephMapper.IntegrationTests.csproj) pins `Microsoft.EntityFrameworkCore.Sqlite` to **10.0.14** and runs against an in-memory SQLite database. Its [SQL contract tests](../tests/AlephMapper.IntegrationTests/SqlTranslationContractTests.cs) use `ToQueryString()` and execute each query. These checks establish the listed shapes for this provider/version; they do not certify every projection or another provider.
+The [integration project](../tests/AlephMapper.IntegrationTests/AlephMapper.IntegrationTests.csproj) pins `Microsoft.EntityFrameworkCore.Sqlite` to **11.0.0** and runs against an in-memory SQLite database. Its [SQL contract tests](../tests/AlephMapper.IntegrationTests/SqlTranslationContractTests.cs) use `ToQueryString()` and execute each query. These checks establish the listed shapes for this provider/version; they do not certify every projection or another provider.
 
 | Generated expression | SQL evidence | Runtime evidence |
 | --- | --- | --- |

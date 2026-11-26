@@ -2,7 +2,7 @@
 
 ## Prerequisites and local build
 
-Use the .NET SDK selected by [`global.json`](global.json) (`10.0.400` with `latestFeature` roll-forward). Python 3 is needed for the compiler/package verifier and documentation link check. Restore may download NuGet dependencies. From the repository root:
+Use the .NET SDK selected by [`global.json`](global.json) (`11.0.100` with `latestFeature` roll-forward). Python 3 is needed for the compiler/package verifier and documentation link check. Restore may download NuGet dependencies. From the repository root:
 
 ```powershell
 dotnet restore AlephMapper.slnx
