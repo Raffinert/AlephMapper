@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -12,6 +13,7 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
+SDK_INBOX_ANALYZERS = {"microsoft.codeanalysis.netanalyzers.dll", "microsoft.codeanalysis.csharp.netanalyzers.dll"}
 
 
 def run(args, cwd=ROOT):
@@ -102,6 +104,13 @@ def main():
         log = run([dotnet, "build", work / "Consumer.csproj", "-c", "Release", "--no-restore", *properties])
         if compiler != "sdk" and (not stamp.exists() or stamp.read_text().strip() != compiler):
             raise RuntimeError("The requested compiler wrapper was not executed")
+        # A pinned older compiler may be unable to load the SDK's inbox .NET analyzers (CS9057 is a
+        # warning for those legs). That also happens without AlephMapper; any other assembly is a failure.
+        mismatched = {re.split(r"[\\/]", re.sub(r"\s+", "", path))[-1].lower()
+                      for path in re.findall(r"CS9057: The analyzer assembly '([^']+)'", log)}
+        unexpected = mismatched - SDK_INBOX_ANALYZERS
+        if unexpected:
+            raise RuntimeError(f"Analyzer assemblies could not load in compiler {compiler}: {sorted(unexpected)}")
         expected_diagnostics = {"AM0019", "AM0021", "AM0022"}
         if modern:
             expected_diagnostics.add("AM0020")

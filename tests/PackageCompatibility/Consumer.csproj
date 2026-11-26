@@ -6,11 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseSharedCompilation>false</UseSharedCompilation>
-    <WarningsAsErrors>$(WarningsAsErrors);CS9057;CS8032;CS8784;CS8785;AD0001</WarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);CS8032;CS8784;CS8785;AD0001</WarningsAsErrors>
+    <!-- With a pinned older compiler, the SDK's own inbox .NET analyzers (SDK 11: built against Roslyn 4.14)
+         also report CS9057, exactly as in any project without AlephMapper. The analyzers stay enabled, and
+         verify_roslyn_compatibility.py fails on any CS9057 that names an assembly other than those. -->
+    <WarningsAsErrors Condition="'$(CompatibilityCompilerVersion)' == ''">$(WarningsAsErrors);CS9057</WarningsAsErrors>
     <DefineConstants Condition="'$(ExpectedRoslynBand)' == '5.0'">$(DefineConstants);EXTENSION_MEMBERS</DefineConstants>
-    <!-- The SDK's inbox .NET analyzers (SDK 11: Roslyn 4.14+) cannot load in older pinned compilers
-         and would fail with CS9057. They are not under test here; AlephMapper's analyzer still is. -->
-    <EnableNETAnalyzers Condition="'$(CompatibilityCompilerVersion)' != ''">false</EnableNETAnalyzers>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AlephMapper" Version="$(PackageVersionUnderTest)" />
