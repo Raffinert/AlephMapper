@@ -2,7 +2,7 @@
 
 ## Verified scope
 
-The source tree declares version `0.8.3` in [`Analyzer.Shared.props`](../source/Analyzer.Shared.props). This is a source/package-build version claim, not a claim that 0.8.3 has been published to NuGet. The [installation guide](installation-and-compatibility.md) shows a `0.8.3` reference for a build of this source; check the [NuGet package page](https://www.nuget.org/packages/AlephMapper) for published versions before installing from that feed.
+The source tree declares version `0.9.0` in [`Analyzer.Shared.props`](../source/Analyzer.Shared.props). This is a source/package-build version claim, not a claim that 0.9.0 has been published to NuGet. The [installation guide](installation-and-compatibility.md) shows a `0.9.0` reference for a build of this source; check the [NuGet package page](https://www.nuget.org/packages/AlephMapper) for published versions before installing from that feed.
 
 The package carries separate Roslyn 4.8 and 5.0 analyzer assets. The repository's compiler verifier exercises Roslyn 4.8.0, 4.14.0, 5.0.0, and the installed SDK compiler against a built package. C# 14 extension members require a C# 14 compiler and the Roslyn 5.0 asset. SQLite behavior has integration tests for selected projections; other EF Core providers and every expression shape are not certified by the suite. See [compatibility](installation-and-compatibility.md) and the [extension matrix](extension-members-compatibility-matrix.md).
 
@@ -17,7 +17,7 @@ The package carries separate Roslyn 4.8 and 5.0 analyzer assets. The repository'
 
 The current [Build NuGet package workflow](../.github/workflows/build-nuget.yml) restores, builds, tests, packs, runs compiler compatibility and package-consumption checks, and uploads artifacts. It does **not** publish to NuGet. No separate public release/publishing workflow is recorded here.
 
-### Artifact inspection for this source build
+### Artifact inspection for the 0.8.3 source build
 
 An isolated local `0.8.3` pack produced one `.nupkg` with the README and both `roslyn4.8`/`roslyn5.0` analyzer DLLs. Its `.nuspec` contains the MIT license, improved description/tags, repository URL, and checkout commit. Both Release builds produced portable PDBs containing Source Link data for GitHub source paths, but this pack produced no `.snupkg` and included no PDB in the `.nupkg`. Symbol distribution and exact artifact reproducibility have not been verified. The local package was built with uncommitted documentation/metadata edits, so its repository commit does not identify every byte of this working-tree build; inspect the committed CI artifact before any release claim.
 
