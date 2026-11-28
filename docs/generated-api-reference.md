@@ -68,7 +68,7 @@ public static PersonDto UpdateTemplate(Person person) => new()
 ```
 <!-- /docs-example -->
 
-The generated signature is `public static PersonDto UpdateTemplate(Person person, PersonDto dest)`. It returns the destination reference. A null source returns `dest` without assignments. A null destination is created before assignments. Update generation for non-nullable value-type destinations is skipped with [AM0001](diagnostics.md#am0001). Collections are skipped by default; `CollectionPropertiesPolicy.Update` opts into assignment of mapped collection values. Replacing a tracked collection can affect relationships, so verify that behavior in the consuming EF Core model. See [advanced usage](advanced-usage.md#updating-existing-objects).
+The generated signature is `public static PersonDto UpdateTemplate(Person person, PersonDto dest)`. It returns the destination reference. A null source returns `dest` without assignments. A null destination is created before assignments. Update generation for non-nullable value-type destinations is skipped with [AM0001](diagnostics.md#am0001), and for root creations with construction-only state (constructor arguments, `init`-only members) with [AM0023](diagnostics.md#am0023). Collections are skipped by default; `CollectionPropertiesPolicy.Update` opts into assignment of mapped collection values. Replacing a tracked collection can affect relationships, so verify that behavior in the consuming EF Core model. See [advanced usage](advanced-usage.md#updating-existing-objects).
 
 ## Explicit adaptation
 

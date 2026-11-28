@@ -109,6 +109,16 @@ public static partial class PersonMapper
 PersonMapper.Map(request, dest: person);
 ```
 
+How the initializer is applied to an existing destination:
+
+- **Nested objects** created with an object initializer are updated member by member; the existing nested instance is kept and is created first when it is `null`. Members are resolved on the declared member type, including inherited members.
+- **Nested objects that cannot be updated in place** — created with constructor arguments, setting `init`-only members, or without an object initializer — are replaced with the mapped instance, so their values match the regular mapping.
+- **Value-type members** (structs and `Nullable<T>`) are assigned as a whole, because a struct property returns a copy.
+- **Types with `required` members** (or without an accessible parameterless constructor) are created with the mapping's own expression when missing and updated member by member otherwise.
+- **Nested initializers without `new`** (`Address = { City = source.City }`) update the instance the destination already holds, as in C#.
+- **A root conditional** such as `source.IsActive ? new() { ... } : null` (also `null!` or `default`) becomes a guard: when the mapping yields no value, the existing destination is returned unchanged.
+- The root creation itself must be updatable in place; otherwise the overload is omitted with [AM0023](diagnostics.md#am0023).
+
 Collection properties are skipped by default. Updating them is opt-in:
 
 ```csharp

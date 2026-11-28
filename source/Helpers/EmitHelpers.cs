@@ -1,4 +1,6 @@
-﻿using AlephMapper.CodeGenerators;
+﻿#nullable enable
+
+using AlephMapper.CodeGenerators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
@@ -7,6 +9,12 @@ namespace AlephMapper.Helpers;
 
 internal static class EmitHelpers
 {
+    /// <summary>
+    /// Builds the statements of an update companion. Returns <c>false</c> when no update can be generated;
+    /// <paramref name="failureReason"/> is set when the mapping shape is recognized but cannot be applied
+    /// to an existing destination (and the caller should report it), and is <c>null</c> for shapes that are
+    /// simply not update candidates.
+    /// </summary>
     public static bool TryBuildUpdateAssignmentsWithInlining(
         ExpressionSyntax inlinedBody,
         string destPrefix,
@@ -15,53 +23,33 @@ internal static class EmitHelpers
         IReadOnlyList<string> sourceParameterNames,
         CollectionPropertiesPolicy collectionPolicy,
         NullablePolicy nullablePolicy,
-        List<string> lines)
+        List<string> lines,
+        out string? failureReason)
     {
-        // Seed type collection with the destination (return) type to reliably resolve
-        // object-initializer property types without depending on fragile LHS binding
-        var propertyInfoCollector = new PropertyTypeInfoCollector(destinationType, destPrefix);
-
-        if (collectionPolicy == CollectionPropertiesPolicy.Skip)
+        var processor = new UpdatableMethodGenerator(sourceParameterNames, collectionPolicy, nullablePolicy);
+        if (!processor.TryProcessRoot(inlinedBody, destPrefix, destinationType, out var processedLines))
         {
-            propertyInfoCollector.Visit(inlinedBody);
+            failureReason = processor.FailureReason;
+            return false;
         }
 
-        var typeContext = propertyInfoCollector.TypeContext;
-
-        var processor = new UpdatableMethodGenerator(destPrefix, typeContext, sourceParameterNames, nullablePolicy);
-        List<string> processedLines;
-
-        var srcName = sourceParameterNames[0];
-
-        // Build null check conditions
-        switch (inlinedBody)
-        {
-            case ObjectCreationExpressionSyntax oce:
-                if (oce.Initializer?.Expressions == null || oce.Initializer.Expressions.Count == 0)
-                    return false;
-
-                processedLines = processor.ProcessObjectCreation(oce);
-                break;
-
-            case ConditionalExpressionSyntax conditional:
-                // Handle conditional expressions like: condition ? new Type { ... } : null
-                // or: condition ? null : new Type { ... }
-                processedLines = processor.ProcessRootConditionalExpression(conditional, destPrefix);
-                break;
-
-            default:
-                return false;
-        }
+        failureReason = null;
 
         if (SymbolHelpers.CanBeNull(sourceType))
         {
-            lines.Add($"if ({srcName} == null) return dest;");
+            var sourceGuard = $"if ({sourceParameterNames[0]} == null) return {destPrefix};";
+            lines.Add(sourceGuard);
+
+            // A root `source == null ? null : new T { ... }` lowers to the very same guard.
+            if (processedLines.Count > 0 && processedLines[0] == sourceGuard)
+            {
+                processedLines.RemoveAt(0);
+            }
         }
 
         lines.AddRange(processedLines);
+        lines.Add($"return {destPrefix};");
 
-        lines.Add("return dest;");
-
-        return lines.Count > 0;
+        return true;
     }
 }

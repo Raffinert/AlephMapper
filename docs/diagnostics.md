@@ -90,4 +90,8 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 **Generated companion conflicts with another member · Warning.** A requested classic projection/update signature already exists, such as a handwritten `MapExpression()` beside `[Projectable] Map(...)`. Rename the existing method or mapping so each signature is unique. The conflicting companion is omitted.
 
+## AM0023
+
+**Mapping cannot update an existing destination in place · Warning.** The update overload would have to set state that only exists at construction time, or replay an initializer that is not idempotent on an existing instance. The message names the reason: constructor arguments on the root creation (`new Target(id) { ... }`), an assigned `init`-only or read-only root member, or a nested collection initializer without `new` (`Tags = { ... }`) under `CollectionPropertiesPolicy.Update`. Make the members settable, move constructor state into the initializer, or keep only the regular mapping. The update overload is omitted; the regular mapping and other companions are unaffected. Nested objects with construction-only state do not report this diagnostic — they are replaced with the mapped instance (see [advanced usage](advanced-usage.md#updating-existing-objects)).
+
 The source of truth for diagnostic IDs is the descriptor declaration plus [analyzer release tracking](../source/AnalyzerReleases.Unshipped.md). For API shapes and troubleshooting, see the [generated API reference](generated-api-reference.md) and [advanced usage](advanced-usage.md#troubleshooting).

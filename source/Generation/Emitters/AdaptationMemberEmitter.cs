@@ -206,8 +206,18 @@ internal static class AdaptationMemberEmitter
                         mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                         mapping.CollectionPolicy,
                         details.NullablePolicy,
-                        lines))
+                        lines,
+                        out var failureReason))
                 {
+                    if (failureReason != null)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.UpdatableNotUpdatableInPlace,
+                            GetLocation(mapping, adaptation),
+                            adaptationName,
+                            failureReason));
+                    }
+
                     continue;
                 }
 

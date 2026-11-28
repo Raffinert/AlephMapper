@@ -383,6 +383,138 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
+    [Test]
+    public async Task Updatable_root_with_init_only_member_reports_AM0023()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public string? Name { get; set; } }
+            public record Target { public string? Name { get; init; } }
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Target Map(Source source) => new Target { Name = source.Name };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        var diagnostic = result.Diagnostics.Single(d => d.Id == "AM0023");
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.GetMessage()).Contains("member 'Name' is init-only");
+        await Assert.That(diagnostic.Descriptor.HelpLinkUri).Contains("docs/diagnostics.md#am0023");
+        await Assert.That(GeneratedUpdateOverloadExists(result, "Target")).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Updatable_root_with_constructor_arguments_reports_AM0023()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public string Id { get; set; } = ""; public string? Name { get; set; } }
+            public class Target(string id) { public string Id { get; } = id; public string? Name { get; set; } public Target() : this("") { } }
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Target Map(Source source) => new Target(source.Id) { Name = source.Name };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Single(d => d.Id == "AM0023").GetMessage()).Contains("constructor arguments");
+        await Assert.That(GeneratedUpdateOverloadExists(result, "Target")).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Updatable_nested_collection_initializer_reports_AM0023_when_collections_are_updated()
+    {
+        const string source = """
+            using AlephMapper;
+            using System.Collections.Generic;
+            public class Source { public string? Tag { get; set; } }
+            public class Target { public List<string> Tags { get; } = new(); }
+            public static partial class Mapper
+            {
+                [Updatable(CollectionProperties = CollectionPropertiesPolicy.Update)]
+                public static Target Map(Source source) => new Target { Tags = { source.Tag ?? "" } };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Single(d => d.Id == "AM0023").GetMessage()).Contains("collection initializer");
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Updatable_positional_record_without_initializer_is_silently_not_an_update_candidate()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public string? Name { get; set; } }
+            public record Target(string? Name);
+            [Updatable]
+            public static partial class Mapper
+            {
+                public static Target Map(Source source) => new Target(source.Name);
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0023")).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Updatable_shapes_needing_construction_compile_without_errors_or_dropped_members()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public string? Name { get; set; } public int X { get; set; } }
+            public struct Point { public int X { get; set; } }
+            public class InitChild { public string? Value { get; init; } }
+            public class RequiredChild { public required string Value { get; set; } }
+            public abstract class Shape { public string? Name { get; set; } }
+            public class Circle : Shape { }
+            public class Target
+            {
+                public Point Position { get; set; }
+                public InitChild? Init { get; set; }
+                public RequiredChild? Required { get; set; }
+                public Shape? Shape { get; set; }
+            }
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Target Map(Source source) => new Target
+                {
+                    Position = new Point { X = source.X },
+                    Init = new InitChild { Value = source.Name },
+                    Required = new RequiredChild { Value = source.Name ?? "" },
+                    Shape = new Circle { Name = source.Name },
+                };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Where(d => d.Id.StartsWith("AM", StringComparison.Ordinal))).IsEmpty();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        var generated = string.Concat(result.GeneratedSources.Select(s => s.SourceText.ToString()));
+        await Assert.That(generated).DoesNotContain("Cannot assign to property of value type");
+        await Assert.That(generated).Contains("dest.Position = new global::Point { X = source.X };");
+        await Assert.That(generated).Contains("dest.Init = new global::InitChild { Value = source.Name };");
+        await Assert.That(generated).Contains("dest.Required.Value = source.Name ?? \"\";");
+        await Assert.That(generated).Contains("dest.Shape = new global::Circle { Name = source.Name };");
+    }
+
+    private static bool GeneratedUpdateOverloadExists(GeneratorRunResult result, string destinationType) =>
+        result.GeneratedSources.Any(s => s.SourceText.ToString().Contains($"global::{destinationType} dest)", StringComparison.Ordinal));
+
     private static async Task<(GeneratorRunResult Result, Compilation Output)> GenerateAndCompile(string source)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
@@ -407,7 +539,8 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(DiagnosticDescriptors.GetById("AM0020")).IsEqualTo(DiagnosticDescriptors.UnsupportedExtensionMember);
         await Assert.That(DiagnosticDescriptors.GetById("AM0021")).IsEqualTo(DiagnosticDescriptors.InvalidMapperDeclaration);
         await Assert.That(DiagnosticDescriptors.GetById("AM0022")).IsEqualTo(DiagnosticDescriptors.GeneratedMemberConflict);
-        await Assert.That(DiagnosticDescriptors.GetById("AM0023")).IsNull();
+        await Assert.That(DiagnosticDescriptors.GetById("AM0023")).IsEqualTo(DiagnosticDescriptors.UpdatableNotUpdatableInPlace);
+        await Assert.That(DiagnosticDescriptors.GetById("AM0024")).IsNull();
     }
 
     private static async Task<GeneratorRunResult> Generate(string source) =>

@@ -49,8 +49,18 @@ internal static class UpdatableMemberEmitter
                 mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                 mapping.CollectionPolicy,
                 details.NullablePolicy,
-                lines))
+                lines,
+                out var failureReason))
         {
+            if (failureReason != null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UpdatableNotUpdatableInPlace,
+                    mapping.MethodSymbol.Locations.FirstOrDefault(),
+                    mapping.MethodSymbol.Name,
+                    failureReason));
+            }
+
             return;
         }
 
