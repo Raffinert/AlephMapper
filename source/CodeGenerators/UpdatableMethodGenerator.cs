@@ -98,7 +98,7 @@ internal sealed class UpdatableMethodGenerator(
 
             case ObjectCreationExpressionSyntax { Initializer: null, ArgumentList: null or { Arguments.Count: 0 } } emptyCreation:
                 // `new T()` in a root branch: the update only has to make sure the destination exists.
-                EmitInPlaceUpdate(emptyCreation, destPrefix, destinationType, indent);
+                EmitInPlaceUpdate(emptyCreation, destPrefix, destinationType, indent, createWithExpression: !CreatesType(emptyCreation, destinationType));
                 return;
 
             case ObjectCreationExpressionSyntax creation:
@@ -108,7 +108,8 @@ internal sealed class UpdatableMethodGenerator(
                     return;
                 }
 
-                EmitInPlaceUpdate(creation, destPrefix, destinationType, indent);
+                // A derived type created for a base-typed destination must be created by the mapping's own expression.
+                EmitInPlaceUpdate(creation, destPrefix, destinationType, indent, createWithExpression: !CreatesType(creation, destinationType));
                 return;
 
             default:
@@ -151,14 +152,18 @@ internal sealed class UpdatableMethodGenerator(
     /// Emits the update of an object that is created with an object initializer:
     /// ensures the target exists, then updates every initialized member.
     /// </summary>
-    private void EmitInPlaceUpdate(ObjectCreationExpressionSyntax creation, string path, ITypeSymbol? type, string indent)
+    private void EmitInPlaceUpdate(ObjectCreationExpressionSyntax creation, string path, ITypeSymbol? type, string indent, bool createWithExpression = false)
     {
         var memberIndent = indent;
         var closeElse = false;
 
-        if (type != null && type.IsReferenceType && type.SpecialType != SpecialType.System_String)
+        // A type parameter without a `struct` constraint may still be a class, so a missing root
+        // destination is created too (`== null` compiles for unconstrained type parameters).
+        if (type != null
+            && (type.IsReferenceType || type is ITypeParameterSymbol { IsValueType: false })
+            && type.SpecialType != SpecialType.System_String)
         {
-            if (CanDefaultConstruct(type))
+            if (!createWithExpression && CanDefaultConstruct(type))
             {
                 _lines.Add($"{indent}if ({path} == null)");
                 _lines.Add($"{indent}{Indent}{path} = new {GetTypeName(type)}();");
@@ -204,13 +209,20 @@ internal sealed class UpdatableMethodGenerator(
                 case IdentifierNameSyntax identifier:
                     var memberName = identifier.Identifier.ValueText;
                     var member = FindMember(type, memberName);
+                    if (member == null && type is INamedTypeSymbol { TypeKind: not TypeKind.Error })
+                    {
+                        Fail($"member '{memberName}' is not declared on '{type.ToDisplayString()}'");
+                        continue;
+                    }
+
                     if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
                     {
                         Fail($"member '{memberName}' of '{path}' is init-only or read-only");
                         continue;
                     }
 
-                    EmitMemberValue(assignment.Right, $"{path}.{memberName}", member?.Type, indent);
+                    // Identifier.Text keeps a verbatim '@' prefix (`@event`); ValueText is only used for lookup.
+                    EmitMemberValue(assignment.Right, $"{path}.{identifier.Identifier.Text}", member?.Type, indent);
                     break;
 
                 case ImplicitElementAccessSyntax elementAccess:
@@ -236,7 +248,9 @@ internal sealed class UpdatableMethodGenerator(
 
         switch (Unwrap(expression))
         {
-            case ConditionalExpressionSyntax conditional:
+            // Only split into if/else when a branch is updated in place; otherwise the whole conditional is
+            // assigned so its natural type (e.g. `c ? 5 : default` is an int) stays exactly as in the mapping.
+            case ConditionalExpressionSyntax conditional when HasInPlaceBranch(conditional, memberType):
                 _lines.Add($"{indent}if ({conditional.Condition.WithoutTrivia()})");
                 _lines.Add($"{indent}{{");
                 EmitMemberBranch(conditional.WhenTrue, path, memberType, indent + Indent);
@@ -247,8 +261,7 @@ internal sealed class UpdatableMethodGenerator(
                 _lines.Add($"{indent}}}");
                 return;
 
-            case ObjectCreationExpressionSyntax creation
-                when memberType is not { IsValueType: true } && CanUpdateInPlace(creation, memberType, out _):
+            case ObjectCreationExpressionSyntax creation when WillUpdateInPlace(creation, memberType):
                 EmitInPlaceUpdate(creation, path, memberType, indent);
                 return;
 
@@ -263,6 +276,31 @@ internal sealed class UpdatableMethodGenerator(
                 return;
         }
     }
+
+    private bool HasInPlaceBranch(ConditionalExpressionSyntax conditional, ITypeSymbol? memberType)
+    {
+        bool Check(ExpressionSyntax branch) => Unwrap(branch) switch
+        {
+            ConditionalExpressionSyntax nested => HasInPlaceBranch(nested, memberType),
+            ObjectCreationExpressionSyntax creation => WillUpdateInPlace(creation, memberType),
+            _ => false
+        };
+
+        return Check(conditional.WhenTrue) || Check(conditional.WhenFalse);
+    }
+
+    /// <summary>
+    /// A nested creation is updated in place only when the member is known to be a reference type, the mapping
+    /// creates exactly the member's type (not a derived one) and all of its state is settable after construction.
+    /// Anything else is assigned as a whole, so the destination receives the same value the mapping produces.
+    /// </summary>
+    private bool WillUpdateInPlace(ObjectCreationExpressionSyntax creation, ITypeSymbol? memberType) =>
+        memberType is { IsReferenceType: true }
+        && CreatesType(creation, memberType)
+        && CanUpdateInPlace(creation, memberType, out _);
+
+    private bool CreatesType(ObjectCreationExpressionSyntax creation, ITypeSymbol type) =>
+        string.Equals(creation.Type.WithoutTrivia().ToString(), GetTypeName(type), StringComparison.Ordinal);
 
     private void EmitMemberBranch(ExpressionSyntax branch, string path, ITypeSymbol? memberType, string indent)
     {
@@ -291,7 +329,7 @@ internal sealed class UpdatableMethodGenerator(
     /// An object creation can be applied member by member to an existing instance only when every piece of
     /// state it sets is reachable after construction: no constructor arguments and only writable members.
     /// </summary>
-    private static bool CanUpdateInPlace(ObjectCreationExpressionSyntax creation, ITypeSymbol? type, out string reason)
+    private bool CanUpdateInPlace(ObjectCreationExpressionSyntax creation, ITypeSymbol? type, out string reason)
     {
         if (creation.ArgumentList is { Arguments.Count: > 0 })
         {
@@ -313,14 +351,47 @@ internal sealed class UpdatableMethodGenerator(
                 return false;
             }
 
-            if (FindMember(type, identifier.Identifier.ValueText) is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
+            var member = FindMember(type, identifier.Identifier.ValueText);
+            if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
             {
                 reason = $"member '{identifier.Identifier.ValueText}' is init-only or read-only";
+                return false;
+            }
+
+            if (Unwrap(assignment.Right) is InitializerExpressionSyntax nested && !IsReplayable(nested, member?.Type))
+            {
+                reason = $"the nested initializer of member '{identifier.Identifier.ValueText}' contains a collection initializer that would add items to the existing collection on every update";
                 return false;
             }
         }
 
         reason = "";
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a nested initializer without <c>new</c> can be applied to the instance a destination already holds.
+    /// Collection initializers add items, so they are replayable only when the collection is skipped anyway.
+    /// </summary>
+    private bool IsReplayable(InitializerExpressionSyntax initializer, ITypeSymbol? memberType)
+    {
+        if (!initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+        {
+            return memberType != null
+                && collectionPolicy == CollectionPropertiesPolicy.Skip
+                && CollectionHelper.IsCollectionType(memberType);
+        }
+
+        foreach (var expression in initializer.Expressions)
+        {
+            if (expression is AssignmentExpressionSyntax { Left: IdentifierNameSyntax identifier } assignment
+                && Unwrap(assignment.Right) is InitializerExpressionSyntax nested
+                && !IsReplayable(nested, FindMember(memberType, identifier.Identifier.ValueText)?.Type))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -378,9 +449,25 @@ internal sealed class UpdatableMethodGenerator(
             switch (member)
             {
                 case IPropertySymbol { IsIndexer: false } property:
-                    return new MemberInfo(property.Type, property.SetMethod is { IsInitOnly: false });
+                    return new MemberInfo(property.Type, FindSetter(property) is { IsInitOnly: false });
                 case IFieldSymbol field:
                     return new MemberInfo(field.Type, !field.IsReadOnly && !field.IsConst);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// An override may redeclare only the getter; the setter is then inherited from the overridden property.
+    /// </summary>
+    private static IMethodSymbol? FindSetter(IPropertySymbol property)
+    {
+        for (IPropertySymbol? current = property; current != null; current = current.OverriddenProperty)
+        {
+            if (current.SetMethod != null)
+            {
+                return current.SetMethod;
             }
         }
 

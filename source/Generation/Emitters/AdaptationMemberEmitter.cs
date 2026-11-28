@@ -167,7 +167,7 @@ internal static class AdaptationMemberEmitter
 
             if (generateUpdate)
             {
-                if (adaptation.DestinationType.IsValueType && !SymbolHelpers.CanBeNull(adaptation.DestinationType))
+                if (adaptation.DestinationType.IsValueType)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.UpdatableValueTypeReturn,

@@ -512,6 +512,48 @@ public class SemanticSafetyGeneratorTests
         await Assert.That(generated).Contains("dest.Shape = new global::Circle { Name = source.Name };");
     }
 
+    [Test]
+    public async Task Updatable_nullable_struct_return_reports_AM0001()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public int X { get; set; } }
+            public struct Point { public int X { get; set; } }
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Point? Map(Source source) => source == null ? null : new Point { X = source.X };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "AM0001")).IsTrue();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Updatable_root_derived_creation_setting_undeclared_member_reports_AM0023()
+    {
+        const string source = """
+            using AlephMapper;
+            public class Source { public string? Name { get; set; } }
+            public class Animal { public string? Name { get; set; } }
+            public class Dog : Animal { public bool Barks { get; set; } }
+            public static partial class Mapper
+            {
+                [Updatable]
+                public static Animal Map(Source source) => new Dog { Name = source.Name, Barks = true };
+            }
+            """;
+
+        var (result, compilation) = await GenerateAndCompile(source);
+
+        await Assert.That(result.Diagnostics.Single(d => d.Id == "AM0023").GetMessage()).Contains("'Barks' is not declared on 'Animal'");
+        await Assert.That(GeneratedUpdateOverloadExists(result, "Animal")).IsFalse();
+        await Assert.That(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
     private static bool GeneratedUpdateOverloadExists(GeneratorRunResult result, string destinationType) =>
         result.GeneratedSources.Any(s => s.SourceText.ToString().Contains($"global::{destinationType} dest)", StringComparison.Ordinal));
 

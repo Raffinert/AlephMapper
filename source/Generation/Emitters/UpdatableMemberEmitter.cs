@@ -29,7 +29,7 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        if (mapping.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mapping.ReturnType))
+        if (mapping.ReturnType.IsValueType)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableValueTypeReturn,

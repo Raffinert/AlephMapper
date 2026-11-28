@@ -155,4 +155,87 @@ public class UpdatableSemanticsTests
         await Assert.That(target.Tags).IsEquivalentTo(["a", "b"]);
         await Assert.That(target.BaseTags).IsEquivalentTo(["a", "b"]);
     }
+
+    [Test]
+    public async Task Verbatim_keyword_member_names_are_kept()
+    {
+        var target = new UpdKeyword();
+
+        UpdatableReviewMapper.MapKeyword(CreateSource(), target);
+
+        await Assert.That(target.@event).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Getter_only_override_still_uses_the_inherited_setter()
+    {
+        var target = new UpdGetterOverride();
+
+        var result = UpdatableReviewMapper.MapOverride(CreateSource(), target);
+
+        await Assert.That(result).IsSameReferenceAs(target);
+        await Assert.That(target.Name).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Derived_creations_produce_the_same_type_as_the_mapping()
+    {
+        var zoo = new UpdZoo { Pet = new UpdAnimal { Name = "old" } };
+        UpdatableReviewMapper.MapZoo(CreateSource(), zoo);
+
+        await Assert.That(zoo.Pet).IsTypeOf<UpdDog>();
+        await Assert.That(zoo.Pet!.Name).IsEqualTo("Ada");
+
+        var created = UpdatableReviewMapper.MapAnimal(CreateSource(), null!);
+        await Assert.That(created).IsTypeOf<UpdDog>();
+        await Assert.That(created.Name).IsEqualTo("Ada");
+
+        var existing = new UpdAnimal();
+        await Assert.That(UpdatableReviewMapper.MapAnimal(CreateSource(), existing)).IsSameReferenceAs(existing);
+        await Assert.That(existing.Name).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Conditional_members_keep_the_natural_type_of_the_conditional()
+    {
+        var source = CreateSource(isActive: false);
+        var target = new UpdZoo { Age = 42 };
+
+        UpdatableReviewMapper.MapZoo(source, target);
+
+        await Assert.That(target.Age).IsEqualTo(UpdatableReviewMapper.MapZoo(source).Age);
+        await Assert.That(target.Age).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Generic_members_match_the_mapping_for_classes_and_structs()
+    {
+        var classTarget = new UpdWrapper<UpdNamedClass>();
+        UpdatableReviewMapper.MapGeneric(CreateSource(), classTarget);
+        await Assert.That(classTarget.Value!.Name).IsEqualTo("Ada");
+
+        var structTarget = new UpdWrapper<UpdNamedStruct>();
+        UpdatableReviewMapper.MapGeneric(CreateSource(), structTarget);
+        await Assert.That(structTarget.Value.Name).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Root_throw_guard_on_the_source_is_preserved()
+    {
+        await Assert.That(() => UpdatableReviewMapper.MapRequiredSource(null, new UpdAnimal()))
+            .Throws<ArgumentNullException>();
+    }
+
+    [Test]
+    public async Task Nested_collection_initializer_inside_a_creation_replaces_the_nested_object()
+    {
+        var oldBag = new UpdBag();
+        oldBag.Items.Add("old");
+        var target = new UpdZoo { Bag = oldBag };
+
+        UpdatableReviewCollectionMapper.MapBag(CreateSource(), target);
+
+        await Assert.That(target.Bag!.Items).IsEquivalentTo(["Ada"]);
+        await Assert.That(oldBag.Items).IsEquivalentTo(["old"]);
+    }
 }

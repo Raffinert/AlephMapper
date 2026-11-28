@@ -4,7 +4,7 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 ## AM0001
 
-**Updatable method with value type return type · Warning.** `[Updatable]` on a mapping returning a non-nullable value type cannot update the caller's value by reference. For example, `[Updatable] static int Map(Source s) => s.Number;` has no update companion. Use the handwritten map as a value-returning operation, or return a reference-type destination. The ordinary method remains.
+**Updatable method with value type return type · Warning.** `[Updatable]` on a mapping returning a value type, including `Nullable<T>` such as `Point?`, cannot update the caller's value by reference. For example, `[Updatable] static int Map(Source s) => s.Number;` has no update companion. Use the handwritten map as a value-returning operation, or return a reference-type destination. The ordinary method remains.
 
 ## AM0002
 
@@ -92,6 +92,6 @@ These are the diagnostic IDs declared by the current generator in [`DiagnosticDe
 
 ## AM0023
 
-**Mapping cannot update an existing destination in place · Warning.** The update overload would have to set state that only exists at construction time, or replay an initializer that is not idempotent on an existing instance. The message names the reason: constructor arguments on the root creation (`new Target(id) { ... }`), an assigned `init`-only or read-only root member, or a nested collection initializer without `new` (`Tags = { ... }`) under `CollectionPropertiesPolicy.Update`. Make the members settable, move constructor state into the initializer, or keep only the regular mapping. The update overload is omitted; the regular mapping and other companions are unaffected. Nested objects with construction-only state do not report this diagnostic — they are replaced with the mapped instance (see [advanced usage](advanced-usage.md#updating-existing-objects)).
+**Mapping cannot update an existing destination in place · Warning.** The update overload would have to set state that only exists at construction time, or replay an initializer that is not idempotent on an existing instance. The message names the reason: constructor arguments on the root creation (`new Target(id) { ... }`), an assigned `init`-only or read-only root member, a member that exists only on a derived type the mapping creates (`Animal Map(...) => new Dog { Barks = ... }`), or a nested collection initializer without `new` (`Tags = { ... }`) under `CollectionPropertiesPolicy.Update`. Make the members settable, move constructor state into the initializer, or keep only the regular mapping. The update overload is omitted; the regular mapping and other companions are unaffected. Nested objects with construction-only state do not report this diagnostic — they are replaced with the mapped instance (see [advanced usage](advanced-usage.md#updating-existing-objects)).
 
 The source of truth for diagnostic IDs is the descriptor declaration plus [analyzer release tracking](../source/AnalyzerReleases.Unshipped.md). For API shapes and troubleshooting, see the [generated API reference](generated-api-reference.md) and [advanced usage](advanced-usage.md#troubleshooting).

@@ -37,13 +37,26 @@ internal static class EmitHelpers
 
         if (SymbolHelpers.CanBeNull(sourceType))
         {
-            var sourceGuard = $"if ({sourceParameterNames[0]} == null) return {destPrefix};";
-            lines.Add(sourceGuard);
+            var sourceNullCheck = $"if ({sourceParameterNames[0]} == null) ";
+            string? sourceGuard = sourceNullCheck + $"return {destPrefix};";
 
-            // A root `source == null ? null : new T { ... }` lowers to the very same guard.
-            if (processedLines.Count > 0 && processedLines[0] == sourceGuard)
+            // A root `source == null ? null : new T { ... }` lowers to the very same guard, and a root
+            // `source == null ? throw ... : new T { ... }` must keep throwing instead of returning early.
+            if (processedLines.Count > 0 && processedLines[0].StartsWith(sourceNullCheck, System.StringComparison.Ordinal))
             {
-                processedLines.RemoveAt(0);
+                if (processedLines[0] != sourceGuard)
+                {
+                    sourceGuard = null;
+                }
+                else
+                {
+                    processedLines.RemoveAt(0);
+                }
+            }
+
+            if (sourceGuard != null)
+            {
+                lines.Add(sourceGuard);
             }
         }
 

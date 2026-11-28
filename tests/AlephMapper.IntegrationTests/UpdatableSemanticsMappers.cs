@@ -123,3 +123,64 @@ public static partial class UpdatableCollectionUpdateMapper
         BaseTags = source.Tags.ToList(),
     };
 }
+
+// Shapes found in review: keyword names, getter-only overrides, derived creations,
+// generic members, conditional typing and throw guards.
+
+public class UpdKeyword { public string? @event { get; set; } }
+
+public class UpdVirtualBase { public virtual string? Name { get; set; } }
+
+public class UpdGetterOverride : UpdVirtualBase
+{
+    public override string? Name { get => base.Name; }
+}
+
+public class UpdAnimal { public string? Name { get; set; } }
+
+public class UpdDog : UpdAnimal { public bool Barks { get; set; } }
+
+public class UpdZoo
+{
+    public UpdAnimal? Pet { get; set; }
+    public int? Age { get; set; }
+    public UpdBag? Bag { get; set; }
+}
+
+public class UpdBag { public List<string> Items { get; } = []; }
+
+public interface IUpdNamed { string? Name { get; set; } }
+
+public class UpdNamedClass : IUpdNamed { public string? Name { get; set; } }
+
+public struct UpdNamedStruct : IUpdNamed { public string? Name { get; set; } }
+
+public class UpdWrapper<T> { public T? Value { get; set; } }
+
+[Updatable]
+public static partial class UpdatableReviewMapper
+{
+    public static UpdKeyword MapKeyword(UpdSource source) => new UpdKeyword { @event = source.Name };
+
+    public static UpdGetterOverride MapOverride(UpdSource source) => new UpdGetterOverride { Name = source.Name };
+
+    public static UpdZoo MapZoo(UpdSource source) => new UpdZoo
+    {
+        Pet = new UpdDog { Name = source.Name, Barks = true },
+        Age = source.IsActive ? 5 : default,
+    };
+
+    public static UpdAnimal MapAnimal(UpdSource source) => new UpdDog { Name = source.Name };
+
+    public static UpdWrapper<T> MapGeneric<T>(UpdSource source) where T : IUpdNamed, new() =>
+        new UpdWrapper<T> { Value = new T { Name = source.Name } };
+
+    public static UpdAnimal MapRequiredSource(UpdSource? source) =>
+        source == null ? throw new ArgumentNullException(nameof(source)) : new UpdAnimal { Name = source.Name };
+}
+
+[Updatable(CollectionProperties = CollectionPropertiesPolicy.Update)]
+public static partial class UpdatableReviewCollectionMapper
+{
+    public static UpdZoo MapBag(UpdSource source) => new UpdZoo { Bag = new UpdBag { Items = { source.Name ?? "" } } };
+}
