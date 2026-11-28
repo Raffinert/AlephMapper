@@ -29,7 +29,7 @@ internal static class UpdatableMemberEmitter
             return;
         }
 
-        if (mapping.ReturnType.IsValueType && !SymbolHelpers.CanBeNull(mapping.ReturnType))
+        if (mapping.ReturnType.IsValueType)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 DiagnosticDescriptors.UpdatableValueTypeReturn,
@@ -49,8 +49,18 @@ internal static class UpdatableMemberEmitter
                 mapping.Parameters.Select(parameter => parameter.Name).ToArray(),
                 mapping.CollectionPolicy,
                 details.NullablePolicy,
-                lines))
+                lines,
+                out var failureReason))
         {
+            if (failureReason != null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.UpdatableNotUpdatableInPlace,
+                    mapping.MethodSymbol.Locations.FirstOrDefault(),
+                    mapping.MethodSymbol.Name,
+                    failureReason));
+            }
+
             return;
         }
 

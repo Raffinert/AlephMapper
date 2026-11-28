@@ -31,6 +31,8 @@ The generated static overload treats the extension receiver as the source and
 uses `dest` as its final parameter. Getter-only extension properties remain
 projection-only.
 
+Nested objects built with an object initializer are updated in place (created when `null`, members resolved including inherited ones). Nested objects with constructor arguments or `init`-only members, and struct members, are assigned as a whole. A root `cond ? new() { ... } : null` returns the existing `dest` unchanged when the condition yields no value. A root creation with constructor arguments or `init`-only members gets no update overload and reports `AM0023`.
+
 Collections are skipped by default. Opt into `[Updatable(CollectionProperties = CollectionPropertiesPolicy.Update)]` only if collection mutation is genuinely required. Test tracked EF relationships and side effects before enabling it. Updating a non-nullable value-type destination produces diagnostic `AM0001` rather than useful update-in-place semantics.
 
 ## Null conditional policy for generated expressions

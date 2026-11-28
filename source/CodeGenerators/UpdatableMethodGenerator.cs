@@ -1,421 +1,596 @@
-using AlephMapper.Models;
+#nullable enable
+
+using AlephMapper.Helpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace AlephMapper.CodeGenerators;
 
+/// <summary>
+/// Lowers an (already inlined) mapping body into statements that update an existing destination in place.
+/// Member types are resolved from the destination type symbols while walking the object initializers,
+/// so nested objects, inherited members, value types and collections are classified by their real types.
+/// </summary>
 internal sealed class UpdatableMethodGenerator(
-    string destPrefix,
-    PropertyMappingContext typeContext,
     IReadOnlyList<string> sourceParamNames,
-    AlephMapper.Helpers.NullablePolicy nullablePolicy)
+    CollectionPropertiesPolicy collectionPolicy,
+    NullablePolicy nullablePolicy)
 {
+    private const string Indent = "    ";
+
     private readonly List<string> _lines = [];
     private readonly string _primarySourceParamName = sourceParamNames.FirstOrDefault() ?? "source";
 
-    public List<string> ProcessObjectCreation(ObjectCreationExpressionSyntax objectCreation)
+    /// <summary>
+    /// Gets the reason why the body cannot be lowered into an in-place update, when that is the case.
+    /// </summary>
+    public string? FailureReason { get; private set; }
+
+    /// <summary>
+    /// Lowers a root body (an object creation or a conditional producing one) into update statements.
+    /// Returns <c>false</c> when the shape is unsupported; <see cref="FailureReason"/> is set when the
+    /// shape is recognized but cannot be updated in place.
+    /// </summary>
+    public bool TryProcessRoot(ExpressionSyntax body, string destPrefix, ITypeSymbol destinationType, out List<string> lines)
     {
         _lines.Clear();
+        FailureReason = null;
+        lines = [];
 
-        if (objectCreation?.Initializer?.Expressions == null) return [];
-
-        if (typeContext.ShouldPropertyBePreCreated(destPrefix, out var typeInfo))
+        switch (Unwrap(body))
         {
-            _lines.Add($"if ({destPrefix} == null)");
-            _lines.Add($"    {destPrefix} = new {GetTypeName(typeInfo.Type)}();");
-        }
+            case ObjectCreationExpressionSyntax creation:
+                if (creation.Initializer is not { RawKind: (int)SyntaxKind.ObjectInitializerExpression } initializer
+                    || initializer.Expressions.Count == 0)
+                {
+                    return false;
+                }
 
-        foreach (var expr in objectCreation.Initializer.Expressions)
-        {
-            if (expr is AssignmentExpressionSyntax assignment)
-            {
-                ProcessAssignment(assignment, destPrefix);
-            }
-        }
-
-        return _lines.ToList();
-    }
-
-    private void ProcessAssignment(AssignmentExpressionSyntax assignment, string currentDestPath)
-    {
-        var propertyName = assignment.Left.ToString();
-        var rightExpression = assignment.Right;
-        var fullDestPath = $"{currentDestPath}.{propertyName}";
-
-        ProcessExpression(rightExpression, fullDestPath);
-    }
-
-    private void ProcessExpression(ExpressionSyntax expression, string fullDestPath)
-    {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
-        {
-            _lines.Add($"// Skipping collection property: {fullDestPath}");
-            return;
-        }
-
-        switch (expression)
-        {
-            case ConditionalExpressionSyntax conditional:
-                ProcessConditionalExpression(conditional, fullDestPath);
+                EmitRootValue(creation, destPrefix, destinationType, "", topLevel: true);
                 break;
 
-            case ObjectCreationExpressionSyntax objectCreation:
-                ProcessDirectObjectCreation(objectCreation, fullDestPath);
+            case ConditionalExpressionSyntax conditional:
+                EmitRootValue(conditional, destPrefix, destinationType, "", topLevel: true);
                 break;
 
             default:
-                // Simple property assignment - check for value type issues
-                if (IsValueTypePropertyAssignment(fullDestPath))
+                return false;
+        }
+
+        if (FailureReason != null)
+        {
+            return false;
+        }
+
+        lines = _lines.ToList();
+        return true;
+    }
+
+    private void EmitRootValue(ExpressionSyntax expression, string destPrefix, ITypeSymbol destinationType, string indent, bool topLevel)
+    {
+        var unwrapped = Unwrap(expression);
+
+        if (IsNullValue(unwrapped))
+        {
+            // A mapping that yields no value leaves the existing destination untouched.
+            if (!topLevel)
+            {
+                _lines.Add($"{indent}return {destPrefix};");
+            }
+
+            return;
+        }
+
+        switch (unwrapped)
+        {
+            case ThrowExpressionSyntax throwExpression:
+                _lines.Add($"{indent}{ToThrowStatement(throwExpression)}");
+                return;
+
+            case ConditionalExpressionSyntax conditional:
+                EmitRootConditional(conditional, destPrefix, destinationType, indent, topLevel);
+                return;
+
+            case ObjectCreationExpressionSyntax { Initializer: null, ArgumentList: null or { Arguments.Count: 0 } } emptyCreation:
+                // `new T()` in a root branch: the update only has to make sure the destination exists.
+                EmitInPlaceUpdate(emptyCreation, destPrefix, destinationType, indent, createWithExpression: !CreatesType(emptyCreation, destinationType));
+                return;
+
+            case ObjectCreationExpressionSyntax creation:
+                if (!CanUpdateInPlace(creation, destinationType, out var reason))
                 {
-                    // For value types, we can't do property-by-property assignment
-                    _lines.Add($"// Warning: Cannot assign to property of value type: {fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
-                    _lines.Add($"// Consider restructuring to avoid nested value type property assignments");
+                    Fail(reason);
+                    return;
                 }
-                else
-                {
-                    if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
+
+                // A derived type created for a base-typed destination must be created by the mapping's own expression.
+                EmitInPlaceUpdate(creation, destPrefix, destinationType, indent, createWithExpression: !CreatesType(creation, destinationType));
+                return;
+
+            default:
+                _lines.Add($"{indent}{destPrefix} = {NormalizeConditionalMemberAccess(expression)};");
+                return;
+        }
+    }
+
+    private void EmitRootConditional(ConditionalExpressionSyntax conditional, string destPrefix, ITypeSymbol destinationType, string indent, bool topLevel)
+    {
+        var whenTrue = Unwrap(conditional.WhenTrue);
+        var whenFalse = Unwrap(conditional.WhenFalse);
+
+        // `cond ? null : value` (or a throw) becomes a guard clause followed by the update of the other branch.
+        if (IsTerminalBranch(whenTrue))
+        {
+            _lines.Add($"{indent}if ({conditional.Condition.WithoutTrivia()}) {TerminalStatement(whenTrue, destPrefix)}");
+            EmitRootValue(whenFalse, destPrefix, destinationType, indent, topLevel);
+            return;
+        }
+
+        if (IsTerminalBranch(whenFalse))
+        {
+            _lines.Add($"{indent}if ({Negate(conditional.Condition)}) {TerminalStatement(whenFalse, destPrefix)}");
+            EmitRootValue(whenTrue, destPrefix, destinationType, indent, topLevel);
+            return;
+        }
+
+        _lines.Add($"{indent}if ({conditional.Condition.WithoutTrivia()})");
+        _lines.Add($"{indent}{{");
+        EmitRootValue(whenTrue, destPrefix, destinationType, indent + Indent, topLevel: false);
+        _lines.Add($"{indent}}}");
+        _lines.Add($"{indent}else");
+        _lines.Add($"{indent}{{");
+        EmitRootValue(whenFalse, destPrefix, destinationType, indent + Indent, topLevel: false);
+        _lines.Add($"{indent}}}");
+    }
+
+    /// <summary>
+    /// Emits the update of an object that is created with an object initializer:
+    /// ensures the target exists, then updates every initialized member.
+    /// </summary>
+    private void EmitInPlaceUpdate(ObjectCreationExpressionSyntax creation, string path, ITypeSymbol? type, string indent, bool createWithExpression = false)
+    {
+        var memberIndent = indent;
+        var closeElse = false;
+
+        // A type parameter without a `struct` constraint may still be a class, so a missing root
+        // destination is created too (`== null` compiles for unconstrained type parameters).
+        if (type != null
+            && (type.IsReferenceType || type is ITypeParameterSymbol { IsValueType: false })
+            && type.SpecialType != SpecialType.System_String)
+        {
+            if (!createWithExpression && CanDefaultConstruct(type))
+            {
+                _lines.Add($"{indent}if ({path} == null)");
+                _lines.Add($"{indent}{Indent}{path} = new {GetTypeName(type)}();");
+            }
+            else
+            {
+                // Required members or a missing parameterless constructor: create the target exactly as the
+                // mapping does, and only update member by member when an instance already exists.
+                _lines.Add($"{indent}if ({path} == null)");
+                _lines.Add($"{indent}{{");
+                _lines.Add($"{indent}{Indent}{path} = {NormalizeConditionalMemberAccess(creation)};");
+                _lines.Add($"{indent}}}");
+                _lines.Add($"{indent}else");
+                _lines.Add($"{indent}{{");
+                memberIndent = indent + Indent;
+                closeElse = true;
+            }
+        }
+
+        if (creation.Initializer != null)
+        {
+            EmitInitializerMembers(creation.Initializer, path, type, memberIndent);
+        }
+
+        if (closeElse)
+        {
+            _lines.Add($"{indent}}}");
+        }
+    }
+
+    private void EmitInitializerMembers(InitializerExpressionSyntax initializer, string path, ITypeSymbol? type, string indent)
+    {
+        foreach (var expression in initializer.Expressions)
+        {
+            if (expression is not AssignmentExpressionSyntax assignment)
+            {
+                Fail($"initializer element '{expression.WithoutTrivia()}' of '{path}' cannot be applied to an existing instance");
+                continue;
+            }
+
+            switch (assignment.Left)
+            {
+                case IdentifierNameSyntax identifier:
+                    var memberName = identifier.Identifier.ValueText;
+                    var member = FindMember(type, memberName);
+                    if (member == null && type is INamedTypeSymbol { TypeKind: not TypeKind.Error })
                     {
-                        _lines.Add($"if ({fullDestPath} == null)");
-                        _lines.Add($"    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
+                        Fail($"member '{memberName}' is not declared on '{type.ToDisplayString()}'");
+                        continue;
                     }
-                    _lines.Add($"{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
-                }
-                break;
+
+                    if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right) && !IsSkippedCollection(member.Value.Type))
+                    {
+                        Fail($"member '{memberName}' of '{path}' is init-only or read-only");
+                        continue;
+                    }
+
+                    // Identifier.Text keeps a verbatim '@' prefix (`@event`); ValueText is only used for lookup.
+                    EmitMemberValue(assignment.Right, $"{path}.{identifier.Identifier.Text}", member?.Type, indent);
+                    break;
+
+                case ImplicitElementAccessSyntax elementAccess:
+                    _lines.Add($"{indent}{path}{elementAccess.ArgumentList.WithoutTrivia()} = {NormalizeConditionalMemberAccess(assignment.Right)};");
+                    break;
+
+                default:
+                    Fail($"initializer element '{assignment.WithoutTrivia()}' of '{path}' is not supported");
+                    break;
+            }
         }
     }
 
-    private void ProcessConditionalExpression(ConditionalExpressionSyntax conditional, string fullDestPath)
+    private void EmitMemberValue(ExpressionSyntax expression, string path, ITypeSymbol? memberType, string indent)
     {
-        var conditionText = conditional.Condition.ToString();
-        var whenTrue = conditional.WhenTrue;
-        var whenFalse = conditional.WhenFalse;
-
-        ProcessConditional(conditionText, whenTrue, whenFalse, fullDestPath);
-    }
-
-    internal List<string> ProcessRootConditionalExpression(ConditionalExpressionSyntax conditional, string currentDestPath)
-    {
-        _lines.Clear();
-        var conditionText = conditional.Condition.WithoutTrivia().ToString();
-        var whenTrue = conditional.WhenTrue;
-        var whenFalse = conditional.WhenFalse;
-
-        var isTrueNull = IsNullExpression(whenTrue);
-        var isFalseNull = IsNullExpression(whenFalse);
-
-        if (!isTrueNull && isFalseNull)
+        if (IsSkippedCollection(memberType))
         {
-            ProcessExpression(whenTrue, currentDestPath);
-        }
-        else if (isTrueNull && !isFalseNull)
-        {
-            ProcessExpression(whenFalse, currentDestPath);
-        }
-        else
-        {
-            ProcessNestedConditionalWithBothObjects(conditionText, whenTrue, whenFalse, currentDestPath, _lines, "");
-        }
-
-        return _lines.ToList();
-    }
-
-    private void ProcessConditional(string conditionText, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, string fullDestPath)
-    {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
-        {
-            _lines.Add($"// Skipping collection property: {fullDestPath}");
+            _lines.Add($"{indent}// Skipping collection property: {path}");
             return;
         }
 
-        _lines.Add($"if ({conditionText})");
-        _lines.Add("{");
-
-        // Process the true branch
-        if (whenTrue is ObjectCreationExpressionSyntax trueObjectCreation)
+        switch (Unwrap(expression))
         {
-            ProcessObjectCreationWithIndent(trueObjectCreation, fullDestPath, "    ");
-        }
-        else if (whenTrue is ThrowExpressionSyntax)
-        {
-            _lines.Add($"    {whenTrue.WithoutTrivia()};");
-        }
-        else
-        {
-            _lines.Add($"    {fullDestPath} = {NormalizeConditionalMemberAccess(whenTrue)};");
-        }
-
-        _lines.Add("}");
-        _lines.Add("else");
-        _lines.Add("{");
-
-        // Process the false branch
-        if (whenFalse is ObjectCreationExpressionSyntax falseObjectCreation)
-        {
-            ProcessObjectCreationWithIndent(falseObjectCreation, fullDestPath, "    ");
-        }
-        else if (whenFalse is ThrowExpressionSyntax)
-        {
-            _lines.Add($"    {whenFalse.WithoutTrivia()};");
-        }
-        else
-        {
-            _lines.Add($"    {fullDestPath} = {NormalizeConditionalMemberAccess(whenFalse)};");
-        }
-
-        _lines.Add("}");
-    }
-
-    private void ProcessObjectCreationWithIndent(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, string indent)
-    {
-        // Ensure target object exists - only add null check if target can be null
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
-        {
-            _lines.Add($"{indent}if ({fullDestPath} == null)");
-            _lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
-        }
-        
-        // Process nested properties
-        var nestedAssignments = objectCreation.Initializer?.Expressions.OfType<AssignmentExpressionSyntax>() ?? [];
-
-        foreach (var nestedAssignment in nestedAssignments)
-        {
-            var nestedPropertyName = nestedAssignment.Left.ToString();
-            var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
-
-            ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, _lines, indent);
-        }
-    }
-
-    private void ProcessNestedExpression(ExpressionSyntax expression, string fullDestPath, List<string> lines, string indent)
-    {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
-        {
-            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            return;
-        }
-
-        switch (expression)
-        {
-            case ConditionalExpressionSyntax conditional:
-                ProcessNestedConditional(conditional, fullDestPath, lines, indent);
+            // Only split into if/else when a branch is updated in place; otherwise the whole conditional is
+            // assigned so its natural type (e.g. `c ? 5 : default` is an int) stays exactly as in the mapping.
+            case ConditionalExpressionSyntax conditional when HasInPlaceBranch(conditional, memberType):
+                _lines.Add($"{indent}if ({conditional.Condition.WithoutTrivia()})");
+                _lines.Add($"{indent}{{");
+                EmitMemberBranch(conditional.WhenTrue, path, memberType, indent + Indent);
+                _lines.Add($"{indent}}}");
+                _lines.Add($"{indent}else");
+                _lines.Add($"{indent}{{");
+                EmitMemberBranch(conditional.WhenFalse, path, memberType, indent + Indent);
+                _lines.Add($"{indent}}}");
                 return;
 
-            case ObjectCreationExpressionSyntax objectCreation:
-                ProcessNestedObjectCreation(objectCreation, fullDestPath, lines, indent);
+            case ObjectCreationExpressionSyntax creation when WillUpdateInPlace(creation, memberType):
+                EmitInPlaceUpdate(creation, path, memberType, indent);
+                return;
+
+            case InitializerExpressionSyntax nestedInitializer:
+                EmitNestedInitializer(nestedInitializer, path, memberType, indent);
                 return;
 
             default:
-                // Simple property assignment
-                lines.Add($"{indent}{fullDestPath} = {NormalizeConditionalMemberAccess(expression)};");
+                // Scalars, value types (struct members cannot be updated through a property copy) and
+                // objects that cannot be updated in place are assigned as a whole, exactly as the mapping does.
+                _lines.Add($"{indent}{path} = {NormalizeConditionalMemberAccess(expression)};");
                 return;
         }
     }
 
-    private void ProcessNestedConditional(ConditionalExpressionSyntax conditional, string fullDestPath, List<string> lines, string indent)
+    private bool HasInPlaceBranch(ConditionalExpressionSyntax conditional, ITypeSymbol? memberType)
     {
-        var conditionText = conditional.Condition.ToString();
-        var whenTrue = conditional.WhenTrue;
-        var whenFalse = conditional.WhenFalse;
+        bool Check(ExpressionSyntax branch) => Unwrap(branch) switch
+        {
+            ConditionalExpressionSyntax nested => HasInPlaceBranch(nested, memberType),
+            ObjectCreationExpressionSyntax creation => WillUpdateInPlace(creation, memberType),
+            _ => false
+        };
 
-        ProcessNestedConditionalWithBothObjects(conditionText, whenTrue, whenFalse, fullDestPath, lines, indent);
+        return Check(conditional.WhenTrue) || Check(conditional.WhenFalse);
     }
 
-    private void ProcessNestedConditionalWithBothObjects(string conditionText, ExpressionSyntax whenTrue, ExpressionSyntax whenFalse, string fullDestPath, List<string> lines, string indent)
+    /// <summary>
+    /// A nested creation is updated in place only when the member is known to be a reference type, the mapping
+    /// creates exactly the member's type (not a derived one) and all of its state is settable after construction.
+    /// Anything else is assigned as a whole, so the destination receives the same value the mapping produces.
+    /// </summary>
+    private bool WillUpdateInPlace(ObjectCreationExpressionSyntax creation, ITypeSymbol? memberType) =>
+        memberType is { IsReferenceType: true }
+        && CreatesType(creation, memberType)
+        && CanUpdateInPlace(creation, memberType, out _);
+
+    private bool CreatesType(ObjectCreationExpressionSyntax creation, ITypeSymbol type) =>
+        string.Equals(creation.Type.WithoutTrivia().ToString(), GetTypeName(type), StringComparison.Ordinal);
+
+    private void EmitMemberBranch(ExpressionSyntax branch, string path, ITypeSymbol? memberType, string indent)
     {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
+        if (Unwrap(branch) is ThrowExpressionSyntax throwExpression)
         {
-            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
+            _lines.Add($"{indent}{ToThrowStatement(throwExpression)}");
             return;
         }
 
-        lines.Add($"{indent}if ({conditionText})");
-        lines.Add($"{indent}{{");
-
-        // Process the true branch
-        if (whenTrue is ObjectCreationExpressionSyntax trueObjectCreation)
-        {
-            ProcessNestedObjectCreationInBranch(trueObjectCreation, fullDestPath, lines, indent + "    ");
-        }
-        else if (whenTrue is ThrowExpressionSyntax)
-        {
-            lines.Add($"{indent}    {whenTrue.WithoutTrivia()};");
-        }
-        else
-        {
-            lines.Add($"{indent}    {fullDestPath} = {NormalizeConditionalMemberAccess(whenTrue)};");
-        }
-
-        lines.Add($"{indent}}}");
-        lines.Add($"{indent}else");
-        lines.Add($"{indent}{{");
-
-        // Process the false branch
-        if (whenFalse is ObjectCreationExpressionSyntax falseObjectCreation)
-        {
-            ProcessNestedObjectCreationInBranch(falseObjectCreation, fullDestPath, lines, indent + "    ");
-        }
-        else if (whenFalse is ThrowExpressionSyntax)
-        {
-            lines.Add($"{indent}    {whenFalse.WithoutTrivia()};");
-        }
-        else
-        {
-            lines.Add($"{indent}    {fullDestPath} = {NormalizeConditionalMemberAccess(whenFalse)};");
-        }
-
-        lines.Add($"{indent}}}");
+        EmitMemberValue(branch, path, memberType, indent);
     }
 
-    private void ProcessNestedObjectCreationInBranch(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
+    private void EmitNestedInitializer(InitializerExpressionSyntax initializer, string path, ITypeSymbol? memberType, string indent)
     {
-        // Ensure nested target object exists - only add null check if target can be null
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
+        // `Member = { ... }` mutates the instance the destination already holds, so the update does the same.
+        if (initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
         {
-            lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
+            EmitInitializerMembers(initializer, path, memberType, indent);
+            return;
         }
-        
-        // Process nested properties
-        if (objectCreation.Initializer?.Expressions != null)
-        {
-            foreach (var expr in objectCreation.Initializer.Expressions)
-            {
-                if (expr is AssignmentExpressionSyntax nestedAssignment)
-                {
-                    var nestedPropertyName = nestedAssignment.Left.ToString();
-                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
 
-                    ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, lines, indent);
-                }
+        Fail($"collection initializer of '{path}' would add items to the existing collection on every update");
+    }
+
+    /// <summary>
+    /// An object creation can be applied member by member to an existing instance only when every piece of
+    /// state it sets is reachable after construction: no constructor arguments and only writable members.
+    /// </summary>
+    private bool CanUpdateInPlace(ObjectCreationExpressionSyntax creation, ITypeSymbol? type, out string reason)
+    {
+        if (creation.ArgumentList is { Arguments.Count: > 0 })
+        {
+            reason = "constructor arguments cannot be applied to an existing instance";
+            return false;
+        }
+
+        if (creation.Initializer is not { } initializer || !initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+        {
+            reason = "the destination is not created with an object initializer";
+            return false;
+        }
+
+        foreach (var expression in initializer.Expressions)
+        {
+            if (expression is not AssignmentExpressionSyntax { Left: IdentifierNameSyntax identifier } assignment)
+            {
+                reason = $"initializer element '{expression.WithoutTrivia()}' cannot be applied to an existing instance";
+                return false;
+            }
+
+            var member = FindMember(type, identifier.Identifier.ValueText);
+            if (IsSkippedCollection(member?.Type))
+            {
+                // Never assigned under CollectionPropertiesPolicy.Skip, so it cannot prevent an in-place update.
+                continue;
+            }
+
+            if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
+            {
+                reason = $"member '{identifier.Identifier.ValueText}' is init-only or read-only";
+                return false;
+            }
+
+            if (Unwrap(assignment.Right) is InitializerExpressionSyntax nested && !IsReplayable(nested, member?.Type))
+            {
+                reason = $"the nested initializer of member '{identifier.Identifier.ValueText}' contains a collection initializer that would add items to the existing collection on every update";
+                return false;
             }
         }
+
+        reason = "";
+        return true;
     }
 
-    private void ProcessNestedObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath, List<string> lines, string indent)
+    /// <summary>
+    /// Whether a nested initializer without <c>new</c> can be applied to the instance a destination already holds.
+    /// Collection initializers add items, so they are replayable only when the collection is skipped anyway.
+    /// </summary>
+    private bool IsReplayable(InitializerExpressionSyntax initializer, ITypeSymbol? memberType)
     {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
+        if (!initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
         {
-            lines.Add($"{indent}// Skipping collection property: {fullDestPath}");
-            return;
+            return IsSkippedCollection(memberType);
         }
 
-        // Direct object creation - ensure target exists and update properties
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
+        foreach (var expression in initializer.Expressions)
         {
-            lines.Add($"{indent}if ({fullDestPath} == null)");
-            lines.Add($"{indent}    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
-        }
-        
-
-        if (objectCreation.Initializer?.Expressions != null)
-        {
-            foreach (var expr in objectCreation.Initializer.Expressions)
+            if (expression is AssignmentExpressionSyntax { Left: IdentifierNameSyntax identifier } assignment
+                && Unwrap(assignment.Right) is InitializerExpressionSyntax nested
+                && !IsReplayable(nested, FindMember(memberType, identifier.Identifier.ValueText)?.Type))
             {
-                if (expr is AssignmentExpressionSyntax nestedAssignment)
-                {
-                    var nestedPropertyName = nestedAssignment.Left.ToString();
-                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
-                    ProcessNestedExpression(nestedAssignment.Right, nestedDestPath, lines, indent);
-                }
+                return false;
             }
         }
+
+        return true;
     }
 
-    private void ProcessDirectObjectCreation(ObjectCreationExpressionSyntax objectCreation, string fullDestPath)
+    private bool IsSkippedCollection(ITypeSymbol? memberType) =>
+        memberType != null
+        && collectionPolicy == CollectionPropertiesPolicy.Skip
+        && CollectionHelper.IsCollectionType(memberType);
+
+    private static bool IsNestedInitializer(ExpressionSyntax expression) => Unwrap(expression) is InitializerExpressionSyntax;
+
+    private readonly struct MemberInfo(ITypeSymbol type, bool isWritable)
     {
-        // Skip collection properties - they are complex to update safely
-        if (typeContext.IsCollectionType(fullDestPath))
+        public ITypeSymbol Type { get; } = type;
+        public bool IsWritable { get; } = isWritable;
+    }
+
+    private static MemberInfo? FindMember(ITypeSymbol? type, string name)
+    {
+        if (type == null)
         {
-            _lines.Add($"// Skipping collection property: {fullDestPath}");
-            return;
+            return null;
         }
 
-        // Check if we're trying to assign to a property of a value type
-        // For example: dest.SomeStruct.Property = value
-        // This won't work because SomeStruct returns a copy
-        if (IsValueTypePropertyAssignment(fullDestPath))
+        if (type is ITypeParameterSymbol typeParameter)
         {
-            // For value types, we can't do property-by-property assignment
-            // Instead, we need to reconstruct the entire path
-            HandleValueTypeAssignment(objectCreation, fullDestPath);
-            return;
-        }
-
-        // Direct object creation - ensure target exists and update properties
-        if (typeContext.ShouldPropertyBePreCreated(fullDestPath, out var typeInfo))
-        {
-            _lines.Add($"if ({fullDestPath} == null)");
-            _lines.Add($"    {fullDestPath} = new {GetTypeName(typeInfo.Type)}();");
-        }
-
-        if (objectCreation.Initializer?.Expressions != null)
-        {
-            foreach (var expr in objectCreation.Initializer.Expressions)
+            foreach (var constraint in typeParameter.ConstraintTypes)
             {
-                if (expr is AssignmentExpressionSyntax nestedAssignment)
+                if (FindMember(constraint, name) is { } constrained)
                 {
-                    var nestedPropertyName = nestedAssignment.Left.ToString();
-                    var nestedDestPath = $"{fullDestPath}.{nestedPropertyName}";
-                    ProcessExpression(nestedAssignment.Right, nestedDestPath);
+                    return constrained;
                 }
             }
+
+            return null;
         }
+
+        for (var current = type; current != null; current = current.BaseType)
+        {
+            if (FindDeclaredMember(current, name) is { } member)
+            {
+                return member;
+            }
+        }
+
+        foreach (var implemented in type.AllInterfaces)
+        {
+            if (FindDeclaredMember(implemented, name) is { } member)
+            {
+                return member;
+            }
+        }
+
+        return null;
     }
 
-    private bool IsValueTypePropertyAssignment(string fullDestPath)
+    private static MemberInfo? FindDeclaredMember(ITypeSymbol type, string name)
     {
-        // Check if this is an assignment to a property of a value type
-        // e.g., "dest.SomeStruct.Property" where SomeStruct is a value type
-        var pathParts = fullDestPath.Split('.');
-        if (pathParts.Length <= 2) return false; // dest.Property is fine
-
-        // Check each intermediate path to see if it's a value type
-        for (int i = 1; i < pathParts.Length - 1; i++)
+        foreach (var member in type.GetMembers(name))
         {
-            var intermediatePath = string.Join(".", pathParts.Take(i + 1));
-            if (typeContext.IsValueType(intermediatePath) && !typeContext.IsNullableValueType(intermediatePath))
+            switch (member)
             {
-                return true; // Found a non-nullable value type in the path
+                case IPropertySymbol { IsIndexer: false } property:
+                    return new MemberInfo(property.Type, FindSetter(property) is { IsInitOnly: false });
+                case IFieldSymbol field:
+                    return new MemberInfo(field.Type, !field.IsReadOnly && !field.IsConst);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// An override may redeclare only the getter; the setter is then inherited from the overridden property.
+    /// </summary>
+    private static IMethodSymbol? FindSetter(IPropertySymbol property)
+    {
+        for (IPropertySymbol? current = property; current != null; current = current.OverriddenProperty)
+        {
+            if (current.SetMethod != null)
+            {
+                return current.SetMethod;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool CanDefaultConstruct(ITypeSymbol type)
+    {
+        if (type is ITypeParameterSymbol typeParameter)
+        {
+            return typeParameter.HasConstructorConstraint;
+        }
+
+        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } named)
+        {
+            return false;
+        }
+
+        var constructor = named.InstanceConstructors.FirstOrDefault(c =>
+            c.Parameters.All(p => p.IsOptional || p.IsParams)
+            && c.DeclaredAccessibility is not (Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal));
+        if (constructor == null)
+        {
+            return false;
+        }
+
+        return !HasRequiredMembers(named) || SetsRequiredMembers(constructor);
+    }
+
+    private static bool HasRequiredMembers(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? current = type; current != null; current = current.BaseType)
+        {
+            if (current.GetMembers().Any(member => member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }))
+            {
+                return true;
             }
         }
 
         return false;
     }
 
-    private void HandleValueTypeAssignment(ObjectCreationExpressionSyntax objectCreation, string fullDestPath)
+    private static bool SetsRequiredMembers(IMethodSymbol constructor) =>
+        constructor.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
+
+    private void Fail(string reason) => FailureReason ??= reason;
+
+    private static ExpressionSyntax Unwrap(ExpressionSyntax expression)
     {
-        // For value type assignments, we need to construct the entire path
-        // This is a complex case that requires reconstructing parent structs
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
 
-        // For now, let's just do a direct assignment to the full path
-        // This will work for simple cases but may fail for deeply nested value types
-        _lines.Add($"{fullDestPath} = {objectCreation.WithoutTrivia()};");
-
-        // Note: This is a simplified approach. A full solution would need to:
-        // 1. Identify the value type property in the path
-        // 2. Reconstruct that struct with the new nested value
-        // 3. Assign the reconstructed struct back to its parent
-        // This is quite complex and may not be worth the effort for edge cases.
+        return expression;
     }
 
-    private static bool IsNullExpression(ExpressionSyntax expression)
+    private static bool IsTerminalBranch(ExpressionSyntax expression) =>
+        IsNullValue(expression) || Unwrap(expression) is ThrowExpressionSyntax;
+
+    private static string TerminalStatement(ExpressionSyntax expression, string destPrefix) =>
+        Unwrap(expression) is ThrowExpressionSyntax throwExpression
+            ? ToThrowStatement(throwExpression)
+            : $"return {destPrefix};";
+
+    private static string ToThrowStatement(ThrowExpressionSyntax throwExpression) =>
+        $"throw {throwExpression.Expression.WithoutTrivia()};";
+
+    /// <summary>
+    /// Recognizes the "no value" forms a mapping uses: <c>null</c>, <c>null!</c>, <c>default</c>,
+    /// <c>default(T)</c> and casts of those.
+    /// </summary>
+    internal static bool IsNullValue(ExpressionSyntax expression)
     {
-        return expression?.ToString().Trim() == "null";
+        switch (Unwrap(expression))
+        {
+            case LiteralExpressionSyntax literal:
+                return literal.IsKind(SyntaxKind.NullLiteralExpression) || literal.IsKind(SyntaxKind.DefaultLiteralExpression);
+            case DefaultExpressionSyntax:
+                return true;
+            case PostfixUnaryExpressionSyntax postfix when postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression):
+                return IsNullValue(postfix.Operand);
+            case CastExpressionSyntax cast:
+                return IsNullValue(cast.Expression);
+            default:
+                return false;
+        }
+    }
+
+    private static string Negate(ExpressionSyntax condition)
+    {
+        var unwrapped = Unwrap(condition);
+        switch (unwrapped)
+        {
+            case BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.NotEqualsExpression):
+                return $"{binary.Left.WithoutTrivia()} == {binary.Right.WithoutTrivia()}";
+            case BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression):
+                return $"{binary.Left.WithoutTrivia()} != {binary.Right.WithoutTrivia()}";
+            case IsPatternExpressionSyntax { Pattern: UnaryPatternSyntax { Pattern: ConstantPatternSyntax constant } unary } isPattern
+                when unary.OperatorToken.IsKind(SyntaxKind.NotKeyword):
+                return $"{isPattern.Expression.WithoutTrivia()} is {constant.WithoutTrivia()}";
+            case IsPatternExpressionSyntax { Pattern: ConstantPatternSyntax constant } isPattern
+                when constant.Expression.IsKind(SyntaxKind.NullLiteralExpression):
+                return $"{isPattern.Expression.WithoutTrivia()} is not null";
+            case PrefixUnaryExpressionSyntax prefix when prefix.IsKind(SyntaxKind.LogicalNotExpression):
+                return prefix.Operand.WithoutTrivia().ToString();
+            case IdentifierNameSyntax or MemberAccessExpressionSyntax or InvocationExpressionSyntax or ElementAccessExpressionSyntax:
+                return $"!{unwrapped.WithoutTrivia()}";
+            default:
+                return $"!({condition.WithoutTrivia()})";
+        }
     }
 
     private string GetTypeName(ITypeSymbol type) =>
-        AlephMapper.Helpers.TypeDisplay.ForSymbol(
-            type,
-            NullableAnnotation.NotAnnotated,
-            nullablePolicy);
+        TypeDisplay.ForSymbol(type, NullableAnnotation.NotAnnotated, nullablePolicy);
 
     private string NormalizeConditionalMemberAccess(ExpressionSyntax expression)
     {
@@ -427,10 +602,7 @@ internal sealed class UpdatableMethodGenerator(
             switch (expr)
             {
                 case MemberAccessExpressionSyntax ma:
-                    var left = Recurse(ma.Expression);
-                    var right = ma.Name.ToString();
-
-                    return left + "." + right;
+                    return Recurse(ma.Expression) + "." + ma.Name;
 
                 case ConditionalAccessExpressionSyntax cae:
                     var target = cae.Expression.WithoutTrivia().ToString();
@@ -444,12 +616,8 @@ internal sealed class UpdatableMethodGenerator(
                 case ElementBindingExpressionSyntax ebs:
                     return _primarySourceParamName + "?" + ebs.WithoutTrivia();
 
-
                 case BinaryExpressionSyntax binary:
-                    var binLeft = Recurse(binary.Left);
-                    var op = binary.OperatorToken.Text;
-                    var binRight = Recurse(binary.Right);
-                    return binLeft + " " + op + " " + binRight;
+                    return Recurse(binary.Left) + " " + binary.OperatorToken.Text + " " + Recurse(binary.Right);
 
                 case InterpolatedStringExpressionSyntax ise:
                     return FormatInterpolated(ise, Recurse);
@@ -462,28 +630,40 @@ internal sealed class UpdatableMethodGenerator(
         return Recurse(expression);
     }
 
+    /// <summary>
+    /// Rebuilds an interpolated string from its original tokens, so verbatim and raw forms, escapes,
+    /// alignment and format clauses are preserved; only the interpolation holes are normalized.
+    /// </summary>
     private static string FormatInterpolated(InterpolatedStringExpressionSyntax ise, Func<ExpressionSyntax, string> normalize)
     {
-        var sb = new System.Text.StringBuilder();
-        sb.Append("$");
-        sb.Append('"');
+        var sb = new StringBuilder();
+        sb.Append(ise.StringStartToken.Text);
         foreach (var part in ise.Contents)
         {
             switch (part)
             {
                 case InterpolatedStringTextSyntax text:
-                    var txt = text.TextToken.Text;
-                    txt = txt.Replace("\"", "\\\"");
-                    sb.Append(txt);
+                    sb.Append(text.TextToken.Text);
                     break;
                 case InterpolationSyntax interpolation:
-                    sb.Append("{");
+                    sb.Append(interpolation.OpenBraceToken.Text);
                     sb.Append(normalize(interpolation.Expression));
-                    sb.Append("}");
+                    if (interpolation.AlignmentClause != null)
+                    {
+                        sb.Append(interpolation.AlignmentClause.WithoutTrivia());
+                    }
+
+                    if (interpolation.FormatClause != null)
+                    {
+                        sb.Append(interpolation.FormatClause.WithoutTrivia());
+                    }
+
+                    sb.Append(interpolation.CloseBraceToken.Text);
                     break;
             }
         }
-        sb.Append('"');
+
+        sb.Append(ise.StringEndToken.Text);
         return sb.ToString();
     }
 }

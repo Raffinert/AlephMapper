@@ -109,6 +109,19 @@ public static partial class PersonMapper
 PersonMapper.Map(request, dest: person);
 ```
 
+How the initializer is applied to an existing destination:
+
+- **Nested objects** created with an object initializer are updated member by member; the existing nested instance is kept and is created first when it is `null`. Members are resolved on the declared member type, including inherited members.
+- **Nested objects that cannot be updated in place** — created with constructor arguments, setting `init`-only members, without an object initializer, or creating a type other than the member's declared type (`Pet = new Dog { ... }` for an `Animal Pet`) — are replaced with the mapped instance, so their values and runtime type match the regular mapping.
+- **Value-type members** (structs and `Nullable<T>`) and members typed by a type parameter without a `class` constraint are assigned as a whole, because a struct property returns a copy.
+- **Conditional members** are split into `if`/`else` only when a branch is updated in place; otherwise the whole conditional is assigned, so its natural type is preserved (`c ? 5 : default` assigns `0` to an `int?`, as in the mapping).
+- **Types with `required` members** (or without an accessible parameterless constructor) are created with the mapping's own expression when missing and updated member by member otherwise.
+- **Nested initializers without `new`** (`Address = { City = source.City }`) update the instance the destination already holds, as in C#.
+- **A root conditional** such as `source.IsActive ? new() { ... } : null` (also `null!` or `default`) becomes a guard: when the mapping yields no value, the existing destination is returned unchanged.
+- A root that creates a derived type (`Animal Map(...) => new Dog { ... }`) creates that type when the destination is `null` and otherwise updates the members declared on the destination type.
+- A root `source == null ? throw ... : new() { ... }` keeps throwing for a `null` source instead of returning the destination.
+- The root creation itself must be updatable in place; otherwise the overload is omitted with [AM0023](diagnostics.md#am0023).
+
 Collection properties are skipped by default. Updating them is opt-in:
 
 ```csharp

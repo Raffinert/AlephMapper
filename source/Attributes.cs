@@ -137,7 +137,7 @@ internal enum CollectionPropertiesPolicy
     Skip,
 
     /// <summary>
-    /// Update collections - collections will be updated during mapping operations
+    /// Update collections - the mapped collection value is assigned to the destination (the existing collection is replaced, not merged)
     /// </summary>
     Update
 }

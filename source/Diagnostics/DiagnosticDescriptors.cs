@@ -188,6 +188,16 @@ public static class DiagnosticDescriptors
         "AM0022", "Generated companion conflicts with another member",
         "Companion generation for '{0}' skipped: {1}", "AlephMapper", DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor UpdatableNotUpdatableInPlace = new(
+        "AM0023",
+        "Mapping cannot update an existing destination in place",
+        "Update method generation for '{0}' skipped: {1}",
+        "AlephMapper",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The mapping sets state that only exists at construction time (constructor arguments, init-only or read-only members) or uses an initializer that cannot be replayed on an existing instance, so an update overload would silently drop or corrupt values.",
+        helpLinkUri: DiagnosticDocsUrl + "am0023");
+
     public static DiagnosticDescriptor? GetById(string id) => id switch
     {
         "AM0001" => UpdatableValueTypeReturn,
@@ -212,6 +222,7 @@ public static class DiagnosticDescriptors
         "AM0020" => UnsupportedExtensionMember,
         "AM0021" => InvalidMapperDeclaration,
         "AM0022" => GeneratedMemberConflict,
+        "AM0023" => UpdatableNotUpdatableInPlace,
         _ => null
     };
 }
