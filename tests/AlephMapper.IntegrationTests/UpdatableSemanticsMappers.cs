@@ -184,3 +184,29 @@ public static partial class UpdatableReviewCollectionMapper
 {
     public static UpdZoo MapBag(UpdSource source) => new UpdZoo { Bag = new UpdBag { Items = { source.Name ?? "" } } };
 }
+
+// Init-only collections are skipped by default, so they must not force replacing the owner.
+
+public class UpdInitCollectionChild
+{
+    public string? Name { get; set; }
+    public List<string> Tags { get; init; } = [];
+}
+
+public class UpdInitCollectionRoot
+{
+    public string? Name { get; set; }
+    public List<string> Tags { get; init; } = [];
+    public UpdInitCollectionChild? Child { get; set; }
+}
+
+[Updatable]
+public static partial class UpdatableSkippedCollectionMapper
+{
+    public static UpdInitCollectionRoot Map(UpdSource source) => new UpdInitCollectionRoot
+    {
+        Name = source.Name,
+        Tags = source.Tags.ToList(),
+        Child = new UpdInitCollectionChild { Name = source.Name, Tags = source.Tags.ToList() }
+    };
+}

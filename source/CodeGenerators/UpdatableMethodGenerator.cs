@@ -215,7 +215,7 @@ internal sealed class UpdatableMethodGenerator(
                         continue;
                     }
 
-                    if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
+                    if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right) && !IsSkippedCollection(member.Value.Type))
                     {
                         Fail($"member '{memberName}' of '{path}' is init-only or read-only");
                         continue;
@@ -238,9 +238,7 @@ internal sealed class UpdatableMethodGenerator(
 
     private void EmitMemberValue(ExpressionSyntax expression, string path, ITypeSymbol? memberType, string indent)
     {
-        if (memberType != null
-            && collectionPolicy == CollectionPropertiesPolicy.Skip
-            && CollectionHelper.IsCollectionType(memberType))
+        if (IsSkippedCollection(memberType))
         {
             _lines.Add($"{indent}// Skipping collection property: {path}");
             return;
@@ -352,6 +350,12 @@ internal sealed class UpdatableMethodGenerator(
             }
 
             var member = FindMember(type, identifier.Identifier.ValueText);
+            if (IsSkippedCollection(member?.Type))
+            {
+                // Never assigned under CollectionPropertiesPolicy.Skip, so it cannot prevent an in-place update.
+                continue;
+            }
+
             if (member is { IsWritable: false } && !IsNestedInitializer(assignment.Right))
             {
                 reason = $"member '{identifier.Identifier.ValueText}' is init-only or read-only";
@@ -377,9 +381,7 @@ internal sealed class UpdatableMethodGenerator(
     {
         if (!initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
         {
-            return memberType != null
-                && collectionPolicy == CollectionPropertiesPolicy.Skip
-                && CollectionHelper.IsCollectionType(memberType);
+            return IsSkippedCollection(memberType);
         }
 
         foreach (var expression in initializer.Expressions)
@@ -394,6 +396,11 @@ internal sealed class UpdatableMethodGenerator(
 
         return true;
     }
+
+    private bool IsSkippedCollection(ITypeSymbol? memberType) =>
+        memberType != null
+        && collectionPolicy == CollectionPropertiesPolicy.Skip
+        && CollectionHelper.IsCollectionType(memberType);
 
     private static bool IsNestedInitializer(ExpressionSyntax expression) => Unwrap(expression) is InitializerExpressionSyntax;
 

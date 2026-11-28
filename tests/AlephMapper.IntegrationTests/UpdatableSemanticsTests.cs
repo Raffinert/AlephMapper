@@ -238,4 +238,23 @@ public class UpdatableSemanticsTests
         await Assert.That(target.Bag!.Items).IsEquivalentTo(["Ada"]);
         await Assert.That(oldBag.Items).IsEquivalentTo(["old"]);
     }
+
+    [Test]
+    public async Task Skipped_init_only_collections_do_not_force_replacing_their_owner()
+    {
+        var rootTags = new List<string> { "root" };
+        var childTags = new List<string> { "child" };
+        var child = new UpdInitCollectionChild { Name = "old", Tags = childTags };
+        var target = new UpdInitCollectionRoot { Name = "old", Tags = rootTags, Child = child };
+
+        var result = UpdatableSkippedCollectionMapper.Map(CreateSource(), target);
+
+        await Assert.That(result).IsSameReferenceAs(target);
+        await Assert.That(target.Name).IsEqualTo("Ada");
+        await Assert.That(target.Tags).IsSameReferenceAs(rootTags);
+        await Assert.That(target.Child).IsSameReferenceAs(child);
+        await Assert.That(child.Name).IsEqualTo("Ada");
+        await Assert.That(child.Tags).IsSameReferenceAs(childTags);
+        await Assert.That(childTags).IsEquivalentTo(["child"]);
+    }
 }
